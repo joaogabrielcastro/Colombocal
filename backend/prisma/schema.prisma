@@ -1,0 +1,160 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cliente {
+  id             Int      @id @default(autoincrement())
+  cnpj           String   @unique
+  razaoSocial    String
+  nomeFantasia   String?
+  telefone       String?
+  cidade         String?
+  estado         String?
+  endereco       String?
+  observacoes    String?
+  fretePadrao    Decimal  @default(0) @db.Decimal(10, 2)
+  ativo          Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  precosEspeciais PrecoClienteProduto[]
+  vendas          Venda[]
+  cheques         Cheque[]
+  pagamentos      Pagamento[]
+}
+
+model Produto {
+  id            Int     @id @default(autoincrement())
+  nome          String
+  codigo        String  @unique
+  precoPadrao   Decimal @db.Decimal(10, 2)
+  unidade       String  @default("ton")
+  estoqueAtual  Decimal @default(0) @db.Decimal(10, 3)
+  estoqueMinimo Decimal @default(0) @db.Decimal(10, 3)
+  ativo         Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  precosClientes PrecoClienteProduto[]
+  itensVenda     ItemVenda[]
+  movimentacoes  MovimentacaoEstoque[]
+}
+
+model PrecoClienteProduto {
+  id        Int     @id @default(autoincrement())
+  clienteId Int
+  produtoId Int
+  preco     Decimal @db.Decimal(10, 2)
+
+  cliente Cliente @relation(fields: [clienteId], references: [id])
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@unique([clienteId, produtoId])
+}
+
+model Motorista {
+  id        Int      @id @default(autoincrement())
+  nome      String
+  telefone  String?
+  veiculo   String?
+  placa     String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  vendas Venda[]
+}
+
+model Vendedor {
+  id                 Int      @id @default(autoincrement())
+  nome               String
+  telefone           String?
+  comissaoPercentual Decimal  @default(0) @db.Decimal(5, 2)
+  ativo              Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  vendas Venda[]
+}
+
+model Venda {
+  id          Int      @id @default(autoincrement())
+  clienteId   Int
+  vendedorId  Int
+  motoristaId Int?
+  frete       Decimal  @default(0) @db.Decimal(10, 2)
+  valorTotal  Decimal  @db.Decimal(10, 2)
+  dataVenda   DateTime @default(now())
+  observacoes String?
+  createdAt   DateTime @default(now())
+
+  cliente   Cliente    @relation(fields: [clienteId], references: [id])
+  vendedor  Vendedor   @relation(fields: [vendedorId], references: [id])
+  motorista Motorista? @relation(fields: [motoristaId], references: [id])
+
+  itens         ItemVenda[]
+  movimentacoes MovimentacaoEstoque[]
+}
+
+model ItemVenda {
+  id            Int     @id @default(autoincrement())
+  vendaId       Int
+  produtoId     Int
+  quantidade    Decimal @db.Decimal(10, 3)
+  precoUnitario Decimal @db.Decimal(10, 2)
+  subtotal      Decimal @db.Decimal(10, 2)
+
+  venda   Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id])
+}
+
+model MovimentacaoEstoque {
+  id         Int      @id @default(autoincrement())
+  produtoId  Int
+  tipo       String   // entrada, saida, ajuste, devolucao
+  quantidade Decimal  @db.Decimal(10, 3)
+  data       DateTime @default(now())
+  observacao String?
+  vendaId    Int?
+
+  produto Produto @relation(fields: [produtoId], references: [id])
+  venda   Venda?  @relation(fields: [vendaId], references: [id])
+}
+
+model Cheque {
+  id              Int       @id @default(autoincrement())
+  clienteId       Int
+  valor           Decimal   @db.Decimal(10, 2)
+  banco           String?
+  numero          String?
+  agencia         String?
+  conta           String?
+  dataRecebimento DateTime  @default(now())
+  dataCompensacao DateTime?
+  status          String    @default("recebido") // recebido, depositado, compensado, devolvido
+  observacoes     String?
+  createdAt       DateTime  @default(now())
+
+  cliente   Cliente    @relation(fields: [clienteId], references: [id])
+  pagamento Pagamento?
+}
+
+model Pagamento {
+  id          Int      @id @default(autoincrement())
+  clienteId   Int
+  tipo        String   // cheque, dinheiro, transferencia
+  valor       Decimal  @db.Decimal(10, 2)
+  data        DateTime @default(now())
+  chequeId    Int?     @unique
+  observacoes String?
+  createdAt   DateTime @default(now())
+
+  cliente Cliente  @relation(fields: [clienteId], references: [id])
+  cheque  Cheque?  @relation(fields: [chequeId], references: [id])
+}
