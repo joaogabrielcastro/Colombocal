@@ -80,13 +80,6 @@ router.get("/", async (req, res) => {
     );
 
     // Produtos com estoque baixo
-    const produtosBaixoEstoque = await prisma.produto.findMany({
-      where: {
-        ativo: true,
-        estoqueAtual: { lte: prisma.produto.fields.estoqueMinimo },
-      },
-    });
-    // Abordagem manual para buscar produtos com estoque baixo
     const produtos = await prisma.produto.findMany({ where: { ativo: true } });
     const estoqueBaixo = produtos.filter(
       (p) => parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo),

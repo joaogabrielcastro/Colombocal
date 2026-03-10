@@ -33,7 +33,7 @@ app.use((err, req, res, next) => {
     .json({ error: "Erro interno do servidor", details: err.message });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3011;
 app.listen(PORT, () => {
   console.log(`✅ Servidor Colombocal rodando na porta ${PORT}`);
 });
