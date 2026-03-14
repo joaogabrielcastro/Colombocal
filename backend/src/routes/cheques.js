@@ -21,8 +21,11 @@ router.get("/", async (req, res) => {
     }
     const cheques = await prisma.cheque.findMany({
       where,
-      include: { cliente: true },
-      orderBy: { dataRecebimento: "desc" },
+      include: {
+        cliente: true,
+        venda: { select: { id: true, dataVenda: true, valorTotal: true } },
+      },
+      orderBy: { numeroOrdem: "desc" },
     });
     res.json(cheques);
   } catch (error) {
@@ -45,11 +48,13 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/cheques - registrar cheque e gerar pagamento
+// POST /api/cheques - registrar cheque
+// status inicial: a_receber (sem pagamento) | recebido (com pagamento)
 router.post("/", async (req, res) => {
   try {
     const {
       clienteId,
+      vendaId,
       valor,
       banco,
       numero,
@@ -57,13 +62,21 @@ router.post("/", async (req, res) => {
       conta,
       dataRecebimento,
       dataCompensacao,
+      status,
       observacoes,
     } = req.body;
+
+    const statusInicial = status || "a_receber";
+    const validStatuses = ["a_receber", "recebido", "depositado"];
+    if (!validStatuses.includes(statusInicial)) {
+      return res.status(400).json({ error: "Status inválido" });
+    }
 
     const cheque = await prisma.$transaction(async (tx) => {
       const novoCheque = await tx.cheque.create({
         data: {
           clienteId: parseInt(clienteId),
+          vendaId: vendaId ? parseInt(vendaId) : null,
           valor: parseFloat(valor),
           banco,
           numero,
@@ -73,29 +86,31 @@ router.post("/", async (req, res) => {
             ? new Date(dataRecebimento)
             : new Date(),
           dataCompensacao: dataCompensacao ? new Date(dataCompensacao) : null,
-          status: "recebido",
+          status: statusInicial,
           observacoes,
         },
       });
 
-      // Gerar pagamento automático quando cheque é registrado
-      await tx.pagamento.create({
-        data: {
-          clienteId: parseInt(clienteId),
-          tipo: "cheque",
-          valor: parseFloat(valor),
-          data: dataRecebimento ? new Date(dataRecebimento) : new Date(),
-          chequeId: novoCheque.id,
-          observacoes: `Cheque #${numero || novoCheque.id} - ${banco || ""}`,
-        },
-      });
+      // Pagamento só é criado quando o cheque foi efetivamente recebido
+      if (statusInicial === "recebido" || statusInicial === "depositado") {
+        await tx.pagamento.create({
+          data: {
+            clienteId: parseInt(clienteId),
+            tipo: "cheque",
+            valor: parseFloat(valor),
+            data: dataRecebimento ? new Date(dataRecebimento) : new Date(),
+            chequeId: novoCheque.id,
+            observacoes: `Cheque #${numero || novoCheque.id} - ${banco || ""}`,
+          },
+        });
+      }
 
       return novoCheque;
     });
 
     const chequeCompleto = await prisma.cheque.findUnique({
       where: { id: cheque.id },
-      include: { cliente: true, pagamento: true },
+      include: { cliente: true, venda: true, pagamento: true },
     });
 
     res.status(201).json(chequeCompleto);
@@ -108,37 +123,52 @@ router.post("/", async (req, res) => {
 router.patch("/:id/status", async (req, res) => {
   try {
     const { status, dataCompensacao } = req.body;
-    const validStatuses = ["recebido", "depositado", "compensado", "devolvido"];
+    const validStatuses = ["a_receber", "recebido", "depositado"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: "Status inválido" });
     }
 
+    const chequeAtual = await prisma.cheque.findUnique({
+      where: { id: parseInt(req.params.id) },
+      include: { pagamento: true },
+    });
+    if (!chequeAtual)
+      return res.status(404).json({ error: "Cheque não encontrado" });
+
     const data = { status };
-    if (status === "compensado" && dataCompensacao) {
+    if (status === "depositado" && dataCompensacao) {
       data.dataCompensacao = new Date(dataCompensacao);
     }
 
-    // Se devolvido, remover o pagamento para voltar o débito na conta
-    if (status === "devolvido") {
-      await prisma.$transaction(async (tx) => {
-        await tx.cheque.update({
-          where: { id: parseInt(req.params.id) },
-          data,
+    await prisma.$transaction(async (tx) => {
+      await tx.cheque.update({ where: { id: parseInt(req.params.id) }, data });
+
+      const temPagamento = !!chequeAtual.pagamento;
+      const precisaPagamento = status === "recebido" || status === "depositado";
+
+      // Se mudou para recebido/depositado e ainda não tem pagamento, cria
+      if (precisaPagamento && !temPagamento) {
+        await tx.pagamento.create({
+          data: {
+            clienteId: chequeAtual.clienteId,
+            tipo: "cheque",
+            valor: chequeAtual.valor,
+            data: chequeAtual.dataRecebimento,
+            chequeId: chequeAtual.id,
+            observacoes: `Cheque #${chequeAtual.numero || chequeAtual.id} - ${chequeAtual.banco || ""}`,
+          },
         });
-        await tx.pagamento.deleteMany({
-          where: { chequeId: parseInt(req.params.id) },
-        });
-      });
-    } else {
-      await prisma.cheque.update({
-        where: { id: parseInt(req.params.id) },
-        data,
-      });
-    }
+      }
+
+      // Se voltou para a_receber, remove pagamento (cheque não foi recebido)
+      if (status === "a_receber" && temPagamento) {
+        await tx.pagamento.deleteMany({ where: { chequeId: chequeAtual.id } });
+      }
+    });
 
     const cheque = await prisma.cheque.findUnique({
       where: { id: parseInt(req.params.id) },
-      include: { cliente: true },
+      include: { cliente: true, venda: true },
     });
     res.json(cheque);
   } catch (error) {

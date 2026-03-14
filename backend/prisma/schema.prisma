@@ -84,15 +84,17 @@ model Vendedor {
 }
 
 model Venda {
-  id          Int      @id @default(autoincrement())
-  clienteId   Int
-  vendedorId  Int
-  motoristaId Int?
-  frete       Decimal  @default(0) @db.Decimal(10, 2)
-  valorTotal  Decimal  @db.Decimal(10, 2)
-  dataVenda   DateTime @default(now())
-  observacoes String?
-  createdAt   DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  clienteId       Int
+  vendedorId      Int
+  motoristaId     Int?
+  frete           Decimal  @default(0) @db.Decimal(10, 2)
+  freteRecibo     Boolean  @default(false)  // recibo de frete emitido?
+  freteReciboNum  String?                   // número do recibo de frete
+  valorTotal      Decimal  @db.Decimal(10, 2) // apenas produtos, sem frete
+  dataVenda       DateTime @default(now())
+  observacoes     String?
+  createdAt       DateTime @default(now())
 
   cliente   Cliente    @relation(fields: [clienteId], references: [id])
   vendedor  Vendedor   @relation(fields: [vendedorId], references: [id])
@@ -100,6 +102,7 @@ model Venda {
 
   itens         ItemVenda[]
   movimentacoes MovimentacaoEstoque[]
+  cheques       Cheque[]
 }
 
 model ItemVenda {
@@ -129,7 +132,9 @@ model MovimentacaoEstoque {
 
 model Cheque {
   id              Int       @id @default(autoincrement())
+  numeroOrdem     Int       @unique @default(autoincrement())
   clienteId       Int
+  vendaId         Int?      // venda a que este cheque se refere
   valor           Decimal   @db.Decimal(10, 2)
   banco           String?
   numero          String?
@@ -137,11 +142,12 @@ model Cheque {
   conta           String?
   dataRecebimento DateTime  @default(now())
   dataCompensacao DateTime?
-  status          String    @default("recebido") // recebido, depositado, compensado, devolvido
+  status          String    @default("a_receber") // a_receber, recebido, depositado
   observacoes     String?
   createdAt       DateTime  @default(now())
 
   cliente   Cliente    @relation(fields: [clienteId], references: [id])
+  venda     Venda?     @relation(fields: [vendaId], references: [id])
   pagamento Pagamento?
 }
 

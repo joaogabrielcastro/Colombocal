@@ -1,48 +1,54 @@
 export function formatMoney(value: number | string | null | undefined): string {
   const num = parseFloat(String(value ?? 0));
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(num);
 }
 
 export function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return '-';
-  return new Intl.DateTimeFormat('pt-BR').format(new Date(date));
+  if (!date) return "-";
+  return new Intl.DateTimeFormat("pt-BR").format(new Date(date));
 }
 
 export function formatCNPJ(cnpj: string): string {
-  const d = cnpj.replace(/\D/g, '');
+  const d = cnpj.replace(/\D/g, "");
   if (d.length !== 14) return cnpj;
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
-export function formatQuantidade(value: number | string, unidade: string): string {
+export function formatQuantidade(
+  value: number | string,
+  unidade: string,
+): string {
   const num = parseFloat(String(value));
-  return `${num.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} ${unidade}`;
+  return `${num.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })} ${unidade}`;
 }
 
-export type StatusCheque = 'recebido' | 'depositado' | 'compensado' | 'devolvido';
+export type StatusCheque = "a_receber" | "recebido" | "depositado";
 
 export const STATUS_CHEQUE_LABEL: Record<StatusCheque, string> = {
-  recebido: 'Recebido',
-  depositado: 'Depositado',
-  compensado: 'Compensado',
-  devolvido: 'Devolvido',
+  a_receber: "A Receber",
+  recebido: "Recebido",
+  depositado: "Depositado",
 };
 
 export const STATUS_CHEQUE_COLOR: Record<StatusCheque, string> = {
-  recebido: 'bg-yellow-100 text-yellow-800',
-  depositado: 'bg-blue-100 text-blue-800',
-  compensado: 'bg-green-100 text-green-800',
-  devolvido: 'bg-red-100 text-red-800',
+  a_receber: "bg-orange-100 text-orange-800",
+  recebido: "bg-yellow-100 text-yellow-800",
+  depositado: "bg-green-100 text-green-800",
 };
 
 export function toInputDate(date: string | Date | null | undefined): string {
-  if (!date) return '';
+  if (!date) return "";
   const d = new Date(date);
-  return d.toISOString().split('T')[0];
+  return d.toISOString().split("T")[0];
 }
 
-export function classNames(...classes: (string | undefined | null | false)[]): string {
-  return classes.filter(Boolean).join(' ');
+export function classNames(
+  ...classes: (string | undefined | null | false)[]
+): string {
+  return classes.filter(Boolean).join(" ");
 }
 
 // Tipos principais
@@ -104,7 +110,9 @@ export interface Venda {
   vendedorId: number;
   motoristaId?: number;
   frete: number;
-  valorTotal: number;
+  freteRecibo: boolean;
+  freteReciboNum?: string;
+  valorTotal: number; // apenas produtos, sem frete
   dataVenda: string;
   observacoes?: string;
   cliente: Cliente;
@@ -115,7 +123,9 @@ export interface Venda {
 
 export interface Cheque {
   id: number;
+  numeroOrdem: number;
   clienteId: number;
+  vendaId?: number;
   valor: number;
   banco?: string;
   numero?: string;
@@ -126,6 +136,7 @@ export interface Cheque {
   status: StatusCheque;
   observacoes?: string;
   cliente: Cliente;
+  venda?: { id: number; dataVenda: string; valorTotal: number } | null;
 }
 
 export interface Pagamento {

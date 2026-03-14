@@ -67,11 +67,10 @@ router.get("/vendas", async (req, res) => {
 router.get("/comissoes", async (req, res) => {
   try {
     const { dataInicio, dataFim, vendedorId } = req.query;
-    const where = {};
+    const where = { ativo: true };
     if (vendedorId) where.id = parseInt(vendedorId);
     const vendedores = await prisma.vendedor.findMany({
       where,
-      where: { ativo: true },
     });
 
     const resultado = [];

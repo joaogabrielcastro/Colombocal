@@ -92,6 +92,22 @@ router.get("/", async (req, res) => {
       include: { cliente: true, vendedor: true },
     });
 
+    // Faturamento dos últimos 6 meses
+    const faturamentoMeses = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const inicio = new Date(d.getFullYear(), d.getMonth(), 1);
+      const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+      const agg = await prisma.venda.aggregate({
+        where: { dataVenda: { gte: inicio, lte: fim } },
+        _sum: { valorTotal: true },
+      });
+      faturamentoMeses.push({
+        mes: d.toLocaleString("pt-BR", { month: "short", year: "2-digit" }),
+        total: parseFloat(agg._sum.valorTotal || 0),
+      });
+    }
+
     res.json({
       vendasHoje: vendasHoje.length,
       faturamentoHoje,
@@ -106,6 +122,7 @@ router.get("/", async (req, res) => {
       estoqueBaixo: estoqueBaixo.length,
       produtosEstoqueBaixo: estoqueBaixo,
       ultimasVendas,
+      faturamentoPorMes: faturamentoMeses,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

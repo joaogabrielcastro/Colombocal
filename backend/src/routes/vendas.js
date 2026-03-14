@@ -65,16 +65,33 @@ router.post("/", async (req, res) => {
       vendedorId,
       motoristaId,
       frete,
+      freteRecibo,
+      freteReciboNum,
       dataVenda,
       observacoes,
       itens,
     } = req.body;
 
-    // Calcular valor total
-    const subtotalProdutos = itens.reduce((acc, item) => {
+    // valorTotal = apenas produtos (frete é cobrado à parte)
+    const valorTotal = itens.reduce((acc, item) => {
       return acc + parseFloat(item.quantidade) * parseFloat(item.precoUnitario);
     }, 0);
-    const valorTotal = subtotalProdutos + parseFloat(frete || 0);
+
+    // Validar estoque disponível antes de criar a venda
+    for (const item of itens) {
+      const produto = await prisma.produto.findUnique({
+        where: { id: parseInt(item.produtoId) },
+      });
+      if (!produto)
+        return res
+          .status(400)
+          .json({ error: `Produto ID ${item.produtoId} não encontrado` });
+      if (parseFloat(produto.estoqueAtual) < parseFloat(item.quantidade)) {
+        return res.status(400).json({
+          error: `Estoque insuficiente para "${produto.nome}". Disponível: ${parseFloat(produto.estoqueAtual)} ${produto.unidade}, solicitado: ${parseFloat(item.quantidade)} ${produto.unidade}`,
+        });
+      }
+    }
 
     // Criar venda e itens em transação
     const venda = await prisma.$transaction(async (tx) => {
@@ -84,6 +101,8 @@ router.post("/", async (req, res) => {
           vendedorId: parseInt(vendedorId),
           motoristaId: motoristaId ? parseInt(motoristaId) : null,
           frete: frete || 0,
+          freteRecibo: !!freteRecibo,
+          freteReciboNum: freteReciboNum || null,
           valorTotal,
           dataVenda: dataVenda ? new Date(dataVenda) : new Date(),
           observacoes,

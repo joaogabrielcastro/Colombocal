@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 // GET /api/clientes - listar todos os clientes
 router.get("/", async (req, res) => {
   try {
-    const { busca, ativo } = req.query;
+    const { busca, ativo, take, skip } = req.query;
     const where = {};
     if (ativo !== undefined) where.ativo = ativo === "true";
     if (busca) {
@@ -17,11 +17,18 @@ router.get("/", async (req, res) => {
         { cidade: { contains: busca, mode: "insensitive" } },
       ];
     }
-    const clientes = await prisma.cliente.findMany({
-      where,
-      orderBy: { razaoSocial: "asc" },
-    });
-    res.json(clientes);
+    const takeNum = take ? parseInt(take) : undefined;
+    const skipNum = skip ? parseInt(skip) : undefined;
+    const [clientes, total] = await Promise.all([
+      prisma.cliente.findMany({
+        where,
+        orderBy: { razaoSocial: "asc" },
+        take: takeNum,
+        skip: skipNum,
+      }),
+      prisma.cliente.count({ where }),
+    ]);
+    res.json({ clientes, total });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

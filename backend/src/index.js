@@ -8,8 +8,8 @@ app.use(cors());
 app.use(express.json());
 
 // Health check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/", (req, res) => {
+  res.json({ message: "API Colombocal funcionando 🚀" });
 });
 
 // Routes

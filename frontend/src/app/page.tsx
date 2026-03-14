@@ -24,6 +24,7 @@ interface DashboardData {
   estoqueBaixo: number;
   produtosEstoqueBaixo: any[];
   ultimasVendas: any[];
+  faturamentoPorMes: { mes: string; total: number }[];
 }
 
 function StatCard({
@@ -159,6 +160,84 @@ export default function DashboardPage() {
           href="/estoque"
         />
       </div>
+
+      {/* Gráfico faturamento */}
+      {d.faturamentoPorMes &&
+        d.faturamentoPorMes.length > 0 &&
+        (() => {
+          const maxVal = Math.max(
+            ...d.faturamentoPorMes.map((m) => m.total),
+            1,
+          );
+          const chartH = 120;
+          const barW = 36;
+          const gap = 16;
+          const totalW = d.faturamentoPorMes.length * (barW + gap) - gap;
+          return (
+            <div className="card mb-6">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">
+                  Faturamento — Últimos 6 Meses
+                </h2>
+              </div>
+              <div className="px-5 py-5 flex justify-center overflow-x-auto">
+                <svg
+                  width={totalW + 20}
+                  height={chartH + 48}
+                  style={{ minWidth: totalW + 20 }}
+                >
+                  {d.faturamentoPorMes.map((m, i) => {
+                    const barH =
+                      maxVal > 0
+                        ? Math.max(
+                            (m.total / maxVal) * chartH,
+                            m.total > 0 ? 4 : 0,
+                          )
+                        : 0;
+                    const x = i * (barW + gap);
+                    const y = chartH - barH;
+                    return (
+                      <g key={m.mes}>
+                        <rect
+                          x={x}
+                          y={y}
+                          width={barW}
+                          height={barH}
+                          rx={4}
+                          fill="#3b82f6"
+                          opacity={barH === 0 ? 0.15 : 0.85}
+                        />
+                        {m.total > 0 && (
+                          <text
+                            x={x + barW / 2}
+                            y={y - 4}
+                            textAnchor="middle"
+                            fontSize={9}
+                            fill="#374151"
+                            fontWeight={600}
+                          >
+                            {m.total >= 1000
+                              ? `R$${(m.total / 1000).toFixed(1)}k`
+                              : `R$${m.total.toFixed(0)}`}
+                          </text>
+                        )}
+                        <text
+                          x={x + barW / 2}
+                          y={chartH + 16}
+                          textAnchor="middle"
+                          fontSize={10}
+                          fill="#6b7280"
+                        >
+                          {m.mes}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+          );
+        })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Últimas vendas */}

@@ -30,7 +30,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/estoque - registrar movimentação manual
+// POST /api/estoque - registrar movimentação
+// (validação de saída feita dentro da rota) manual
 router.post("/", async (req, res) => {
   try {
     const { produtoId, tipo, quantidade, data, observacao } = req.body;
@@ -40,6 +41,18 @@ router.post("/", async (req, res) => {
     }
 
     const movimentacao = await prisma.$transaction(async (tx) => {
+      const produto = await tx.produto.findUnique({
+        where: { id: parseInt(produtoId) },
+      });
+      if (!produto) throw new Error("Produto não encontrado");
+
+      // Validar estoque disponível para saída manual
+      if (tipo === "saida" && parseFloat(produto.estoqueAtual) < qtd) {
+        throw new Error(
+          `Estoque insuficiente para "${produto.nome}". Disponível: ${parseFloat(produto.estoqueAtual)} ${produto.unidade}, solicitado: ${qtd} ${produto.unidade}`,
+        );
+      }
+
       const mov = await tx.movimentacaoEstoque.create({
         data: {
           produtoId: parseInt(produtoId),
@@ -55,9 +68,6 @@ router.post("/", async (req, res) => {
       if (tipo === "saida") delta = -qtd;
       else if (tipo === "ajuste") {
         // No ajuste, a quantidade é o novo valor absoluto do estoque
-        const produto = await tx.produto.findUnique({
-          where: { id: parseInt(produtoId) },
-        });
         delta = qtd - parseFloat(produto.estoqueAtual);
       }
 

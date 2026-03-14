@@ -1,10 +1,20 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
-import { formatMoney, type Cliente, type Produto, type Vendedor, type Motorista } from '@/lib/utils';
-import api from '@/lib/api';
+"use client";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  ArrowLeftIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
+import {
+  formatMoney,
+  type Cliente,
+  type Produto,
+  type Vendedor,
+  type Motorista,
+} from "@/lib/utils";
+import api from "@/lib/api";
 
 interface ItemForm {
   produtoId: string;
@@ -18,9 +28,21 @@ interface ProdutoPreco extends Produto {
 }
 
 export default function NovaVendaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-gray-400">Carregando...</div>
+      }
+    >
+      <NovaVendaForm />
+    </Suspense>
+  );
+}
+
+function NovaVendaForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preClienteId = searchParams.get('clienteId');
+  const preClienteId = searchParams.get("clienteId");
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -28,25 +50,32 @@ export default function NovaVendaPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [produtosCliente, setProdutosCliente] = useState<ProdutoPreco[]>([]);
 
-  const [clienteId, setClienteId] = useState(preClienteId || '');
-  const [vendedorId, setVendedorId] = useState('');
-  const [motoristaId, setMotoristaId] = useState('');
-  const [frete, setFrete] = useState('');
-  const [dataVenda, setDataVenda] = useState(new Date().toISOString().split('T')[0]);
-  const [observacoes, setObservacoes] = useState('');
-  const [itens, setItens] = useState<ItemForm[]>([{ produtoId: '', quantidade: '', precoUnitario: '' }]);
+  const [clienteId, setClienteId] = useState(preClienteId || "");
+  const [vendedorId, setVendedorId] = useState("");
+  const [motoristaId, setMotoristaId] = useState("");
+  const [frete, setFrete] = useState("");
+  const [dataVenda, setDataVenda] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [observacoes, setObservacoes] = useState("");
+  const [itens, setItens] = useState<ItemForm[]>([
+    { produtoId: "", quantidade: "", precoUnitario: "" },
+  ]);
+
+  const [freteRecibo, setFreteRecibo] = useState(false);
+  const [freteReciboNum, setFreteReciboNum] = useState("");
 
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState('');
+  const [erro, setErro] = useState("");
 
   useEffect(() => {
     Promise.all([
-      api.get<Cliente[]>('/clientes?ativo=true'),
-      api.get<Vendedor[]>('/vendedores'),
-      api.get<Motorista[]>('/motoristas'),
-      api.get<Produto[]>('/produtos?ativo=true'),
+      api.get<{ clientes: Cliente[] }>("/clientes?ativo=true"),
+      api.get<Vendedor[]>("/vendedores"),
+      api.get<Motorista[]>("/motoristas"),
+      api.get<Produto[]>("/produtos?ativo=true"),
     ]).then(([c, v, m, p]) => {
-      setClientes(c);
+      setClientes(c.clientes);
       setVendedores(v);
       setMotoristas(m);
       setProdutos(p);
@@ -60,49 +89,89 @@ export default function NovaVendaPage() {
       setProdutosCliente([]);
       return;
     }
-    api.get<ProdutoPreco[]>(`/clientes/${clienteId}/precos`).then(data => {
+    api.get<ProdutoPreco[]>(`/clientes/${clienteId}/precos`).then((data) => {
       setProdutosCliente(data);
       // Atualizar preços nos itens existentes
-      setItens(prev => prev.map(item => {
-        if (!item.produtoId) return item;
-        const pc = data.find(p => String(p.id) === item.produtoId);
-        if (pc) return { ...item, precoUnitario: String(pc.precoAplicado) };
-        return item;
-      }));
+      setItens((prev) =>
+        prev.map((item) => {
+          if (!item.produtoId) return item;
+          const pc = data.find((p) => String(p.id) === item.produtoId);
+          if (pc) return { ...item, precoUnitario: String(pc.precoAplicado) };
+          return item;
+        }),
+      );
       // Preencher frete padrão do cliente
-      const cliente = clientes.find(c => String(c.id) === clienteId);
+      const cliente = clientes.find((c) => String(c.id) === clienteId);
       if (cliente && !frete) setFrete(String(cliente.fretePadrao));
     });
   }, [clienteId]);
 
   const handleProdutoChange = (idx: number, produtoId: string) => {
-    const pc = produtosCliente.find(p => String(p.id) === produtoId);
-    const preco = pc ? String(pc.precoAplicado) : '';
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, produtoId, precoUnitario: preco } : item));
+    const pc = produtosCliente.find((p) => String(p.id) === produtoId);
+    const preco = pc ? String(pc.precoAplicado) : "";
+    setItens((prev) =>
+      prev.map((item, i) =>
+        i === idx ? { ...item, produtoId, precoUnitario: preco } : item,
+      ),
+    );
   };
 
-  const addItem = () => setItens(prev => [...prev, { produtoId: '', quantidade: '', precoUnitario: '' }]);
-  const removeItem = (idx: number) => setItens(prev => prev.filter((_, i) => i !== idx));
+  const addItem = () =>
+    setItens((prev) => [
+      ...prev,
+      { produtoId: "", quantidade: "", precoUnitario: "" },
+    ]);
+  const removeItem = (idx: number) =>
+    setItens((prev) => prev.filter((_, i) => i !== idx));
 
   const subtotal = itens.reduce((acc, item) => {
-    const q = parseFloat(item.quantidade || '0');
-    const p = parseFloat(item.precoUnitario || '0');
+    const q = parseFloat(item.quantidade || "0");
+    const p = parseFloat(item.precoUnitario || "0");
     return acc + q * p;
   }, 0);
-  const freteVal = parseFloat(frete || '0');
-  const total = subtotal + freteVal;
+  const freteVal = parseFloat(frete || "0");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clienteId || !vendedorId) { setErro('Selecione cliente e vendedor'); return; }
-    const itensValidos = itens.filter(i => i.produtoId && i.quantidade && i.precoUnitario);
-    if (itensValidos.length === 0) { setErro('Adicione pelo menos um produto'); return; }
+    if (!clienteId || !vendedorId) {
+      setErro("Selecione cliente e vendedor");
+      return;
+    }
+    const itensValidos = itens.filter(
+      (i) => i.produtoId && i.quantidade && i.precoUnitario,
+    );
+    if (itensValidos.length === 0) {
+      setErro("Adicione pelo menos um produto");
+      return;
+    }
+
+    // Validar estoque disponível
+    const allProdutos = produtosCliente.length > 0 ? produtosCliente : produtos;
+    for (const item of itensValidos) {
+      const prod = allProdutos.find((p) => String(p.id) === item.produtoId);
+      if (
+        prod &&
+        parseFloat(item.quantidade) > parseFloat(String(prod.estoqueAtual))
+      ) {
+        setErro(
+          `Estoque insuficiente para "${prod.nome}". Disponível: ${parseFloat(String(prod.estoqueAtual))} ${prod.unidade}, solicitado: ${parseFloat(item.quantidade)} ${prod.unidade}`,
+        );
+        return;
+      }
+    }
     setSalvando(true);
-    setErro('');
+    setErro("");
     try {
-      const venda = await api.post<{ id: number }>('/vendas', {
-        clienteId, vendedorId, motoristaId: motoristaId || undefined,
-        frete: freteVal, dataVenda, observacoes, itens: itensValidos,
+      const venda = await api.post<{ id: number }>("/vendas", {
+        clienteId,
+        vendedorId,
+        motoristaId: motoristaId || undefined,
+        frete: freteVal,
+        freteRecibo,
+        freteReciboNum: freteRecibo ? freteReciboNum : undefined,
+        dataVenda,
+        observacoes,
+        itens: itensValidos,
       });
       router.push(`/vendas/${venda.id}`);
     } catch (e: any) {
@@ -120,7 +189,11 @@ export default function NovaVendaPage() {
         <h1 className="text-2xl font-bold text-gray-900">Nova Venda</h1>
       </div>
 
-      {erro && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{erro}</div>}
+      {erro && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {erro}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Dados da venda */}
@@ -128,39 +201,117 @@ export default function NovaVendaPage() {
           <h2 className="font-semibold text-gray-900 mb-4">Dados da Venda</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
-              <select required value={clienteId} onChange={e => setClienteId(e.target.value)} className="input-field">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cliente *
+              </label>
+              <select
+                required
+                value={clienteId}
+                onChange={(e) => setClienteId(e.target.value)}
+                className="input-field"
+              >
                 <option value="">Selecione o cliente</option>
-                {clientes.map(c => (
-                  <option key={c.id} value={c.id}>{c.nomeFantasia || c.razaoSocial}</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nomeFantasia || c.razaoSocial}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vendedor *</label>
-              <select required value={vendedorId} onChange={e => setVendedorId(e.target.value)} className="input-field">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vendedor *
+              </label>
+              <select
+                required
+                value={vendedorId}
+                onChange={(e) => setVendedorId(e.target.value)}
+                className="input-field"
+              >
                 <option value="">Selecione</option>
-                {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nome}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Motorista</label>
-              <select value={motoristaId} onChange={e => setMotoristaId(e.target.value)} className="input-field">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Motorista
+              </label>
+              <select
+                value={motoristaId}
+                onChange={(e) => setMotoristaId(e.target.value)}
+                className="input-field"
+              >
                 <option value="">Sem motorista</option>
-                {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                {motoristas.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nome}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Data da Venda</label>
-              <input type="date" value={dataVenda} onChange={e => setDataVenda(e.target.value)} className="input-field" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Data da Venda
+              </label>
+              <input
+                type="date"
+                value={dataVenda}
+                onChange={(e) => setDataVenda(e.target.value)}
+                className="input-field"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frete (R$)</label>
-              <input type="number" step="0.01" min="0" value={frete} onChange={e => setFrete(e.target.value)} className="input-field" placeholder="0,00" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Frete (R$) — cobrado à parte
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={frete}
+                onChange={(e) => setFrete(e.target.value)}
+                className="input-field"
+                placeholder="0,00"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-              <input value={observacoes} onChange={e => setObservacoes(e.target.value)} className="input-field" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Recibo de Frete
+              </label>
+              <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={freteRecibo}
+                  onChange={(e) => setFreteRecibo(e.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <span className="text-sm text-gray-700">
+                  Emitir recibo de frete
+                </span>
+              </label>
+              {freteRecibo && (
+                <input
+                  type="text"
+                  placeholder="Número do recibo"
+                  value={freteReciboNum}
+                  onChange={(e) => setFreteReciboNum(e.target.value)}
+                  className="input-field mt-2"
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Observações
+              </label>
+              <input
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                className="input-field"
+              />
             </div>
           </div>
         </div>
@@ -169,7 +320,11 @@ export default function NovaVendaPage() {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Produtos</h2>
-            <button type="button" onClick={addItem} className="btn-secondary text-xs py-1.5">
+            <button
+              type="button"
+              onClick={addItem}
+              className="btn-secondary text-xs py-1.5"
+            >
               <PlusIcon className="w-3.5 h-3.5" /> Adicionar produto
             </button>
           </div>
@@ -186,19 +341,39 @@ export default function NovaVendaPage() {
             </thead>
             <tbody>
               {itens.map((item, idx) => {
-                const sub = parseFloat(item.quantidade || '0') * parseFloat(item.precoUnitario || '0');
+                const sub =
+                  parseFloat(item.quantidade || "0") *
+                  parseFloat(item.precoUnitario || "0");
+                const allProdutos =
+                  produtosCliente.length > 0 ? produtosCliente : produtos;
+                const prodSelecionado = allProdutos.find(
+                  (p) => String(p.id) === item.produtoId,
+                );
+                const estoqueInsuf =
+                  prodSelecionado &&
+                  parseFloat(item.quantidade || "0") >
+                    parseFloat(String(prodSelecionado.estoqueAtual));
                 return (
                   <tr key={idx} className="border-b border-gray-50">
                     <td className="py-2 pr-3">
                       <select
                         value={item.produtoId}
-                        onChange={e => handleProdutoChange(idx, e.target.value)}
+                        onChange={(e) =>
+                          handleProdutoChange(idx, e.target.value)
+                        }
                         className="input-field text-sm"
                       >
                         <option value="">Selecione o produto</option>
-                        {(produtosCliente.length > 0 ? produtosCliente : produtos).map(p => (
+                        {(produtosCliente.length > 0
+                          ? produtosCliente
+                          : produtos
+                        ).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.nome} ({p.unidade})
+                            {parseFloat(String(p.estoqueAtual)) <=
+                            parseFloat(String(p.estoqueMinimo))
+                              ? " ⚠️ Estoque baixo"
+                              : ""}
                           </option>
                         ))}
                       </select>
@@ -210,9 +385,28 @@ export default function NovaVendaPage() {
                         min="0"
                         placeholder="0"
                         value={item.quantidade}
-                        onChange={e => setItens(prev => prev.map((it, i) => i === idx ? { ...it, quantidade: e.target.value } : it))}
-                        className="input-field text-sm"
+                        onChange={(e) =>
+                          setItens((prev) =>
+                            prev.map((it, i) =>
+                              i === idx
+                                ? { ...it, quantidade: e.target.value }
+                                : it,
+                            ),
+                          )
+                        }
+                        className={`input-field text-sm ${estoqueInsuf ? "border-red-400 bg-red-50" : ""}`}
                       />
+                      {prodSelecionado && (
+                        <p
+                          className={`text-xs mt-0.5 ${estoqueInsuf ? "text-red-600 font-medium" : "text-gray-400"}`}
+                        >
+                          Disponível:{" "}
+                          {parseFloat(
+                            String(prodSelecionado.estoqueAtual),
+                          ).toLocaleString("pt-BR")}{" "}
+                          {prodSelecionado.unidade}
+                        </p>
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       <input
@@ -221,14 +415,28 @@ export default function NovaVendaPage() {
                         min="0"
                         placeholder="0,00"
                         value={item.precoUnitario}
-                        onChange={e => setItens(prev => prev.map((it, i) => i === idx ? { ...it, precoUnitario: e.target.value } : it))}
+                        onChange={(e) =>
+                          setItens((prev) =>
+                            prev.map((it, i) =>
+                              i === idx
+                                ? { ...it, precoUnitario: e.target.value }
+                                : it,
+                            ),
+                          )
+                        }
                         className="input-field text-sm"
                       />
                     </td>
-                    <td className="py-2 pr-3 font-medium text-sm">{formatMoney(sub)}</td>
+                    <td className="py-2 pr-3 font-medium text-sm">
+                      {formatMoney(sub)}
+                    </td>
                     <td className="py-2">
                       {itens.length > 1 && (
-                        <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600">
+                        <button
+                          type="button"
+                          onClick={() => removeItem(idx)}
+                          className="text-red-400 hover:text-red-600"
+                        >
                           <TrashIcon className="w-4 h-4" />
                         </button>
                       )}
@@ -243,28 +451,33 @@ export default function NovaVendaPage() {
         {/* Totais */}
         <div className="card p-5">
           <div className="flex justify-end">
-            <div className="w-64 space-y-2">
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Subtotal produtos:</span>
-                <span className="font-medium">{formatMoney(subtotal)}</span>
+            <div className="w-72 space-y-2">
+              <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
+                <span>Total Produtos:</span>
+                <span className="text-green-700 text-lg">
+                  {formatMoney(subtotal)}
+                </span>
               </div>
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Frete:</span>
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Frete (cobrado à parte):</span>
                 <span className="font-medium">{formatMoney(freteVal)}</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-gray-900 border-t pt-2">
-                <span>Total:</span>
-                <span className="text-green-700 text-lg">{formatMoney(total)}</span>
-              </div>
+              {freteRecibo && (
+                <div className="text-xs text-blue-600 text-right">
+                  Recibo de frete{freteReciboNum ? `: ${freteReciboNum}` : ""}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="flex gap-3">
           <button type="submit" disabled={salvando} className="btn-primary">
-            {salvando ? 'Registrando...' : 'Registrar Venda'}
+            {salvando ? "Registrando..." : "Registrar Venda"}
           </button>
-          <Link href="/vendas" className="btn-secondary">Cancelar</Link>
+          <Link href="/vendas" className="btn-secondary">
+            Cancelar
+          </Link>
         </div>
       </form>
     </div>
