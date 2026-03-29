@@ -3,21 +3,33 @@ import { useEffect, useState } from "react";
 import {
   MagnifyingGlassIcon,
   ArrowDownTrayIcon,
+  PrinterIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
 import api from "@/lib/api";
+import { TableListSkeleton } from "@/components/ui/skeletons";
+
+interface VendaComissaoLinha {
+  id: number;
+  valorTotal: unknown;
+  comissaoCalculada?: number;
+  [key: string]: unknown;
+}
 
 interface ComissaoVendedor {
   vendedor: { id: number; nome: string; comissaoPercentual: number };
-  vendas: any[];
+  vendas: VendaComissaoLinha[];
   totalVendas: number;
   comissao: number;
   percentual: number;
   quantidadeVendas: number;
 }
 
+type ComissaoModo = "emissao" | "caixa";
+
 export default function ComissoesPage() {
   const [dados, setDados] = useState<ComissaoVendedor[]>([]);
+  const [modo, setModo] = useState<ComissaoModo>("emissao");
   const [loading, setLoading] = useState(false);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
@@ -31,7 +43,38 @@ export default function ComissoesPage() {
     const fim = hoje.toISOString().split("T")[0];
     setDataInicio(ini);
     setDataFim(fim);
-    buscar(ini, fim);
+    let cancelled = false;
+    (async () => {
+      let m: ComissaoModo = "emissao";
+      try {
+        const c = await api.get<{ comissaoModo: ComissaoModo }>("/config");
+        m = c.comissaoModo === "caixa" ? "caixa" : "emissao";
+        if (!cancelled) setModo(m);
+      } catch {
+        /* default emissao */
+      }
+      if (cancelled) return;
+      const params = new URLSearchParams();
+      params.set("dataInicio", ini);
+      params.set("dataFim", fim);
+      params.set("modo", m);
+      setLoading(true);
+      try {
+        const r = await api.get<{
+          modo: ComissaoModo;
+          resultado: ComissaoVendedor[];
+        }>(`/relatorios/comissoes?${params}`);
+        if (!cancelled) {
+          setModo(r.modo);
+          setDados(r.resultado);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const exportarCSV = () => {
@@ -59,19 +102,38 @@ export default function ComissoesPage() {
     URL.revokeObjectURL(url);
   };
 
-  const buscar = (ini?: string, fim?: string) => {
+  const buscar = (ini?: string, fim?: string, m?: ComissaoModo) => {
     const params = new URLSearchParams();
     if (ini ?? dataInicio) params.set("dataInicio", ini ?? dataInicio);
     if (fim ?? dataFim) params.set("dataFim", fim ?? dataFim);
+    const modoUse = m ?? modo;
+    params.set("modo", modoUse);
     setLoading(true);
     api
-      .get<ComissaoVendedor[]>(`/relatorios/comissoes?${params}`)
-      .then(setDados)
+      .get<{ modo: ComissaoModo; resultado: ComissaoVendedor[] }>(
+        `/relatorios/comissoes?${params}`,
+      )
+      .then((r) => {
+        setModo(r.modo);
+        setDados(r.resultado);
+      })
       .finally(() => setLoading(false));
+  };
+
+  const salvarModoPadrao = async () => {
+    await api.put("/config", { comissaoModo: modo });
+    buscar();
   };
 
   const totalComissao = dados.reduce((acc, d) => acc + d.comissao, 0);
   const totalVendas = dados.reduce((acc, d) => acc + d.totalVendas, 0);
+
+  const imprimirRelatorio = () => {
+    const tituloAnterior = document.title;
+    document.title = `Comissões por Vendedor - ${dataInicio} a ${dataFim}`;
+    window.print();
+    document.title = tituloAnterior;
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -79,6 +141,10 @@ export default function ComissoesPage() {
         <h1 className="text-2xl font-bold text-gray-900">
           Comissões por Vendedor
         </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Modo atual:{" "}
+          <strong>{modo === "caixa" ? "sobre caixa (pago na ordem)" : "emissão (valor na venda)"}</strong>
+        </p>
       </div>
 
       <div className="card p-4 mb-6">
@@ -103,24 +169,52 @@ export default function ComissoesPage() {
               className="input-field"
             />
           </div>
-          <div className="flex items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Regra</label>
+            <select
+              value={modo}
+              onChange={(e) => {
+                const m = e.target.value as ComissaoModo;
+                setModo(m);
+                buscar(undefined, undefined, m);
+              }}
+              className="input-field min-w-44"
+            >
+              <option value="emissao">Emissão (histórico na venda)</option>
+              <option value="caixa">Caixa (proporcional ao recebido)</option>
+            </select>
+          </div>
+          <div className="flex items-end gap-2 flex-wrap">
             <button onClick={() => buscar()} className="btn-primary">
               <MagnifyingGlassIcon className="w-4 h-4" /> Calcular
             </button>
+            <button type="button" onClick={salvarModoPadrao} className="btn-secondary text-sm">
+              Salvar regra padrão
+            </button>
             {dados.length > 0 && (
-              <button
-                onClick={exportarCSV}
-                className="btn-secondary flex items-center gap-1"
-              >
-                <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
-              </button>
+              <>
+                <button
+                  onClick={imprimirRelatorio}
+                  className="btn-secondary flex items-center gap-1"
+                >
+                  <PrinterIcon className="w-4 h-4" /> Imprimir
+                </button>
+                <button
+                  onClick={exportarCSV}
+                  className="btn-secondary flex items-center gap-1"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+                </button>
+              </>
             )}
           </div>
         </div>
       </div>
 
       {loading && (
-        <div className="text-center text-gray-400 py-8">Calculando...</div>
+        <div className="card p-4">
+          <TableListSkeleton rows={8} cols={5} />
+        </div>
       )}
 
       {!loading && dados.length > 0 && (
@@ -205,9 +299,10 @@ export default function ComissoesPage() {
                           </td>
                           <td className="table-cell text-right text-orange-600">
                             {formatMoney(
-                              (parseFloat(String(v.valorTotal)) *
-                                d.percentual) /
-                                100,
+                              v.comissaoCalculada ??
+                                (parseFloat(String(v.valorTotal)) *
+                                  d.percentual) /
+                                  100,
                             )}
                           </td>
                         </tr>

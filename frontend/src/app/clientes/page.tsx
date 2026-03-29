@@ -9,6 +9,9 @@ import {
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatCNPJ, type Cliente } from "@/lib/utils";
 import api from "@/lib/api";
+import { TableListSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
+import { reportApiError } from "@/lib/report-api-error";
 
 const PAGE_SIZE = 20;
 
@@ -33,6 +36,14 @@ export default function ClientesPage() {
       .then((data) => {
         setClientes(data.clientes);
         setTotal(data.total);
+      })
+      .catch((e) => {
+        reportApiError(e, {
+          title: "Não foi possível carregar os clientes",
+          onRetry: () => carregar(b, p),
+        });
+        setClientes([]);
+        setTotal(0);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -97,10 +108,26 @@ export default function ClientesPage() {
       {/* Tabela */}
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Carregando...</div>
+          <div className="p-4">
+            <TableListSkeleton rows={10} cols={6} />
+          </div>
         ) : clientes.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
-            {busca ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}
+          <div className="p-6">
+            <EmptyState
+              title={busca ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}
+              description={
+                busca
+                  ? "Tente outro termo ou limpe a busca."
+                  : "Cadastre o primeiro cliente para começar."
+              }
+              action={
+                !busca ? (
+                  <Link href="/clientes/novo" className="btn-primary">
+                    Novo cliente
+                  </Link>
+                ) : undefined
+              }
+            />
           </div>
         ) : (
           <table className="w-full">

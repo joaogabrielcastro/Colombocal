@@ -1,9 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import api from '@/lib/api';
+import type { Vendedor } from '@/lib/utils';
 
 interface CnpjData {
   cnpj: string;
@@ -25,15 +26,22 @@ const initialForm = {
   endereco: '',
   observacoes: '',
   fretePadrao: '',
+  vendedorId: '',
+  comissaoFixaPercentual: '',
 };
 
 export default function NovoClientePage() {
   const router = useRouter();
   const [form, setForm] = useState(initialForm);
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    api.get<Vendedor[]>('/vendedores').then(setVendedores);
+  }, []);
 
   const handleBuscarCNPJ = async () => {
     const cnpj = cnpjBusca.replace(/\D/g, '');
@@ -70,6 +78,11 @@ export default function NovoClientePage() {
       const cliente = await api.post<{ id: number }>('/clientes', {
         ...form,
         fretePadrao: parseFloat(form.fretePadrao || '0'),
+        vendedorId: form.vendedorId ? parseInt(form.vendedorId, 10) : undefined,
+        comissaoFixaPercentual:
+          form.comissaoFixaPercentual !== ''
+            ? parseFloat(form.comissaoFixaPercentual.replace(',', '.'))
+            : undefined,
       });
       router.push(`/clientes/${cliente.id}`);
     } catch (e: any) {
@@ -78,8 +91,14 @@ export default function NovoClientePage() {
     }
   };
 
-  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [field]: e.target.value }));
+  const set =
+    (field: keyof typeof form) =>
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >,
+    ) =>
+      setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -159,6 +178,33 @@ export default function NovoClientePage() {
               onChange={set('fretePadrao')}
               className="input-field"
               placeholder="0,00"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Vendedor do cliente</label>
+            <select
+              value={form.vendedorId}
+              onChange={set('vendedorId')}
+              className="input-field"
+            >
+              <option value="">Nenhum</option>
+              {vendedores.filter((v) => v.ativo).map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nome} ({v.comissaoPercentual}% padrão)
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Comissão fixa (%)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.comissaoFixaPercentual}
+              onChange={set('comissaoFixaPercentual')}
+              className="input-field"
+              placeholder="Opcional — sobrescreve o % do vendedor"
             />
           </div>
           <div className="md:col-span-2">

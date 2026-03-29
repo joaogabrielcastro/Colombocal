@@ -1,16 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ShoppingCartIcon,
   CurrencyDollarIcon,
-  ExclamationTriangleIcon,
   BanknotesIcon,
   CubeIcon,
   ArrowTrendingUpIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
 import api from "@/lib/api";
+import { DashboardSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
+import { reportApiError } from "@/lib/report-api-error";
 
 interface DashboardData {
   vendasHoje: number;
@@ -21,8 +23,7 @@ interface DashboardData {
   totalEmAberto: number;
   chequesPendentes: number;
   totalChequesPendentes: number;
-  estoqueBaixo: number;
-  produtosEstoqueBaixo: any[];
+  totalProdutosAtivos: number;
   ultimasVendas: any[];
   faturamentoPorMes: { mes: string; total: number }[];
 }
@@ -62,28 +63,42 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api
-      .get<DashboardData>("/dashboard")
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await api.get<DashboardData>("/dashboard");
+      setData(d);
+    } catch (e) {
+      setData(null);
+      reportApiError(e, {
+        title: "Não foi possível carregar o dashboard",
+        onRetry: () => void carregar(),
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400 text-sm">Carregando...</div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-red-500 text-sm">
-          Erro ao carregar dashboard. Verifique se o servidor está rodando.
-        </div>
+      <div className="p-6 max-w-lg mx-auto flex items-center min-h-[50vh]">
+        <EmptyState
+          title="Dashboard indisponível"
+          description="Verifique se o backend está em execução e tente novamente."
+          action={
+            <button type="button" className="btn-primary" onClick={() => void carregar()}>
+              Tentar novamente
+            </button>
+          }
+        />
       </div>
     );
   }
@@ -93,16 +108,24 @@ export default function DashboardPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          {new Intl.DateTimeFormat("pt-BR", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          }).format(new Date())}
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            {new Intl.DateTimeFormat("pt-BR", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            }).format(new Date())}
+          </p>
+        </div>
+        <Link
+          href="/cobranca"
+          className="text-sm font-medium text-blue-600 hover:underline"
+        >
+          Painel de cobrança →
+        </Link>
       </div>
 
       {/* Stats grid */}
@@ -148,16 +171,12 @@ export default function DashboardPage() {
           href="/cheques"
         />
         <StatCard
-          title="Estoque Baixo"
-          value={String(d.estoqueBaixo)}
-          sub={d.estoqueBaixo > 0 ? "produtos abaixo do mínimo" : "estoque ok"}
+          title="Produtos Ativos"
+          value={String(d.totalProdutosAtivos)}
+          sub="cadastro (venda por telefone)"
           icon={CubeIcon}
-          color={
-            d.estoqueBaixo > 0
-              ? "bg-red-100 text-red-600"
-              : "bg-gray-100 text-gray-500"
-          }
-          href="/estoque"
+          color="bg-slate-100 text-slate-600"
+          href="/produtos"
         />
       </div>
 
@@ -253,9 +272,17 @@ export default function DashboardPage() {
           </div>
           <div className="divide-y divide-gray-50">
             {d.ultimasVendas.length === 0 ? (
-              <p className="px-5 py-4 text-gray-400 text-sm">
-                Nenhuma venda registrada
-              </p>
+              <div className="px-5 py-6">
+                <EmptyState
+                  title="Nenhuma venda ainda"
+                  description="As vendas recentes aparecerão aqui."
+                  action={
+                    <Link href="/vendas/nova" className="btn-primary text-sm">
+                      Nova venda
+                    </Link>
+                  }
+                />
+              </div>
             ) : (
               d.ultimasVendas.map((v: any) => (
                 <Link
@@ -280,49 +307,21 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Produtos estoque baixo */}
         <div className="card">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              {d.estoqueBaixo > 0 && (
-                <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />
-              )}
-              Estoque Baixo
-            </h2>
+            <h2 className="font-semibold text-gray-900">Movimentações</h2>
             <Link
               href="/estoque"
               className="text-blue-600 text-sm hover:underline"
             >
-              Ver estoque
+              Ver histórico
             </Link>
           </div>
-          <div className="divide-y divide-gray-50">
-            {d.produtosEstoqueBaixo.length === 0 ? (
-              <p className="px-5 py-4 text-gray-400 text-sm">
-                Todos os produtos estão com estoque adequado
-              </p>
-            ) : (
-              d.produtosEstoqueBaixo.map((p: any) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between px-5 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {p.nome}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Mínimo: {p.estoqueMinimo} {p.unidade}
-                    </p>
-                  </div>
-                  <span className="text-sm font-bold text-red-600">
-                    {parseFloat(p.estoqueAtual).toLocaleString("pt-BR")}{" "}
-                    {p.unidade}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
+          <p className="px-5 py-4 text-gray-500 text-sm leading-relaxed">
+            O cadastro de produtos não controla quantidade em estoque (operação
+            por telefone). Use a tela de movimentações apenas se precisar de
+            registro manual de entradas/saídas.
+          </p>
         </div>
       </div>
     </div>

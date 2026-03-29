@@ -15,8 +15,6 @@ async function main() {
         codigo: "CAL-HID-001",
         precoPadrao: 650.0,
         unidade: "ton",
-        estoqueAtual: 50,
-        estoqueMinimo: 10,
       },
     }),
     prisma.produto.upsert({
@@ -27,8 +25,6 @@ async function main() {
         codigo: "CAL-HID-002",
         precoPadrao: 580.0,
         unidade: "ton",
-        estoqueAtual: 80,
-        estoqueMinimo: 15,
       },
     }),
     prisma.produto.upsert({
@@ -39,8 +35,6 @@ async function main() {
         codigo: "CAL-VIV-001",
         precoPadrao: 420.0,
         unidade: "ton",
-        estoqueAtual: 120,
-        estoqueMinimo: 20,
       },
     }),
   ]);
@@ -59,6 +53,14 @@ async function main() {
   });
 
   console.log(`✅ Vendedor padrão criado: ${vendedor.nome}`);
+
+  await prisma.configSistema.upsert({
+    where: { chave: "COMISSAO_MODO" },
+    create: { chave: "COMISSAO_MODO", valor: "emissao" },
+    update: {},
+  });
+  console.log("✅ Config padrão COMISSAO_MODO=emissao");
+
   console.log("✅ Seed concluído com sucesso!");
 }
 

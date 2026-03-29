@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import {
   ExclamationTriangleIcon,
   ArrowDownTrayIcon,
+  PrinterIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
 import api from "@/lib/api";
+import { TableListSkeleton } from "@/components/ui/skeletons";
 
 interface ContaCliente {
   cliente: { id: number; razaoSocial: string; nomeFantasia?: string };
@@ -22,7 +24,7 @@ interface ChequeStatus {
 
 interface ChequeItem {
   id: number;
-  cliente: { nomeFantasia?: string; razaoSocial: string };
+  cliente: { id: number; nomeFantasia?: string; razaoSocial: string };
   valor: number;
   banco: string;
   numero: string;
@@ -39,16 +41,16 @@ interface FinanceiroData {
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  a_receber: "A Receber",
   recebido: "Recebido",
   depositado: "Depositado",
-  compensado: "Compensado",
   devolvido: "Devolvido",
 };
 
 const STATUS_COLOR: Record<string, string> = {
+  a_receber: "bg-orange-100 text-orange-800",
   recebido: "bg-blue-100 text-blue-800",
-  depositado: "bg-yellow-100 text-yellow-800",
-  compensado: "bg-green-100 text-green-800",
+  depositado: "bg-green-100 text-green-800",
   devolvido: "bg-red-100 text-red-800",
 };
 
@@ -110,6 +112,13 @@ export default function FinanceiroPage() {
     URL.revokeObjectURL(url);
   };
 
+  const imprimirRelatorio = () => {
+    const tituloAnterior = document.title;
+    document.title = `Relatório Financeiro - ${aba}`;
+    window.print();
+    document.title = tituloAnterior;
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
@@ -117,17 +126,27 @@ export default function FinanceiroPage() {
           Relatório Financeiro
         </h1>
         {dados && (
-          <button
-            onClick={exportarCSV}
-            className="btn-secondary flex items-center gap-1"
-          >
-            <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={imprimirRelatorio}
+              className="btn-secondary flex items-center gap-1"
+            >
+              <PrinterIcon className="w-4 h-4" /> Imprimir
+            </button>
+            <button
+              onClick={exportarCSV}
+              className="btn-secondary flex items-center gap-1"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+            </button>
+          </div>
         )}
       </div>
 
       {loading && (
-        <div className="text-center text-gray-400 py-8">Carregando...</div>
+        <div className="card p-4">
+          <TableListSkeleton rows={10} cols={5} />
+        </div>
       )}
 
       {!loading && dados && (
@@ -357,7 +376,7 @@ export default function FinanceiroPage() {
                       <tr key={c.id} className="table-row">
                         <td className="table-cell">
                           <a
-                            href={`/clientes/${c.cliente}`}
+                            href={`/clientes/${c.cliente.id}`}
                             className="text-blue-600 hover:underline"
                           >
                             {c.cliente.nomeFantasia || c.cliente.razaoSocial}

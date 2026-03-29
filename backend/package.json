@@ -4,20 +4,29 @@
   "description": "Backend do sistema Colombocal - Gestão Comercial de Distribuidora de Cal",
   "main": "src/index.js",
   "scripts": {
+    "postinstall": "prisma generate",
+    "test": "node --test test/**/*.test.js",
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "legacy:mdb-notes": "node scripts/legacy-mdb-notes.js",
+    "legacy:plan": "python scripts/import_legacy_csv_to_new_db.py --csv-dir scripts/legacy_exports --out scripts/legacy_import_plan.json --min-date 2020-01-01",
+    "legacy:import:dry": "python scripts/import_legacy_apply.py --csv-dir scripts/legacy_exports --min-date 2020-01-01",
+    "legacy:import:apply": "python scripts/import_legacy_apply.py --csv-dir scripts/legacy_exports --apply --limit-sales 1000 --limit-cheques 2000 --min-date 2020-01-01"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
     "axios": "^1.6.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.4",
-    "express": "^4.18.3"
+    "express": "^4.18.3",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.1.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "nodemon": "^3.1.0",

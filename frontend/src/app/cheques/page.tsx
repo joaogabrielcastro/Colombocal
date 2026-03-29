@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PlusIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import {
   formatMoney,
@@ -12,45 +13,81 @@ import {
 } from "@/lib/utils";
 import api from "@/lib/api";
 import * as XLSX from "xlsx";
+import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
+import { reportApiError } from "@/lib/report-api-error";
 
-// a_receber → recebido → depositado
-const STATUS_NEXT: Record<string, string[]> = {
-  a_receber: ["recebido"],
-  recebido: ["depositado", "a_receber"],
-  depositado: [],
+// Fluxo com devolução: a_receber -> recebido -> depositado, com desvios para devolvido
+const STATUS_NEXT: Record<StatusCheque, StatusCheque[]> = {
+  a_receber: ["recebido", "devolvido"],
+  recebido: ["depositado", "a_receber", "devolvido"],
+  depositado: ["devolvido"],
+  devolvido: ["recebido", "a_receber"],
 };
 
-export default function ChequesPage() {
+function ChequesPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFiltro, setStatusFiltro] = useState("");
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const pageSize = 20;
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
+  const [statusFiltro, setStatusFiltro] = useState(searchParams.get("status") || "");
+  const [dataInicio, setDataInicio] = useState(searchParams.get("dataInicio") || "");
+  const [dataFim, setDataFim] = useState(searchParams.get("dataFim") || "");
+  const ordemInicial = searchParams.get("ordem") || "";
+  const [ordemInput, setOrdemInput] = useState(ordemInicial);
+  const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
   const [atualizando, setAtualizando] = useState<number | null>(null);
 
-  const carregar = () => {
+  const carregar = async () => {
     const params = new URLSearchParams();
     if (statusFiltro) params.set("status", statusFiltro);
     if (dataInicio) params.set("dataInicio", dataInicio);
     if (dataFim) params.set("dataFim", dataFim);
+    const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
+    if (ordemTrim) params.set("ordem", ordemTrim);
+    params.set("take", String(pageSize));
+    params.set("skip", String((page - 1) * pageSize));
     setLoading(true);
-    api
-      .get<Cheque[]>(`/cheques?${params}`)
-      .then(setCheques)
-      .finally(() => setLoading(false));
+    try {
+      const resp = await api.getWithMeta<Cheque[]>(`/cheques?${params.toString()}`);
+      setCheques(resp.data);
+      setTotal(resp.meta.totalCount ?? resp.data.length);
+    } catch (e) {
+      reportApiError(e, {
+        title: "Não foi possível carregar os cheques",
+        onRetry: () => void carregar(),
+      });
+      setCheques([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
+    const params = new URLSearchParams();
+    if (statusFiltro) params.set("status", statusFiltro);
+    if (dataInicio) params.set("dataInicio", dataInicio);
+    if (dataFim) params.set("dataFim", dataFim);
+    const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
+    if (ordemTrim) params.set("ordem", ordemTrim);
+    if (page > 1) params.set("page", String(page));
+    router.replace(`/cheques${params.toString() ? `?${params.toString()}` : ""}`);
     carregar();
-  }, []);
+  }, [statusFiltro, dataInicio, dataFim, ordemFiltro, page]);
 
   const handleMudarStatus = async (id: number, novoStatus: string) => {
     setAtualizando(id);
+    setFeedback("");
     try {
       await api.patch(`/cheques/${id}/status`, { status: novoStatus });
-      carregar();
-    } catch (e: any) {
-      alert(e.message);
+      setFeedback("Status atualizado com sucesso.");
+      await carregar();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível atualizar o status" });
     } finally {
       setAtualizando(null);
     }
@@ -65,6 +102,7 @@ export default function ChequesPage() {
       venda: c.venda ? `Venda #${c.venda.id}` : "-",
       valor: parseFloat(String(c.valor)),
       dataRecebimento: formatDate(c.dataRecebimento),
+      dataCompensacao: formatDate(c.dataCompensacao),
       status: STATUS_CHEQUE_LABEL[c.status],
     }));
 
@@ -90,6 +128,7 @@ export default function ChequesPage() {
         <td>${c.venda ? `Venda #${c.venda.id}` : "-"}</td>
         <td>${formatMoney(c.valor)}</td>
         <td>${formatDate(c.dataRecebimento)}</td>
+        <td>${formatDate(c.dataCompensacao)}</td>
         <td>${STATUS_CHEQUE_LABEL[c.status]}</td>
       </tr>
     `,
@@ -121,6 +160,7 @@ export default function ChequesPage() {
                 <th>Venda</th>
                 <th>Valor</th>
                 <th>Recebido em</th>
+                <th>Compensado em</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -135,8 +175,9 @@ export default function ChequesPage() {
   };
 
   const totalPendente = cheques
-    .filter((c) => c.status === "a_receber" || c.status === "recebido")
+      .filter((c) => c.status === "a_receber" || c.status === "recebido")
     .reduce((acc, c) => acc + parseFloat(String(c.valor)), 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="p-6">
@@ -152,6 +193,7 @@ export default function ChequesPage() {
           <PlusIcon className="w-4 h-4" /> Novo Cheque
         </Link>
       </div>
+      {feedback && <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">{feedback}</div>}
 
       {/* Filtros */}
       <div className="card p-4 mb-4">
@@ -167,7 +209,24 @@ export default function ChequesPage() {
               <option value="a_receber">A Receber</option>
               <option value="recebido">Recebido</option>
               <option value="depositado">Depositado</option>
+              <option value="devolvido">Devolvido</option>
             </select>
+          </div>
+          <div className="min-w-36">
+            <label className="block text-xs text-gray-500 mb-1">
+              Ordem / venda
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={ordemInput}
+              onChange={(e) => setOrdemInput(e.target.value)}
+              className="input-field font-mono"
+              placeholder="ex: 1520 ou #1520"
+            />
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              Nº ordem do cheque ou ID da venda
+            </p>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">
@@ -190,7 +249,14 @@ export default function ChequesPage() {
             />
           </div>
           <div className="flex items-end">
-            <button onClick={carregar} className="btn-primary">
+            <button
+              type="button"
+              onClick={() => {
+                setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
+                setPage(1);
+              }}
+              className="btn-primary"
+            >
               <MagnifyingGlassIcon className="w-4 h-4" /> Filtrar
             </button>
           </div>
@@ -206,8 +272,8 @@ export default function ChequesPage() {
       </div>
 
       {/* Resumo por status */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {(["a_receber", "recebido", "depositado"] as StatusCheque[]).map(
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {(["a_receber", "recebido", "depositado", "devolvido"] as StatusCheque[]).map(
           (s) => {
             const grupo = cheques.filter((c) => c.status === s);
             const total = grupo.reduce(
@@ -239,7 +305,9 @@ export default function ChequesPage() {
       {/* Tabela */}
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Carregando...</div>
+          <div className="p-4">
+            <TableListSkeleton rows={12} cols={8} />
+          </div>
         ) : cheques.length === 0 ? (
           <div className="p-8 text-center text-gray-400">
             Nenhum cheque encontrado
@@ -254,6 +322,7 @@ export default function ChequesPage() {
                 <th className="table-header">Venda</th>
                 <th className="table-header">Valor</th>
                 <th className="table-header">Recebido em</th>
+                <th className="table-header">Compensado em</th>
                 <th className="table-header">Status</th>
                 <th className="table-header">Ações</th>
               </tr>
@@ -296,6 +365,7 @@ export default function ChequesPage() {
                   <td className="table-cell">
                     {formatDate(c.dataRecebimento)}
                   </td>
+                  <td className="table-cell">{formatDate(c.dataCompensacao)}</td>
                   <td className="table-cell">
                     <span
                       className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_CHEQUE_COLOR[c.status]}`}
@@ -305,7 +375,7 @@ export default function ChequesPage() {
                   </td>
                   <td className="table-cell">
                     <div className="flex gap-1 flex-wrap">
-                      {STATUS_NEXT[c.status]?.map((next) => (
+                      {STATUS_NEXT[c.status].map((next) => (
                         <button
                           key={next}
                           disabled={atualizando === c.id}
@@ -313,10 +383,12 @@ export default function ChequesPage() {
                           className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
                             next === "a_receber"
                               ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                              : next === "devolvido"
+                                ? "bg-red-100 text-red-700 hover:bg-red-200"
                               : "bg-blue-100 text-blue-700 hover:bg-blue-200"
                           }`}
                         >
-                          → {STATUS_CHEQUE_LABEL[next as StatusCheque]}
+                          → {STATUS_CHEQUE_LABEL[next]}
                         </button>
                       ))}
                     </div>
@@ -327,6 +399,34 @@ export default function ChequesPage() {
           </table>
         )}
       </div>
+      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+        <p>Total de registros: {total}</p>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Anterior
+          </button>
+          <span>Página {page} de {totalPages}</span>
+          <button
+            className="btn-secondary"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Próxima
+          </button>
+        </div>
+      </div>
     </div>
+  );
+}
+
+export default function ChequesPage() {
+  return (
+    <Suspense fallback={<ListPageSkeleton tableRows={12} />}>
+      <ChequesPageContent />
+    </Suspense>
   );
 }

@@ -1,12 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
+const {
+  parsePagination,
+  setPaginationHeaders,
+  handleRouteError,
+} = require("../utils/api");
 const prisma = new PrismaClient();
 
 // GET /api/produtos
 router.get("/", async (req, res) => {
   try {
     const { busca, ativo } = req.query;
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 200,
+      maxTake: 500,
+    });
     const where = {};
     if (ativo !== undefined) where.ativo = ativo === "true";
     if (busca) {
@@ -15,13 +24,19 @@ router.get("/", async (req, res) => {
         { codigo: { contains: busca, mode: "insensitive" } },
       ];
     }
-    const produtos = await prisma.produto.findMany({
-      where,
-      orderBy: { nome: "asc" },
-    });
+    const [produtos, total] = await Promise.all([
+      prisma.produto.findMany({
+        where,
+        orderBy: { nome: "asc" },
+        take,
+        skip,
+      }),
+      prisma.produto.count({ where }),
+    ]);
+    setPaginationHeaders(res, { total, take, skip });
     res.json(produtos);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -38,45 +53,41 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Produto não encontrado" });
     res.json(produto);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
 // POST /api/produtos
 router.post("/", async (req, res) => {
   try {
-    const { nome, codigo, precoPadrao, unidade, estoqueAtual, estoqueMinimo } =
-      req.body;
+    const { nome, codigo, precoPadrao, unidade } = req.body;
     const produto = await prisma.produto.create({
       data: {
         nome,
         codigo,
         precoPadrao,
         unidade: unidade || "ton",
-        estoqueAtual: estoqueAtual || 0,
-        estoqueMinimo: estoqueMinimo || 0,
       },
     });
     res.status(201).json(produto);
   } catch (error) {
     if (error.code === "P2002")
       return res.status(400).json({ error: "Código já cadastrado" });
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
 // PUT /api/produtos/:id
 router.put("/:id", async (req, res) => {
   try {
-    const { nome, codigo, precoPadrao, unidade, estoqueMinimo, ativo } =
-      req.body;
+    const { nome, codigo, precoPadrao, unidade, ativo } = req.body;
     const produto = await prisma.produto.update({
       where: { id: parseInt(req.params.id) },
-      data: { nome, codigo, precoPadrao, unidade, estoqueMinimo, ativo },
+      data: { nome, codigo, precoPadrao, unidade, ativo },
     });
     res.json(produto);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -89,7 +100,7 @@ router.delete("/:id", async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 

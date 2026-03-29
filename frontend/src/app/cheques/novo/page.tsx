@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { type Cliente, type Venda } from "@/lib/utils";
 import api from "@/lib/api";
+import { FormPageSkeleton } from "@/components/ui/skeletons";
 
 function NovoChequeForm() {
   const router = useRouter();
@@ -222,6 +223,8 @@ function NovoChequeForm() {
                 A Receber (cheque prometido, ainda não entregue)
               </option>
               <option value="recebido">Recebido (cheque em mãos)</option>
+              <option value="depositado">Depositado</option>
+              <option value="devolvido">Devolvido</option>
             </select>
           </div>
 
@@ -253,11 +256,7 @@ function NovoChequeForm() {
 
 export default function NovoChequeePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="p-8 text-center text-gray-400">Carregando...</div>
-      }
-    >
+    <Suspense fallback={<FormPageSkeleton />}>
       <NovoChequeForm />
     </Suspense>
   );

@@ -1,12 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
+const {
+  parsePagination,
+  setPaginationHeaders,
+  handleRouteError,
+} = require("../utils/api");
 const prisma = new PrismaClient();
 
 // GET /api/clientes - listar todos os clientes
 router.get("/", async (req, res) => {
   try {
-    const { busca, ativo, take, skip } = req.query;
+    const { busca, ativo } = req.query;
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 100,
+      maxTake: 500,
+    });
     const where = {};
     if (ativo !== undefined) where.ativo = ativo === "true";
     if (busca) {
@@ -17,20 +26,20 @@ router.get("/", async (req, res) => {
         { cidade: { contains: busca, mode: "insensitive" } },
       ];
     }
-    const takeNum = take ? parseInt(take) : undefined;
-    const skipNum = skip ? parseInt(skip) : undefined;
     const [clientes, total] = await Promise.all([
       prisma.cliente.findMany({
         where,
         orderBy: { razaoSocial: "asc" },
-        take: takeNum,
-        skip: skipNum,
+        take,
+        skip,
+        include: { vendedor: true },
       }),
       prisma.cliente.count({ where }),
     ]);
+    setPaginationHeaders(res, { total, take, skip });
     res.json({ clientes, total });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -41,13 +50,14 @@ router.get("/:id", async (req, res) => {
       where: { id: parseInt(req.params.id) },
       include: {
         precosEspeciais: { include: { produto: true } },
+        vendedor: true,
       },
     });
     if (!cliente)
       return res.status(404).json({ error: "Cliente não encontrado" });
     res.json(cliente);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -71,8 +81,14 @@ router.get("/:id/conta", async (req, res) => {
 
     const pagamentos = await prisma.pagamento.findMany({
       where: { clienteId: id },
-      include: { cheque: true },
+      include: { cheque: true, venda: true },
       orderBy: { data: "desc" },
+    });
+
+    const titulos = await prisma.tituloReceber.findMany({
+      where: { clienteId: id },
+      include: { venda: true },
+      orderBy: { vencimento: "asc" },
     });
 
     const totalDebitos = vendas.reduce(
@@ -84,17 +100,23 @@ router.get("/:id/conta", async (req, res) => {
       0,
     );
     const saldo = totalCreditos - totalDebitos; // negativo = devendo
+    const totalTitulosEmAberto = titulos.reduce((acc, t) => {
+      const aberto = parseFloat(t.valorOriginal) - parseFloat(t.valorPago);
+      return acc + Math.max(0, aberto);
+    }, 0);
 
     res.json({
       cliente,
       saldo,
       totalDebitos,
       totalCreditos,
+      totalTitulosEmAberto,
       vendas,
       pagamentos,
+      titulos,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -133,6 +155,8 @@ router.post("/", async (req, res) => {
       endereco,
       observacoes,
       fretePadrao,
+      vendedorId,
+      comissaoFixaPercentual,
     } = req.body;
     const cnpjLimpo = cnpj.replace(/\D/g, "");
     const cliente = await prisma.cliente.create({
@@ -146,13 +170,22 @@ router.post("/", async (req, res) => {
         endereco,
         observacoes,
         fretePadrao: fretePadrao || 0,
+        vendedorId:
+          vendedorId != null && vendedorId !== ""
+            ? parseInt(vendedorId, 10)
+            : null,
+        comissaoFixaPercentual:
+          comissaoFixaPercentual != null && comissaoFixaPercentual !== ""
+            ? parseFloat(comissaoFixaPercentual)
+            : null,
       },
+      include: { vendedor: true },
     });
     res.status(201).json(cliente);
   } catch (error) {
     if (error.code === "P2002")
       return res.status(400).json({ error: "CNPJ já cadastrado" });
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -169,6 +202,8 @@ router.put("/:id", async (req, res) => {
       observacoes,
       fretePadrao,
       ativo,
+      vendedorId,
+      comissaoFixaPercentual,
     } = req.body;
     const cliente = await prisma.cliente.update({
       where: { id: parseInt(req.params.id) },
@@ -182,11 +217,20 @@ router.put("/:id", async (req, res) => {
         observacoes,
         fretePadrao,
         ativo,
+        vendedorId:
+          vendedorId === null || vendedorId === ""
+            ? null
+            : parseInt(vendedorId, 10),
+        comissaoFixaPercentual:
+          comissaoFixaPercentual === null || comissaoFixaPercentual === ""
+            ? null
+            : parseFloat(comissaoFixaPercentual),
       },
+      include: { vendedor: true },
     });
     res.json(cliente);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -211,7 +255,7 @@ router.put("/:id/precos", async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -224,7 +268,7 @@ router.delete("/:id", async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 

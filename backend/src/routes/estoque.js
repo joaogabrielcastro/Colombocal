@@ -3,7 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-// GET /api/estoque - listar movimentações
+// GET /api/estoque - listar movimentações (histórico; sem saldo em produto)
 router.get("/", async (req, res) => {
   try {
     const { produtoId, tipo, dataInicio, dataFim } = req.query;
@@ -30,8 +30,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/estoque - registrar movimentação
-// (validação de saída feita dentro da rota) manual
+// POST /api/estoque - registrar movimentação manual (apenas histórico)
 router.post("/", async (req, res) => {
   try {
     const { produtoId, tipo, quantidade, data, observacao } = req.body;
@@ -40,43 +39,19 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Tipo inválido" });
     }
 
-    const movimentacao = await prisma.$transaction(async (tx) => {
-      const produto = await tx.produto.findUnique({
-        where: { id: parseInt(produtoId) },
-      });
-      if (!produto) throw new Error("Produto não encontrado");
+    const produto = await prisma.produto.findUnique({
+      where: { id: parseInt(produtoId) },
+    });
+    if (!produto) return res.status(400).json({ error: "Produto não encontrado" });
 
-      // Validar estoque disponível para saída manual
-      if (tipo === "saida" && parseFloat(produto.estoqueAtual) < qtd) {
-        throw new Error(
-          `Estoque insuficiente para "${produto.nome}". Disponível: ${parseFloat(produto.estoqueAtual)} ${produto.unidade}, solicitado: ${qtd} ${produto.unidade}`,
-        );
-      }
-
-      const mov = await tx.movimentacaoEstoque.create({
-        data: {
-          produtoId: parseInt(produtoId),
-          tipo,
-          quantidade: qtd,
-          data: data ? new Date(data) : new Date(),
-          observacao,
-        },
-      });
-
-      // Atualizar estoque
-      let delta = qtd;
-      if (tipo === "saida") delta = -qtd;
-      else if (tipo === "ajuste") {
-        // No ajuste, a quantidade é o novo valor absoluto do estoque
-        delta = qtd - parseFloat(produto.estoqueAtual);
-      }
-
-      await tx.produto.update({
-        where: { id: parseInt(produtoId) },
-        data: { estoqueAtual: { increment: delta } },
-      });
-
-      return mov;
+    const movimentacao = await prisma.movimentacaoEstoque.create({
+      data: {
+        produtoId: parseInt(produtoId),
+        tipo,
+        quantidade: qtd,
+        data: data ? new Date(data) : new Date(),
+        observacao,
+      },
     });
 
     const movCompleta = await prisma.movimentacaoEstoque.findUnique({

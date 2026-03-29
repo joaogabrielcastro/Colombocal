@@ -11,37 +11,42 @@ datasource db {
 }
 
 model Cliente {
-  id             Int      @id @default(autoincrement())
-  cnpj           String   @unique
-  razaoSocial    String
-  nomeFantasia   String?
-  telefone       String?
-  cidade         String?
-  estado         String?
-  endereco       String?
-  observacoes    String?
-  fretePadrao    Decimal  @default(0) @db.Decimal(10, 2)
-  ativo          Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                     Int      @id @default(autoincrement())
+  cnpj                   String   @unique
+  razaoSocial            String
+  nomeFantasia           String?
+  telefone               String?
+  cidade                 String?
+  estado                 String?
+  endereco               String?
+  observacoes            String?
+  fretePadrao            Decimal  @default(0) @db.Decimal(10, 2)
+  vendedorId             Int?
+  comissaoFixaPercentual Decimal? @db.Decimal(5, 2)
+  ativo                  Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
+  vendedor        Vendedor?             @relation(fields: [vendedorId], references: [id])
   precosEspeciais PrecoClienteProduto[]
   vendas          Venda[]
   cheques         Cheque[]
   pagamentos      Pagamento[]
+  titulos         TituloReceber[]
+  fretes          FreteMovimento[]
+
+  @@index([ativo, razaoSocial])
 }
 
 model Produto {
-  id            Int     @id @default(autoincrement())
-  nome          String
-  codigo        String  @unique
-  precoPadrao   Decimal @db.Decimal(10, 2)
-  unidade       String  @default("ton")
-  estoqueAtual  Decimal @default(0) @db.Decimal(10, 3)
-  estoqueMinimo Decimal @default(0) @db.Decimal(10, 3)
-  ativo         Boolean @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  nome        String
+  codigo      String   @unique
+  precoPadrao Decimal  @db.Decimal(10, 2)
+  unidade     String   @default("ton")
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   precosClientes PrecoClienteProduto[]
   itensVenda     ItemVenda[]
@@ -80,7 +85,8 @@ model Vendedor {
   ativo              Boolean  @default(true)
   createdAt          DateTime @default(now())
 
-  vendas Venda[]
+  clientes Cliente[]
+  vendas   Venda[]
 }
 
 model Venda {
@@ -88,9 +94,12 @@ model Venda {
   clienteId       Int
   vendedorId      Int
   motoristaId     Int?
+  // Frete: valor na venda é a fonte principal; FreteMovimento espelha/atualiza para histórico e tela Fretes.
   frete           Decimal  @default(0) @db.Decimal(10, 2)
   freteRecibo     Boolean  @default(false)  // recibo de frete emitido?
   freteReciboNum  String?                   // número do recibo de frete
+  comissaoPercentualAplicado Decimal @default(0) @db.Decimal(5, 2)
+  comissaoValor              Decimal @default(0) @db.Decimal(10, 2)
   valorTotal      Decimal  @db.Decimal(10, 2) // apenas produtos, sem frete
   dataVenda       DateTime @default(now())
   observacoes     String?
@@ -103,6 +112,12 @@ model Venda {
   itens         ItemVenda[]
   movimentacoes MovimentacaoEstoque[]
   cheques       Cheque[]
+  pagamentos    Pagamento[]
+  titulos       TituloReceber[]
+  fretes        FreteMovimento[]
+
+  @@index([clienteId, dataVenda])
+  @@index([vendedorId, dataVenda])
 }
 
 model ItemVenda {
@@ -127,7 +142,10 @@ model MovimentacaoEstoque {
   vendaId    Int?
 
   produto Produto @relation(fields: [produtoId], references: [id])
-  venda   Venda?  @relation(fields: [vendaId], references: [id])
+  venda   Venda?  @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+
+  @@index([produtoId, data])
+  @@index([vendaId])
 }
 
 model Cheque {
@@ -147,13 +165,17 @@ model Cheque {
   createdAt       DateTime  @default(now())
 
   cliente   Cliente    @relation(fields: [clienteId], references: [id])
-  venda     Venda?     @relation(fields: [vendaId], references: [id])
+  venda     Venda?     @relation(fields: [vendaId], references: [id], onDelete: SetNull)
   pagamento Pagamento?
+
+  @@index([clienteId, status, dataRecebimento])
+  @@index([vendaId])
 }
 
 model Pagamento {
   id          Int      @id @default(autoincrement())
   clienteId   Int
+  vendaId     Int?
   tipo        String   // cheque, dinheiro, transferencia
   valor       Decimal  @db.Decimal(10, 2)
   data        DateTime @default(now())
@@ -161,6 +183,78 @@ model Pagamento {
   observacoes String?
   createdAt   DateTime @default(now())
 
-  cliente Cliente  @relation(fields: [clienteId], references: [id])
-  cheque  Cheque?  @relation(fields: [chequeId], references: [id])
+  cliente Cliente @relation(fields: [clienteId], references: [id])
+  venda   Venda?  @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  cheque  Cheque? @relation(fields: [chequeId], references: [id])
+
+  @@index([clienteId, data])
+  @@index([vendaId, data])
+}
+
+model TituloReceber {
+  id            Int      @id @default(autoincrement())
+  clienteId     Int
+  vendaId       Int?
+  numero        String?
+  vencimento    DateTime
+  valorOriginal Decimal  @db.Decimal(10, 2)
+  valorPago     Decimal  @default(0) @db.Decimal(10, 2)
+  status        String   @default("aberto") // aberto, parcial, quitado
+  observacoes   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cliente Cliente @relation(fields: [clienteId], references: [id])
+  venda   Venda?  @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+
+  @@index([clienteId, status, vencimento])
+  @@index([vendaId])
+}
+
+// Movimento de frete (listagem, recibo, legados). Valor/recibo também existem em Venda; manter alinhados via API de venda.
+model FreteMovimento {
+  id         Int      @id @default(autoincrement())
+  vendaId    Int? // opcional: fretes legados sem ordem vinculada no banco novo
+  clienteId  Int
+  valor      Decimal  @db.Decimal(10, 2)
+  reciboEmitido Boolean @default(false)
+  reciboNumero  String?
+  reciboData DateTime? // data do recibo (pode diferir da data do movimento)
+  data       DateTime @default(now())
+  observacao String?
+  createdAt  DateTime @default(now())
+
+  venda   Venda?  @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  cliente Cliente @relation(fields: [clienteId], references: [id])
+
+  @@index([clienteId, data])
+  @@index([vendaId])
+}
+
+// Parâmetros globais do sistema (regras comerciais/financeiras)
+model ConfigSistema {
+  id        Int      @id @default(autoincrement())
+  chave     String   @unique
+  valor     String
+  updatedAt DateTime @updatedAt
+}
+
+model FinanceiroEvento {
+  id         Int      @id @default(autoincrement())
+  tipo       String
+  entidade   String
+  entidadeId Int?
+  clienteId  Int?
+  vendaId    Int?
+  chequeId   Int?
+  pagamentoId Int?
+  tituloId   Int?
+  valor      Decimal? @db.Decimal(10, 2)
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tipo, createdAt])
+  @@index([clienteId, createdAt])
+  @@index([vendaId, createdAt])
+  @@index([chequeId, createdAt])
 }

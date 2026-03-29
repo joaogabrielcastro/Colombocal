@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { type Vendedor } from "@/lib/utils";
 import api from "@/lib/api";
+import { TableListSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
+import { reportApiError } from "@/lib/report-api-error";
 
 export default function VendedoresPage() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -13,11 +16,20 @@ export default function VendedoresPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
-  const carregar = () =>
+  const carregar = () => {
+    setLoading(true);
     api
       .get<Vendedor[]>("/vendedores")
       .then(setVendedores)
+      .catch((e) => {
+        reportApiError(e, {
+          title: "Não foi possível carregar vendedores",
+          onRetry: () => void carregar(),
+        });
+        setVendedores([]);
+      })
       .finally(() => setLoading(false));
+  };
   useEffect(() => {
     carregar();
   }, []);
@@ -36,8 +48,9 @@ export default function VendedoresPage() {
       setEditando(null);
       setForm({});
       carregar();
-    } catch (e: any) {
-      setErro(e.message);
+    } catch (e) {
+      reportApiError(e, { title: "Erro ao salvar vendedor" });
+      setErro(e instanceof Error ? e.message : "");
     } finally {
       setSalvando(false);
     }
@@ -160,10 +173,15 @@ export default function VendedoresPage() {
 
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Carregando...</div>
+          <div className="p-4">
+            <TableListSkeleton rows={6} cols={4} />
+          </div>
         ) : vendedores.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
-            Nenhum vendedor cadastrado
+          <div className="p-6">
+            <EmptyState
+              title="Nenhum vendedor cadastrado"
+              description="Cadastre vendedores para registrar vendas e comissões."
+            />
           </div>
         ) : (
           <table className="w-full">

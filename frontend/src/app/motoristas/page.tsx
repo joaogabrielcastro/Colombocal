@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { type Motorista } from '@/lib/utils';
 import api from '@/lib/api';
+import { TableListSkeleton } from '@/components/ui/skeletons';
+import { EmptyState } from '@/components/ui/empty-state';
+import { reportApiError } from '@/lib/report-api-error';
 
 export default function MotoristasPage() {
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -13,7 +16,17 @@ export default function MotoristasPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
-  const carregar = () => api.get<Motorista[]>('/motoristas').then(setMotoristas).finally(() => setLoading(false));
+  const carregar = () => {
+    setLoading(true);
+    api
+      .get<Motorista[]>('/motoristas')
+      .then(setMotoristas)
+      .catch((e) => {
+        reportApiError(e, { title: 'Motoristas', onRetry: () => void carregar() });
+        setMotoristas([]);
+      })
+      .finally(() => setLoading(false));
+  };
   useEffect(() => { carregar(); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,8 +43,9 @@ export default function MotoristasPage() {
       setEditando(null);
       setForm({});
       carregar();
-    } catch (e: any) {
-      setErro(e.message);
+    } catch (e) {
+      reportApiError(e, { title: 'Erro ao salvar motorista' });
+      setErro(e instanceof Error ? e.message : '');
     } finally {
       setSalvando(false);
     }
@@ -89,9 +103,13 @@ export default function MotoristasPage() {
 
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Carregando...</div>
+          <div className="p-4">
+            <TableListSkeleton rows={6} cols={4} />
+          </div>
         ) : motoristas.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Nenhum motorista cadastrado</div>
+          <div className="p-6">
+            <EmptyState title="Nenhum motorista cadastrado" description="Cadastre motoristas para vincular às vendas." />
+          </div>
         ) : (
           <table className="w-full">
             <thead>

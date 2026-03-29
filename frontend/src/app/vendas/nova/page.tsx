@@ -15,6 +15,8 @@ import {
   type Motorista,
 } from "@/lib/utils";
 import api from "@/lib/api";
+import { FreteOrientacaoPainel } from "@/components/FreteOrientacao";
+import { FormPageSkeleton } from "@/components/ui/skeletons";
 
 interface ItemForm {
   produtoId: string;
@@ -29,11 +31,7 @@ interface ProdutoPreco extends Produto {
 
 export default function NovaVendaPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="p-8 text-center text-gray-400">Carregando...</div>
-      }
-    >
+    <Suspense fallback={<FormPageSkeleton />}>
       <NovaVendaForm />
     </Suspense>
   );
@@ -83,7 +81,7 @@ function NovaVendaForm() {
     });
   }, []);
 
-  // Quando o cliente muda, buscar os preços especiais
+  // Quando o cliente muda, buscar os preços especiais e vendedor padrão
   useEffect(() => {
     if (!clienteId) {
       setProdutosCliente([]);
@@ -91,7 +89,6 @@ function NovaVendaForm() {
     }
     api.get<ProdutoPreco[]>(`/clientes/${clienteId}/precos`).then((data) => {
       setProdutosCliente(data);
-      // Atualizar preços nos itens existentes
       setItens((prev) =>
         prev.map((item) => {
           if (!item.produtoId) return item;
@@ -100,9 +97,9 @@ function NovaVendaForm() {
           return item;
         }),
       );
-      // Preencher frete padrão do cliente
       const cliente = clientes.find((c) => String(c.id) === clienteId);
       if (cliente && !frete) setFrete(String(cliente.fretePadrao));
+      if (cliente?.vendedorId) setVendedorId(String(cliente.vendedorId));
     });
   }, [clienteId]);
 
@@ -145,20 +142,6 @@ function NovaVendaForm() {
       return;
     }
 
-    // Validar estoque disponível
-    const allProdutos = produtosCliente.length > 0 ? produtosCliente : produtos;
-    for (const item of itensValidos) {
-      const prod = allProdutos.find((p) => String(p.id) === item.produtoId);
-      if (
-        prod &&
-        parseFloat(item.quantidade) > parseFloat(String(prod.estoqueAtual))
-      ) {
-        setErro(
-          `Estoque insuficiente para "${prod.nome}". Disponível: ${parseFloat(String(prod.estoqueAtual))} ${prod.unidade}, solicitado: ${parseFloat(item.quantidade)} ${prod.unidade}`,
-        );
-        return;
-      }
-    }
     setSalvando(true);
     setErro("");
     try {
@@ -199,6 +182,25 @@ function NovaVendaForm() {
         {/* Dados da venda */}
         <div className="card p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Dados da Venda</h2>
+          {clienteId &&
+            (() => {
+              const cli = clientes.find((c) => String(c.id) === clienteId);
+              const com =
+                cli?.comissaoFixaPercentual != null
+                  ? cli.comissaoFixaPercentual
+                  : cli?.vendedor?.comissaoPercentual;
+              return com != null ? (
+                <p className="text-sm text-gray-600 mb-3">
+                  Comissão aplicável neste cliente:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {Number(com).toLocaleString("pt-BR")}%
+                  </span>
+                  {cli?.comissaoFixaPercentual == null &&
+                    cli?.vendedor &&
+                    " (padrão do vendedor)"}
+                </p>
+              ) : null;
+            })()}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -303,6 +305,9 @@ function NovaVendaForm() {
                 />
               )}
             </div>
+            <div className="col-span-full">
+              <FreteOrientacaoPainel variant="compact" />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Observações
@@ -344,15 +349,6 @@ function NovaVendaForm() {
                 const sub =
                   parseFloat(item.quantidade || "0") *
                   parseFloat(item.precoUnitario || "0");
-                const allProdutos =
-                  produtosCliente.length > 0 ? produtosCliente : produtos;
-                const prodSelecionado = allProdutos.find(
-                  (p) => String(p.id) === item.produtoId,
-                );
-                const estoqueInsuf =
-                  prodSelecionado &&
-                  parseFloat(item.quantidade || "0") >
-                    parseFloat(String(prodSelecionado.estoqueAtual));
                 return (
                   <tr key={idx} className="border-b border-gray-50">
                     <td className="py-2 pr-3">
@@ -370,10 +366,6 @@ function NovaVendaForm() {
                         ).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.nome} ({p.unidade})
-                            {parseFloat(String(p.estoqueAtual)) <=
-                            parseFloat(String(p.estoqueMinimo))
-                              ? " ⚠️ Estoque baixo"
-                              : ""}
                           </option>
                         ))}
                       </select>
@@ -394,19 +386,8 @@ function NovaVendaForm() {
                             ),
                           )
                         }
-                        className={`input-field text-sm ${estoqueInsuf ? "border-red-400 bg-red-50" : ""}`}
+                        className="input-field text-sm"
                       />
-                      {prodSelecionado && (
-                        <p
-                          className={`text-xs mt-0.5 ${estoqueInsuf ? "text-red-600 font-medium" : "text-gray-400"}`}
-                        >
-                          Disponível:{" "}
-                          {parseFloat(
-                            String(prodSelecionado.estoqueAtual),
-                          ).toLocaleString("pt-BR")}{" "}
-                          {prodSelecionado.unidade}
-                        </p>
-                      )}
                     </td>
                     <td className="py-2 pr-3">
                       <input

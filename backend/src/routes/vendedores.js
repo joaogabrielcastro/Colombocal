@@ -1,17 +1,33 @@
 const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
+const {
+  parsePagination,
+  setPaginationHeaders,
+  handleRouteError,
+} = require("../utils/api");
 const prisma = new PrismaClient();
 
 router.get("/", async (req, res) => {
   try {
-    const vendedores = await prisma.vendedor.findMany({
-      where: { ativo: true },
-      orderBy: { nome: "asc" },
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 200,
+      maxTake: 500,
     });
+    const where = { ativo: true };
+    const [vendedores, total] = await Promise.all([
+      prisma.vendedor.findMany({
+        where,
+        orderBy: { nome: "asc" },
+        take,
+        skip,
+      }),
+      prisma.vendedor.count({ where }),
+    ]);
+    setPaginationHeaders(res, { total, take, skip });
     res.json(vendedores);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -24,7 +40,7 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Vendedor não encontrado" });
     res.json(vendedor);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -36,7 +52,7 @@ router.post("/", async (req, res) => {
     });
     res.status(201).json(vendedor);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -49,7 +65,7 @@ router.put("/:id", async (req, res) => {
     });
     res.json(vendedor);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -61,7 +77,7 @@ router.delete("/:id", async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 

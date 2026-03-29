@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
@@ -17,8 +17,13 @@ import {
   type Cliente,
   type Produto,
   type Cheque,
+  type Vendedor,
 } from "@/lib/utils";
+import { toast } from "sonner";
 import api from "@/lib/api";
+import { DetailPageSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
+import { reportApiError } from "@/lib/report-api-error";
 
 interface ContaData {
   cliente: Cliente;
@@ -37,6 +42,7 @@ interface ProdutoPreco extends Produto {
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [conta, setConta] = useState<ContaData | null>(null);
   const [produtos, setProdutos] = useState<ProdutoPreco[]>([]);
   const [cheques, setCheques] = useState<Cheque[]>([]);
@@ -49,25 +55,69 @@ export default function ClienteDetailPage() {
   const [form, setForm] = useState<Partial<Cliente>>({});
   const [salvandoForm, setSalvandoForm] = useState(false);
   const [erro, setErro] = useState("");
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [filtroChqStatus, setFiltroChqStatus] = useState("");
+  const [filtroChqIni, setFiltroChqIni] = useState("");
+  const [filtroChqFim, setFiltroChqFim] = useState("");
+  const [buscaChq, setBuscaChq] = useState("");
 
   useEffect(() => {
+    const abaUrl = searchParams.get("aba");
+    if (abaUrl === "conta" || abaUrl === "cheques" || abaUrl === "precos" || abaUrl === "editar") {
+      setAba(abaUrl);
+    }
+  }, [searchParams]);
+
+  const carregarCheques = () => {
+    const params = new URLSearchParams();
+    params.set("clienteId", String(id));
+    if (filtroChqStatus) params.set("status", filtroChqStatus);
+    if (filtroChqIni) params.set("dataInicio", filtroChqIni);
+    if (filtroChqFim) params.set("dataFim", filtroChqFim);
+    api.get<Cheque[]>(`/cheques?${params}`).then(setCheques);
+  };
+
+  useEffect(() => {
+    api.get<Vendedor[]>("/vendedores").then(setVendedores);
+  }, []);
+
+  const carregarPrincipal = useCallback(() => {
+    setLoading(true);
     Promise.all([
       api.get<ContaData>(`/clientes/${id}/conta`),
       api.get<ProdutoPreco[]>(`/clientes/${id}/precos`),
-      api.get<Cheque[]>(`/cheques?clienteId=${id}`),
     ])
-      .then(([contaData, prodData, chequesData]) => {
+      .then(([contaData, prodData]) => {
         setConta(contaData);
-        setForm(contaData.cliente);
+        setForm({
+          ...contaData.cliente,
+          vendedorId: contaData.cliente.vendedorId ?? undefined,
+          comissaoFixaPercentual:
+            contaData.cliente.comissaoFixaPercentual ?? undefined,
+        });
         setProdutos(prodData);
-        setCheques(chequesData);
         const mapa: Record<number, string> = {};
         prodData.forEach((p) => {
           if (p.precoEspecial) mapa[p.id] = String(p.precoEspecial);
         });
         setPrecosEdit(mapa);
       })
+      .catch((e) => {
+        setConta(null);
+        reportApiError(e, {
+          title: "Não foi possível carregar o cliente",
+          onRetry: () => void carregarPrincipal(),
+        });
+      })
       .finally(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    void carregarPrincipal();
+  }, [carregarPrincipal]);
+
+  useEffect(() => {
+    carregarCheques();
   }, [id]);
 
   const handleSalvarPrecos = async () => {
@@ -80,9 +130,9 @@ export default function ClienteDetailPage() {
       await api.put(`/clientes/${id}/precos`, { precos });
       const prodData = await api.get<ProdutoPreco[]>(`/clientes/${id}/precos`);
       setProdutos(prodData);
-      alert("Preços salvos com sucesso!");
-    } catch (e: any) {
-      alert(e.message);
+      toast.success("Preços salvos");
+    } catch (e) {
+      reportApiError(e, { title: "Erro ao salvar preços" });
     } finally {
       setSalvandoPrecos(false);
     }
@@ -93,24 +143,44 @@ export default function ClienteDetailPage() {
     setSalvandoForm(true);
     setErro("");
     try {
-      await api.put(`/clientes/${id}`, form);
+      await api.put(`/clientes/${id}`, {
+        ...form,
+        vendedorId: form.vendedorId == null ? null : Number(form.vendedorId),
+        comissaoFixaPercentual:
+          form.comissaoFixaPercentual === undefined ||
+          form.comissaoFixaPercentual === null
+            ? null
+            : parseFloat(String(form.comissaoFixaPercentual).replace(",", ".")),
+      });
       const contaData = await api.get<ContaData>(`/clientes/${id}/conta`);
       setConta(contaData);
-      setForm(contaData.cliente);
+      setForm({
+        ...contaData.cliente,
+        vendedorId: contaData.cliente.vendedorId ?? undefined,
+        comissaoFixaPercentual:
+          contaData.cliente.comissaoFixaPercentual ?? undefined,
+      });
       setAba("conta");
-    } catch (e: any) {
-      setErro(e.message);
+    } catch (e) {
+      reportApiError(e, { title: "Erro ao salvar cliente" });
+      setErro(e instanceof Error ? e.message : "");
     } finally {
       setSalvandoForm(false);
     }
   };
 
-  if (loading)
-    return <div className="p-8 text-center text-gray-400">Carregando...</div>;
+  if (loading) return <DetailPageSkeleton />;
   if (!conta)
     return (
-      <div className="p-8 text-center text-gray-400">
-        Cliente não encontrado
+      <div className="p-6 max-w-lg mx-auto flex items-center min-h-[40vh]">
+        <EmptyState
+          title="Cliente não encontrado ou indisponível"
+          action={
+            <button type="button" className="btn-primary" onClick={() => void carregarPrincipal()}>
+              Tentar novamente
+            </button>
+          }
+        />
       </div>
     );
 
@@ -184,7 +254,10 @@ export default function ClienteDetailPage() {
         {(["conta", "cheques", "precos", "editar"] as const).map((tab) => (
           <button
             key={tab}
-            onClick={() => setAba(tab)}
+            onClick={() => {
+              setAba(tab);
+              router.replace(`/clientes/${id}?aba=${tab}`);
+            }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               aba === tab
                 ? "bg-white shadow text-gray-900"
@@ -268,6 +341,14 @@ export default function ClienteDetailPage() {
                       <p className="text-xs text-gray-400">
                         {formatDate(p.data)}
                       </p>
+                      {p.vendaId && (
+                        <Link
+                          href={`/vendas/${p.vendaId}`}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          Venda #{p.vendaId}
+                        </Link>
+                      )}
                     </div>
                     <span className="text-sm font-semibold text-green-600">
                       +{formatMoney(p.valor)}
@@ -283,7 +364,7 @@ export default function ClienteDetailPage() {
       {/* Cheques */}
       {aba === "cheques" && (
         <div className="card overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center">
+          <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2">
             <h3 className="font-semibold text-gray-900">Cheques do Cliente</h3>
             <Link
               href={`/cheques/novo?clienteId=${id}`}
@@ -292,9 +373,69 @@ export default function ClienteDetailPage() {
               + Novo Cheque
             </Link>
           </div>
+          <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Status</label>
+              <select
+                value={filtroChqStatus}
+                onChange={(e) => setFiltroChqStatus(e.target.value)}
+                className="input-field w-36 text-sm"
+              >
+                <option value="">Todos</option>
+                <option value="a_receber">A Receber</option>
+                <option value="recebido">Recebido</option>
+                <option value="depositado">Depositado</option>
+                <option value="devolvido">Devolvido</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">De</label>
+              <input
+                type="date"
+                value={filtroChqIni}
+                onChange={(e) => setFiltroChqIni(e.target.value)}
+                className="input-field text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Até</label>
+              <input
+                type="date"
+                value={filtroChqFim}
+                onChange={(e) => setFiltroChqFim(e.target.value)}
+                className="input-field text-sm"
+              />
+            </div>
+            <button type="button" onClick={carregarCheques} className="btn-primary text-sm">
+              Filtrar
+            </button>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs text-gray-500 mb-1">
+                Busca (banco, nº cheque, ordem)
+              </label>
+              <input
+                value={buscaChq}
+                onChange={(e) => setBuscaChq(e.target.value)}
+                className="input-field text-sm"
+                placeholder="Filtra na lista carregada..."
+              />
+            </div>
+          </div>
           {cheques.length === 0 ? (
             <p className="p-6 text-center text-gray-400">
               Nenhum cheque registrado
+            </p>
+          ) : cheques.filter((c) => {
+              const q = buscaChq.trim().toLowerCase();
+              if (!q) return true;
+              return (
+                (c.banco && c.banco.toLowerCase().includes(q)) ||
+                (c.numero && c.numero.toLowerCase().includes(q)) ||
+                String(c.numeroOrdem).includes(q)
+              );
+            }).length === 0 ? (
+            <p className="p-6 text-center text-gray-400">
+              Nenhum cheque com os filtros atuais
             </p>
           ) : (
             <table className="w-full">
@@ -309,7 +450,17 @@ export default function ClienteDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {cheques.map((c) => (
+                {cheques
+                  .filter((c) => {
+                    const q = buscaChq.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      (c.banco && c.banco.toLowerCase().includes(q)) ||
+                      (c.numero && c.numero.toLowerCase().includes(q)) ||
+                      String(c.numeroOrdem).includes(q)
+                    );
+                  })
+                  .map((c) => (
                   <tr key={c.id} className="table-row">
                     <td className="table-cell font-mono font-bold text-gray-600">
                       #{c.numeroOrdem}
@@ -473,6 +624,55 @@ export default function ClienteDetailPage() {
                   }))
                 }
                 className="input-field"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vendedor do cliente
+              </label>
+              <select
+                value={
+                  form.vendedorId != null ? String(form.vendedorId) : ""
+                }
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    vendedorId: e.target.value
+                      ? parseInt(e.target.value, 10)
+                      : null,
+                  }))
+                }
+                className="input-field"
+              >
+                <option value="">Nenhum</option>
+                {vendedores
+                  .filter((v) => v.ativo)
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.nome}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Comissão fixa (%)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.comissaoFixaPercentual ?? ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    comissaoFixaPercentual: e.target.value
+                      ? parseFloat(e.target.value)
+                      : undefined,
+                  }))
+                }
+                className="input-field"
+                placeholder="Opcional"
               />
             </div>
             <div>

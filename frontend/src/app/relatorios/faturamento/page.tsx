@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import {
   MagnifyingGlassIcon,
   ArrowDownTrayIcon,
+  PrinterIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney } from "@/lib/utils";
 import api from "@/lib/api";
+import { TableListSkeleton } from "@/components/ui/skeletons";
 
 interface FaturamentoData {
   totalGeral: number;
@@ -94,6 +96,13 @@ export default function FaturamentoPage() {
   const maxTotal = (arr: { total: number }[]) =>
     Math.max(...arr.map((i) => i.total), 1);
 
+  const imprimirRelatorio = () => {
+    const tituloAnterior = document.title;
+    document.title = `Relatório de Faturamento - ${aba}`;
+    window.print();
+    document.title = tituloAnterior;
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-6">
@@ -129,19 +138,29 @@ export default function FaturamentoPage() {
               <MagnifyingGlassIcon className="w-4 h-4" /> Gerar
             </button>
             {dados && (
-              <button
-                onClick={exportarCSV}
-                className="btn-secondary flex items-center gap-1"
-              >
-                <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
-              </button>
+              <>
+                <button
+                  onClick={imprimirRelatorio}
+                  className="btn-secondary flex items-center gap-1"
+                >
+                  <PrinterIcon className="w-4 h-4" /> Imprimir
+                </button>
+                <button
+                  onClick={exportarCSV}
+                  className="btn-secondary flex items-center gap-1"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+                </button>
+              </>
             )}
           </div>
         </div>
       </div>
 
       {loading && (
-        <div className="text-center text-gray-400 py-8">Carregando...</div>
+        <div className="card p-4">
+          <TableListSkeleton rows={10} cols={5} />
+        </div>
       )}
 
       {!loading && dados && (

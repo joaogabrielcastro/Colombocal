@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { PlusIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { formatDate, type Produto } from "@/lib/utils";
 import api from "@/lib/api";
+import { TableListSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
+import { reportApiError } from "@/lib/report-api-error";
 
 interface Movimentacao {
   id: number;
@@ -56,12 +59,22 @@ export default function EstoquePage() {
     api
       .get<Movimentacao[]>(`/estoque?${params}`)
       .then(setMovimentacoes)
+      .catch((e) => {
+        reportApiError(e, {
+          title: "Movimentações",
+          onRetry: () => void carregar(),
+        });
+        setMovimentacoes([]);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     carregar();
-    api.get<Produto[]>("/produtos?ativo=true").then(setProdutos);
+    api
+      .get<Produto[]>("/produtos?ativo=true")
+      .then(setProdutos)
+      .catch((e) => reportApiError(e, { title: "Produtos" }));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,10 +92,9 @@ export default function EstoquePage() {
         data: new Date().toISOString().split("T")[0],
       });
       carregar();
-      // Recarregar produtos para estoques atualizados
-      api.get<Produto[]>("/produtos?ativo=true").then(setProdutos);
-    } catch (e: any) {
-      setErro(e.message);
+    } catch (e) {
+      reportApiError(e, { title: "Erro ao registrar movimentação" });
+      setErro(e instanceof Error ? e.message : "");
     } finally {
       setSalvando(false);
     }
@@ -92,9 +104,12 @@ export default function EstoquePage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Estoque</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Movimentações
+          </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Movimentações e saldos de produtos
+            Histórico opcional — vendas geram saída registrada automaticamente.
+            Não há saldo por produto no cadastro.
           </p>
         </div>
         <button
@@ -108,35 +123,6 @@ export default function EstoquePage() {
         </button>
       </div>
 
-      {/* Saldo produtos */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {produtos.map((p) => {
-          const baixo =
-            parseFloat(String(p.estoqueAtual)) <=
-            parseFloat(String(p.estoqueMinimo));
-          return (
-            <div
-              key={p.id}
-              className={`card p-3 border-l-4 ${baixo ? "border-l-red-500" : "border-l-green-500"}`}
-            >
-              <p className="text-xs text-gray-500 font-medium truncate">
-                {p.nome}
-              </p>
-              <p
-                className={`text-lg font-bold mt-1 ${baixo ? "text-red-600" : "text-green-700"}`}
-              >
-                {parseFloat(String(p.estoqueAtual)).toLocaleString("pt-BR")}
-              </p>
-              <p className="text-xs text-gray-400">
-                {p.unidade} • mín:{" "}
-                {parseFloat(String(p.estoqueMinimo)).toLocaleString("pt-BR")}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Modal */}
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -168,28 +154,6 @@ export default function EstoquePage() {
                     </option>
                   ))}
                 </select>
-                {form.produtoId &&
-                  form.tipo === "saida" &&
-                  (() => {
-                    const prod = produtos.find(
-                      (p) => String(p.id) === form.produtoId,
-                    );
-                    if (!prod) return null;
-                    const insuf =
-                      parseFloat(form.quantidade || "0") >
-                      parseFloat(String(prod.estoqueAtual));
-                    return (
-                      <p
-                        className={`text-xs mt-1 ${insuf ? "text-red-600 font-medium" : "text-gray-400"}`}
-                      >
-                        Disponível:{" "}
-                        {parseFloat(String(prod.estoqueAtual)).toLocaleString(
-                          "pt-BR",
-                        )}{" "}
-                        {prod.unidade}
-                      </p>
-                    );
-                  })()}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -204,16 +168,14 @@ export default function EstoquePage() {
                 >
                   <option value="entrada">Entrada</option>
                   <option value="saida">Saída manual</option>
-                  <option value="ajuste">Ajuste (novo total)</option>
+                  <option value="ajuste">Ajuste (valor informado)</option>
                   <option value="devolucao">Devolução</option>
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {form.tipo === "ajuste"
-                      ? "Novo Estoque Total"
-                      : "Quantidade"}
+                    Quantidade
                   </label>
                   <input
                     required
@@ -274,7 +236,6 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {/* Filtros */}
       <div className="card p-4 mb-4">
         <div className="flex gap-3 flex-wrap">
           <div>
@@ -316,10 +277,15 @@ export default function EstoquePage() {
 
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Carregando...</div>
+          <div className="p-4">
+            <TableListSkeleton rows={8} cols={6} />
+          </div>
         ) : movimentacoes.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
-            Nenhuma movimentação encontrada
+          <div className="p-6">
+            <EmptyState
+              title="Nenhuma movimentação encontrada"
+              description="Use os filtros ou registre uma movimentação manual."
+            />
           </div>
         ) : (
           <table className="w-full">
@@ -347,9 +313,7 @@ export default function EstoquePage() {
                   </td>
                   <td className="table-cell font-medium">
                     {["saida"].includes(m.tipo) ? "-" : "+"}
-                    {parseFloat(String(m.quantidade)).toLocaleString(
-                      "pt-BR",
-                    )}{" "}
+                    {parseFloat(String(m.quantidade)).toLocaleString("pt-BR")}{" "}
                     {m.produto.unidade}
                   </td>
                   <td className="table-cell">
