@@ -239,6 +239,7 @@ model ConfigSistema {
   updatedAt DateTime @updatedAt
 }
 
+/// Eventos de auditoria financeira (append-only). Ver política de retenção em `services/financeiroEventos.js`.
 model FinanceiroEvento {
   id         Int      @id @default(autoincrement())
   tipo       String

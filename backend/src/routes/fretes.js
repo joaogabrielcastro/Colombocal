@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const {
   parseIntField,
   parseNumberField,
@@ -13,7 +13,6 @@ const {
 } = require("../utils/api");
 const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
 
-const prisma = new PrismaClient();
 
 // GET /api/fretes — listagem com filtros (painel / relatório)
 router.get("/", async (req, res) => {

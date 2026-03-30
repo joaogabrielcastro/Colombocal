@@ -1,10 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const { getConfig, setConfig, DEFAULTS } = require("../services/configSistema");
 const { handleRouteError } = require("../utils/api");
 
-const prisma = new PrismaClient();
 
 // GET /api/config — regras visíveis na UI
 router.get("/", async (req, res) => {

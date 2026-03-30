@@ -1,19 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const {
   parseIntField,
   parseNumberField,
   parseDateField,
   ensureArray,
 } = require("../utils/validation");
+const { parseBody } = require("../utils/zodParse");
+const { vendaFretePatchSchema } = require("../schemas/venda");
 const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
 const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
-const prisma = new PrismaClient();
 
 function addDays(date, days) {
   const d = new Date(date);
@@ -98,26 +99,30 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+function dataFreteReciboParaPrisma(v) {
+  if (v === undefined) return undefined;
+  if (v == null) return null;
+  if (v instanceof Date) return v;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 // PATCH /api/vendas/:id — frete / recibo (sincroniza com primeiro FreteMovimento)
 router.patch("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    const {
-      frete,
-      freteRecibo,
-      freteReciboNum,
-      freteReciboData,
-    } = req.body;
+    const b = parseBody(vendaFretePatchSchema, req.body);
 
     const venda = await prisma.venda.findUnique({ where: { id } });
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
     const dataVenda = {};
-    if (frete !== undefined && frete !== null && frete !== "") {
-      dataVenda.frete = parseNumberField(frete, "frete", { min: 0 });
+    if (b.frete !== undefined) {
+      dataVenda.frete = b.frete;
     }
-    if (freteRecibo !== undefined) dataVenda.freteRecibo = !!freteRecibo;
-    if (freteReciboNum !== undefined) dataVenda.freteReciboNum = freteReciboNum || null;
+    if (b.freteRecibo !== undefined) dataVenda.freteRecibo = !!b.freteRecibo;
+    if (b.freteReciboNum !== undefined)
+      dataVenda.freteReciboNum = b.freteReciboNum || null;
 
     const updated = await prisma.$transaction(async (tx) => {
       const v = await tx.venda.update({
@@ -133,14 +138,12 @@ router.patch("/:id", async (req, res) => {
       if (fretes.length > 0) {
         const primeiro = fretes[0];
         const fmData = {};
-        if (frete !== undefined && frete !== null && frete !== "")
-          fmData.valor = parseNumberField(frete, "frete", { min: 0 });
-        if (freteRecibo !== undefined) fmData.reciboEmitido = !!freteRecibo;
-        if (freteReciboNum !== undefined) fmData.reciboNumero = freteReciboNum || null;
-        if (freteReciboData !== undefined) {
-          fmData.reciboData = freteReciboData
-            ? parseDateField(freteReciboData, "freteReciboData")
-            : null;
+        if (b.frete !== undefined) fmData.valor = b.frete;
+        if (b.freteRecibo !== undefined) fmData.reciboEmitido = !!b.freteRecibo;
+        if (b.freteReciboNum !== undefined)
+          fmData.reciboNumero = b.freteReciboNum || null;
+        if (b.freteReciboData !== undefined) {
+          fmData.reciboData = dataFreteReciboParaPrisma(b.freteReciboData);
         }
         if (Object.keys(fmData).length > 0) {
           await tx.freteMovimento.update({
@@ -161,9 +164,10 @@ router.patch("/:id", async (req, res) => {
               valor: valorFrete,
               reciboEmitido: !!v.freteRecibo,
               reciboNumero: v.freteReciboNum || null,
-              reciboData: freteReciboData
-                ? parseDateField(freteReciboData, "freteReciboData")
-                : null,
+              reciboData:
+                b.freteReciboData !== undefined
+                  ? dataFreteReciboParaPrisma(b.freteReciboData)
+                  : null,
               data: v.dataVenda,
               observacao: `Frete venda #${id} (edição)`,
             },

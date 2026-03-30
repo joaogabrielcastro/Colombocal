@@ -57,7 +57,6 @@ app.use("/api/fretes", require("./routes/fretes"));
 app.use("/api/config", require("./routes/config"));
 app.use("/api/cheques", require("./routes/cheques"));
 app.use("/api/pagamentos", require("./routes/pagamentos"));
-app.use("/api/estoque", require("./routes/estoque"));
 app.use("/api/relatorios", require("./routes/relatorios"));
 app.use("/api/dashboard", require("./routes/dashboard"));
 app.use("/api/cnpj", require("./routes/cnpj"));

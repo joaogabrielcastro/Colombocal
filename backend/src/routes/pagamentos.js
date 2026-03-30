@@ -1,23 +1,19 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const {
-  aplicarPagamentoNosTitulos,
   recalcularTitulos,
+  recalcularTodosTitulosCliente,
 } = require("../services/recebiveis");
 const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
-const {
-  parseIntField,
-  parseNumberField,
-  parseDateField,
-  ensureEnum,
-} = require("../utils/validation");
+const { parseIntField } = require("../utils/validation");
+const { parseBody } = require("../utils/zodParse");
+const { pagamentoCreateSchema } = require("../schemas/pagamento");
 const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
-const prisma = new PrismaClient();
 
 // GET /api/pagamentos
 router.get("/", async (req, res) => {
@@ -50,52 +46,42 @@ router.get("/", async (req, res) => {
 // POST /api/pagamentos - registrar pagamento em dinheiro ou transferência (baixa por cliente ou por venda)
 router.post("/", async (req, res) => {
   try {
-    const { clienteId, vendaId, tipo, valor, data, observacoes } = req.body;
-    const tipoNormalizado = ensureEnum(tipo, "tipo", [
-      "dinheiro",
-      "transferencia",
-      "cheque",
-    ]);
-    if (tipoNormalizado === "cheque") {
+    const b = parseBody(pagamentoCreateSchema, req.body);
+    if (b.tipo === "cheque") {
       return res
         .status(400)
         .json({ error: "Para cheques, use a rota /api/cheques" });
     }
-    const clienteIdNum = parseIntField(clienteId, "clienteId", { min: 1 });
-    const vendaIdNum = parseIntField(vendaId, "vendaId", {
-      required: false,
-      min: 1,
-    });
-    const valorNum = parseNumberField(valor, "valor", { min: 0.01 });
-    const dataPagamento = parseDateField(data, "data", { required: false });
+    const dataPagamento =
+      b.data instanceof Date
+        ? b.data
+        : b.data
+          ? new Date(b.data)
+          : new Date();
 
     const pagamento = await prisma.$transaction(async (tx) => {
       const novoPagamento = await tx.pagamento.create({
         data: {
-          clienteId: clienteIdNum,
-          vendaId: vendaIdNum,
-          tipo: tipoNormalizado,
-          valor: valorNum,
-          data: dataPagamento || new Date(),
-          observacoes,
+          clienteId: b.clienteId,
+          vendaId: b.vendaId ?? null,
+          tipo: b.tipo,
+          valor: b.valor,
+          data: dataPagamento,
+          observacoes: b.observacoes,
         },
         include: { cliente: true, venda: true },
       });
 
-      await aplicarPagamentoNosTitulos(tx, {
-        clienteId: clienteIdNum,
-        vendaId: vendaIdNum,
-        valor: valorNum,
-      });
+      await recalcularTodosTitulosCliente(tx, b.clienteId);
       await registrarEventoFinanceiro(tx, {
         tipo: "PAGAMENTO_CRIADO",
         entidade: "Pagamento",
         entidadeId: novoPagamento.id,
         pagamentoId: novoPagamento.id,
-        clienteId: clienteIdNum,
-        vendaId: vendaIdNum,
-        valor: valorNum,
-        payload: { tipo: tipoNormalizado },
+        clienteId: b.clienteId,
+        vendaId: b.vendaId ?? null,
+        valor: b.valor,
+        payload: { tipo: b.tipo },
       });
 
       return novoPagamento;

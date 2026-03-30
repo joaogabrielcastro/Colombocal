@@ -306,23 +306,6 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-
-        <div className="card">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Movimentações</h2>
-            <Link
-              href="/estoque"
-              className="text-blue-600 text-sm hover:underline"
-            >
-              Ver histórico
-            </Link>
-          </div>
-          <p className="px-5 py-4 text-gray-500 text-sm leading-relaxed">
-            O cadastro de produtos não controla quantidade em estoque (operação
-            por telefone). Use a tela de movimentações apenas se precisar de
-            registro manual de entradas/saídas.
-          </p>
-        </div>
       </div>
     </div>
   );

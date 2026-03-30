@@ -1,12 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
-const prisma = new PrismaClient();
 
 // GET /api/produtos
 router.get("/", async (req, res) => {

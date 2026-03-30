@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const { handleRouteError, parsePagination, setPaginationHeaders } = require("../utils/api");
 const { getConfig } = require("../services/configSistema");
 const {
@@ -8,7 +8,6 @@ const {
   comissaoPorCaixa,
 } = require("../services/comissao");
 
-const prisma = new PrismaClient();
 
 function getDateRange(dataInicio, dataFim) {
   const where = {};
@@ -135,16 +134,33 @@ router.get("/comissoes", async (req, res) => {
       pagByVenda.get(p.vendaId).push(p);
     }
 
+    const vendedorById = new Map(vendedores.map((x) => [x.id, x]));
+
+    const vendaParaCalculo = (venda) => {
+      const vProv = vendedorById.get(venda.vendedorId);
+      const pctVenda = parseFloat(String(venda.comissaoPercentualAplicado ?? 0));
+      const valGravado = parseFloat(String(venda.comissaoValor ?? 0));
+      const pctCadastro = vProv
+        ? parseFloat(String(vProv.comissaoPercentual ?? 0))
+        : 0;
+      if (valGravado > 0 || pctVenda > 0) return venda;
+      if (pctCadastro > 0) {
+        return { ...venda, comissaoPercentualAplicado: pctCadastro };
+      }
+      return venda;
+    };
+
     const vendasByVendedor = new Map();
     for (const venda of vendas) {
       const key = venda.vendedorId;
       if (!vendasByVendedor.has(key)) vendasByVendedor.set(key, []);
       const lista = vendasByVendedor.get(key);
       const pags = pagByVenda.get(venda.id) || [];
+      const vCalc = vendaParaCalculo(venda);
       const comissaoLinha =
         modo === "caixa"
-          ? comissaoPorCaixa(venda, pags)
-          : comissaoPorEmissao(venda);
+          ? comissaoPorCaixa(vCalc, pags)
+          : comissaoPorEmissao(vCalc);
       lista.push({
         ...venda,
         comissaoCalculada: comissaoLinha,
@@ -249,33 +265,91 @@ router.get("/faturamento", async (req, res) => {
   }
 });
 
+function sumDecimal(v) {
+  if (v == null || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  const n = parseFloat(s.replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeChequeStatusSlug(raw) {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function mapChequeGroupBy(rows) {
+  const order = ["a_receber", "recebido", "depositado", "devolvido"];
+  const merged = new Map();
+  for (const row of rows) {
+    const status = normalizeChequeStatusSlug(row.status);
+    const count = row._count?.id ?? 0;
+    const total = sumDecimal(row._sum?.valor);
+    const cur = merged.get(status) || { status, count: 0, total: 0 };
+    cur.count += count;
+    cur.total += total;
+    merged.set(status, cur);
+  }
+  return [...merged.values()].sort((a, b) => {
+    const ia = order.indexOf(a.status);
+    const ib = order.indexOf(b.status);
+    const fa = ia === -1 ? 999 : ia;
+    const fb = ib === -1 ? 999 : ib;
+    return fa - fb || a.status.localeCompare(b.status);
+  });
+}
+
 // GET /api/relatorios/financeiro
 router.get("/financeiro", async (req, res) => {
   try {
+    const chequePendenteWhere = {
+      status: { in: ["a_receber", "recebido"] },
+    };
     // Todos clientes ativos com suas contas (baseado em títulos)
-    const [clientes, titulosAgg, chequesPorStatus, chequesPendentes, chequesDevolvidos] =
-      await Promise.all([
-        prisma.cliente.findMany({ where: { ativo: true } }),
-        prisma.tituloReceber.groupBy({
-          by: ["clienteId"],
-          _sum: { valorOriginal: true, valorPago: true },
-        }),
-        prisma.cheque.groupBy({
-          by: ["status"],
-          _sum: { valor: true },
-          _count: { id: true },
-        }),
-        prisma.cheque.findMany({
-          where: { status: { in: ["a_receber", "recebido"] } },
-          include: { cliente: true },
-          orderBy: { dataRecebimento: "asc" },
-        }),
-        prisma.cheque.findMany({
-          where: { status: "devolvido" },
-          include: { cliente: true },
-          orderBy: { dataRecebimento: "desc" },
-        }),
-      ]);
+    const [
+      clientes,
+      titulosAgg,
+      chequesPorStatusRaw,
+      chequesPendentesCount,
+      chequesPendentesValorAgg,
+      chequesPendentes,
+      chequesDevolvidos,
+    ] = await Promise.all([
+      prisma.cliente.findMany({ where: { ativo: true } }),
+      prisma.tituloReceber.groupBy({
+        by: ["clienteId"],
+        _sum: { valorOriginal: true, valorPago: true },
+      }),
+      prisma.cheque.groupBy({
+        by: ["status"],
+        _sum: { valor: true },
+        _count: { id: true },
+      }),
+      prisma.cheque.count({ where: chequePendenteWhere }),
+      prisma.cheque.aggregate({
+        where: chequePendenteWhere,
+        _sum: { valor: true },
+      }),
+      prisma.cheque.findMany({
+        where: chequePendenteWhere,
+        take: 500,
+        include: { cliente: true },
+        orderBy: { dataRecebimento: "asc" },
+      }),
+      prisma.cheque.findMany({
+        where: { status: "devolvido" },
+        include: { cliente: true },
+        orderBy: { dataRecebimento: "desc" },
+      }),
+    ]);
+
+    const chequesPorStatus = mapChequeGroupBy(chequesPorStatusRaw);
+    const chequesPendentesValorTotal = sumDecimal(
+      chequesPendentesValorAgg._sum?.valor,
+    );
 
     const aggMap = new Map(
       titulosAgg.map((a) => [
@@ -306,6 +380,9 @@ router.get("/financeiro", async (req, res) => {
       totalEmAberto,
       chequesPorStatus,
       chequesPendentes,
+      chequesPendentesCount: chequesPendentesCount,
+      chequesPendentesValorTotal,
+      chequesPendentesListaMax: 500,
       chequesDevolvidos,
     });
   } catch (error) {
@@ -392,54 +469,6 @@ router.get("/titulos", async (req, res) => {
     }
 
     res.json({ titulos, resumo });
-  } catch (error) {
-    handleRouteError(res, error);
-  }
-});
-
-// GET /api/relatorios/eventos-financeiros
-router.get("/eventos-financeiros", async (req, res) => {
-  try {
-    const { tipo, clienteId, vendaId, dataInicio, dataFim } = req.query;
-    const { take, skip } = parsePagination(req.query, {
-      defaultTake: 100,
-      maxTake: 500,
-    });
-
-    const where = {};
-    if (tipo) where.tipo = tipo;
-    if (clienteId) where.clienteId = parseInt(clienteId, 10);
-    if (vendaId) where.vendaId = parseInt(vendaId, 10);
-    if (dataInicio || dataFim) {
-      where.createdAt = getDateRange(dataInicio, dataFim);
-    }
-
-    const [eventos, total] = await Promise.all([
-      prisma.financeiroEvento.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take,
-        skip,
-      }),
-      prisma.financeiroEvento.count({ where }),
-    ]);
-    setPaginationHeaders(res, { total, take, skip });
-
-    const resumoPorTipoRaw = await prisma.financeiroEvento.groupBy({
-      by: ["tipo"],
-      where,
-      _count: { _all: true },
-      _sum: { valor: true },
-    });
-    const resumoPorTipo = resumoPorTipoRaw
-      .map((r) => ({
-        tipo: r.tipo,
-        quantidade: r._count._all,
-        valorTotal: parseFloat(r._sum.valor || 0),
-      }))
-      .sort((a, b) => b.quantidade - a.quantidade);
-
-    res.json({ eventos, resumoPorTipo, total });
   } catch (error) {
     handleRouteError(res, error);
   }

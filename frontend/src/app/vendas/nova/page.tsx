@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -17,6 +17,7 @@ import {
 import api from "@/lib/api";
 import { FreteOrientacaoPainel } from "@/components/FreteOrientacao";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
+import SearchableSelect from "@/components/SearchableSelect";
 
 interface ItemForm {
   produtoId: string;
@@ -40,17 +41,15 @@ export default function NovaVendaPage() {
 function NovaVendaForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preClienteId = searchParams.get("clienteId");
+  const clienteIdFromQuery = searchParams.get("clienteId");
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [produtosCliente, setProdutosCliente] = useState<ProdutoPreco[]>([]);
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
 
-  const [clienteId, setClienteId] = useState(preClienteId || "");
   const [vendedorId, setVendedorId] = useState("");
   const [motoristaId, setMotoristaId] = useState("");
+  const [clienteId, setClienteId] = useState(clienteIdFromQuery || "");
+  const clienteIdRef = useRef(clienteId);
+  clienteIdRef.current = clienteId;
   const [frete, setFrete] = useState("");
   const [dataVenda, setDataVenda] = useState(
     new Date().toISOString().split("T")[0],
@@ -67,45 +66,164 @@ function NovaVendaForm() {
   const [erro, setErro] = useState("");
 
   useEffect(() => {
-    Promise.all([
-      api.get<{ clientes: Cliente[] }>("/clientes?ativo=true"),
-      api.get<Vendedor[]>("/vendedores"),
-      api.get<Motorista[]>("/motoristas"),
-      api.get<Produto[]>("/produtos?ativo=true"),
-    ]).then(([c, v, m, p]) => {
-      setClientes(c.clientes);
-      setVendedores(v);
-      setMotoristas(m);
-      setProdutos(p);
-      if (v.length > 0) setVendedorId(String(v[0].id));
+    api.get<Vendedor[]>("/vendedores?take=1").then((arr) => {
+      if (arr.length > 0) {
+        setVendedorId((v) => v || String(arr[0].id));
+      }
     });
   }, []);
 
-  // Quando o cliente muda, buscar os preços especiais e vendedor padrão
+  useEffect(() => {
+    if (clienteIdFromQuery) setClienteId(clienteIdFromQuery);
+  }, [clienteIdFromQuery]);
+
   useEffect(() => {
     if (!clienteId) {
-      setProdutosCliente([]);
+      setSelectedCliente(null);
       return;
     }
-    api.get<ProdutoPreco[]>(`/clientes/${clienteId}/precos`).then((data) => {
-      setProdutosCliente(data);
-      setItens((prev) =>
-        prev.map((item) => {
-          if (!item.produtoId) return item;
-          const pc = data.find((p) => String(p.id) === item.produtoId);
-          if (pc) return { ...item, precoUnitario: String(pc.precoAplicado) };
-          return item;
-        }),
-      );
-      const cliente = clientes.find((c) => String(c.id) === clienteId);
-      if (cliente && !frete) setFrete(String(cliente.fretePadrao));
-      if (cliente?.vendedorId) setVendedorId(String(cliente.vendedorId));
-    });
+    let cancelled = false;
+    api
+      .get<Cliente>(`/clientes/${clienteId}`)
+      .then((cli) => {
+        if (cancelled) return;
+        setSelectedCliente(cli);
+        setFrete((prev) => (!prev ? String(cli.fretePadrao ?? 0) : prev));
+        if (cli.vendedorId) setVendedorId(String(cli.vendedorId));
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedCliente(null);
+      });
+    setItens((prev) =>
+      prev.map((i) => ({ ...i, produtoId: "", precoUnitario: "" })),
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [clienteId]);
 
-  const handleProdutoChange = (idx: number, produtoId: string) => {
-    const pc = produtosCliente.find((p) => String(p.id) === produtoId);
-    const preco = pc ? String(pc.precoAplicado) : "";
+  const loadClienteOptions = useCallback(async (q: string) => {
+    const p = new URLSearchParams({
+      ativo: "true",
+      busca: q,
+      take: "40",
+    });
+    const r = await api.get<{ clientes: Cliente[] }>(`/clientes?${p}`);
+    return r.clientes.map((c) => ({
+      id: c.id,
+      label: (c.nomeFantasia?.trim() || c.razaoSocial) as string,
+    }));
+  }, []);
+
+  const loadClienteLabel = useCallback(async (id: string) => {
+    const c = await api.get<Cliente>(`/clientes/${id}`);
+    return (c.nomeFantasia?.trim() || c.razaoSocial) ?? null;
+  }, []);
+
+  const loadVendedorOptions = useCallback(async (q: string) => {
+    const p = new URLSearchParams({ take: "80" });
+    if (q.trim()) p.set("busca", q.trim());
+    const r = await api.get<Vendedor[]>(`/vendedores?${p}`);
+    return r.map((v) => ({ id: v.id, label: v.nome }));
+  }, []);
+
+  const loadVendedorLabel = useCallback(async (id: string) => {
+    try {
+      const v = await api.get<Vendedor>(`/vendedores/${id}`);
+      return v.nome;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const loadMotoristaOptions = useCallback(async (q: string) => {
+    const p = new URLSearchParams({ take: "80" });
+    if (q.trim()) p.set("busca", q.trim());
+    const r = await api.get<Motorista[]>(`/motoristas?${p}`);
+    return r.map((m) => ({ id: m.id, label: m.nome }));
+  }, []);
+
+  const loadProdutoOptions = useCallback(
+    async (q: string) => {
+      const p = new URLSearchParams({ ativo: "true", take: "40" });
+      if (q.trim()) p.set("busca", q.trim());
+      if (clienteId) {
+        const list = await api.get<ProdutoPreco[]>(
+          `/clientes/${clienteId}/precos?${p}`,
+        );
+        return list.map((pr) => ({
+          id: pr.id,
+          label: `${pr.nome} (${pr.unidade})`,
+        }));
+      }
+      const list = await api.get<Produto[]>(`/produtos?${p}`);
+      return list.map((pr) => ({
+        id: pr.id,
+        label: `${pr.nome} (${pr.unidade})`,
+      }));
+    },
+    [clienteId],
+  );
+
+  const loadProdutoLabelById = useCallback(
+    async (id: string) => {
+      try {
+        if (clienteId) {
+          const rows = await api.get<ProdutoPreco[]>(
+            `/clientes/${clienteId}/precos?produtoId=${id}`,
+          );
+          const pr = rows[0];
+          return pr ? `${pr.nome} (${pr.unidade})` : null;
+        }
+        const pr = await api.get<Produto>(`/produtos/${id}`);
+        return `${pr.nome} (${pr.unidade})`;
+      } catch {
+        return null;
+      }
+    },
+    [clienteId],
+  );
+
+  const parsePrecoApi = (v: unknown) => {
+    const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", "."));
+    return Number.isFinite(n) ? String(n) : "";
+  };
+
+  const handleProdutoChange = async (idx: number, produtoId: string) => {
+    const cidSnapshot = clienteIdRef.current;
+    if (!produtoId) {
+      setItens((prev) =>
+        prev.map((item, i) =>
+          i === idx ? { ...item, produtoId: "", precoUnitario: "" } : item,
+        ),
+      );
+      return;
+    }
+
+    let preco = "";
+    if (cidSnapshot) {
+      try {
+        const rows = await api.get<ProdutoPreco[]>(
+          `/clientes/${cidSnapshot}/precos?produtoId=${encodeURIComponent(produtoId)}`,
+        );
+        if (clienteIdRef.current !== cidSnapshot) return;
+        const pc = rows[0];
+        if (pc) preco = parsePrecoApi(pc.precoAplicado);
+      } catch {
+        if (clienteIdRef.current !== cidSnapshot) return;
+      }
+    } else {
+      try {
+        const p = await api.get<Produto>(`/produtos/${produtoId}`);
+        if (clienteIdRef.current !== "") return;
+        preco = parsePrecoApi(p.precoPadrao);
+      } catch {
+        if (clienteIdRef.current !== "") return;
+      }
+    }
+
+    if (cidSnapshot && clienteIdRef.current !== cidSnapshot) return;
+
     setItens((prev) =>
       prev.map((item, i) =>
         i === idx ? { ...item, produtoId, precoUnitario: preco } : item,
@@ -157,11 +275,17 @@ function NovaVendaForm() {
         itens: itensValidos,
       });
       router.push(`/vendas/${venda.id}`);
-    } catch (e: any) {
-      setErro(e.message);
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : "Erro ao registrar");
       setSalvando(false);
     }
   };
+
+  const cli = selectedCliente;
+  const com =
+    cli?.comissaoFixaPercentual != null
+      ? cli.comissaoFixaPercentual
+      : cli?.vendedor?.comissaoPercentual;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -179,82 +303,46 @@ function NovaVendaForm() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Dados da venda */}
         <div className="card p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Dados da Venda</h2>
-          {clienteId &&
-            (() => {
-              const cli = clientes.find((c) => String(c.id) === clienteId);
-              const com =
-                cli?.comissaoFixaPercentual != null
-                  ? cli.comissaoFixaPercentual
-                  : cli?.vendedor?.comissaoPercentual;
-              return com != null ? (
-                <p className="text-sm text-gray-600 mb-3">
-                  Comissão aplicável neste cliente:{" "}
-                  <span className="font-semibold text-gray-900">
-                    {Number(com).toLocaleString("pt-BR")}%
-                  </span>
-                  {cli?.comissaoFixaPercentual == null &&
-                    cli?.vendedor &&
-                    " (padrão do vendedor)"}
-                </p>
-              ) : null;
-            })()}
+          {cli != null && com != null && (
+            <p className="text-sm text-gray-600 mb-3">
+              Comissão aplicável neste cliente:{" "}
+              <span className="font-semibold text-gray-900">
+                {Number(com).toLocaleString("pt-BR")}%
+              </span>
+              {cli.comissaoFixaPercentual == null &&
+                cli.vendedor &&
+                " (padrão do vendedor)"}
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cliente *
-              </label>
-              <select
-                required
-                value={clienteId}
-                onChange={(e) => setClienteId(e.target.value)}
-                className="input-field"
-              >
-                <option value="">Selecione o cliente</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nomeFantasia || c.razaoSocial}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Vendedor *
-              </label>
-              <select
-                required
-                value={vendedorId}
-                onChange={(e) => setVendedorId(e.target.value)}
-                className="input-field"
-              >
-                <option value="">Selecione</option>
-                {vendedores.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Motorista
-              </label>
-              <select
-                value={motoristaId}
-                onChange={(e) => setMotoristaId(e.target.value)}
-                className="input-field"
-              >
-                <option value="">Sem motorista</option>
-                {motoristas.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableSelect
+              label="Cliente"
+              value={clienteId}
+              onChange={setClienteId}
+              loadOptions={loadClienteOptions}
+              loadLabelById={loadClienteLabel}
+              minChars={2}
+              placeholder="Nome, fantasia, CNPJ ou cidade…"
+            />
+            <SearchableSelect
+              label="Vendedor"
+              value={vendedorId}
+              onChange={setVendedorId}
+              loadOptions={loadVendedorOptions}
+              loadLabelById={loadVendedorLabel}
+              minChars={0}
+              placeholder="Digite para buscar vendedor…"
+            />
+            <SearchableSelect
+              label="Motorista"
+              value={motoristaId}
+              onChange={setMotoristaId}
+              loadOptions={loadMotoristaOptions}
+              minChars={0}
+              placeholder="Nome do motorista (opcional)…"
+            />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Data da Venda
@@ -321,7 +409,6 @@ function NovaVendaForm() {
           </div>
         </div>
 
-        {/* Produtos */}
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Produtos</h2>
@@ -333,6 +420,12 @@ function NovaVendaForm() {
               <PlusIcon className="w-3.5 h-3.5" /> Adicionar produto
             </button>
           </div>
+          {!clienteId && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
+              Selecione um cliente para aplicar tabela de preços do cliente; até
+              lá, a busca usa preço padrão do produto.
+            </p>
+          )}
 
           <table className="w-full">
             <thead>
@@ -351,24 +444,17 @@ function NovaVendaForm() {
                   parseFloat(item.precoUnitario || "0");
                 return (
                   <tr key={idx} className="border-b border-gray-50">
-                    <td className="py-2 pr-3">
-                      <select
+                    <td className="py-2 pr-3 min-w-[12rem]">
+                      <SearchableSelect
+                        label="Produto"
+                        hideLabel
                         value={item.produtoId}
-                        onChange={(e) =>
-                          handleProdutoChange(idx, e.target.value)
-                        }
-                        className="input-field text-sm"
-                      >
-                        <option value="">Selecione o produto</option>
-                        {(produtosCliente.length > 0
-                          ? produtosCliente
-                          : produtos
-                        ).map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nome} ({p.unidade})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(id) => void handleProdutoChange(idx, id)}
+                        loadOptions={loadProdutoOptions}
+                        loadLabelById={loadProdutoLabelById}
+                        minChars={2}
+                        placeholder="Buscar produto…"
+                      />
                     </td>
                     <td className="py-2 pr-3">
                       <input
@@ -429,7 +515,6 @@ function NovaVendaForm() {
           </table>
         </div>
 
-        {/* Totais */}
         <div className="card p-5">
           <div className="flex justify-end">
             <div className="w-72 space-y-2">

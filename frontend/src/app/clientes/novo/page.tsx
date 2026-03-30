@@ -1,10 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import api from '@/lib/api';
 import type { Vendedor } from '@/lib/utils';
+import SearchableSelect from '@/components/SearchableSelect';
 
 interface CnpjData {
   cnpj: string;
@@ -33,14 +34,24 @@ const initialForm = {
 export default function NovoClientePage() {
   const router = useRouter();
   const [form, setForm] = useState(initialForm);
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
-  useEffect(() => {
-    api.get<Vendedor[]>('/vendedores').then(setVendedores);
+  const loadVendedorOptions = useCallback(async (q: string) => {
+    const p = new URLSearchParams({ take: '80' });
+    if (q.trim()) p.set('busca', q.trim());
+    const r = await api.get<Vendedor[]>(`/vendedores?${p}`);
+    return r.map((v) => ({
+      id: v.id,
+      label: `${v.nome} (${v.comissaoPercentual}% padrão)`,
+    }));
+  }, []);
+
+  const loadVendedorLabelById = useCallback(async (id: string) => {
+    const v = await api.get<Vendedor>(`/vendedores/${id}`);
+    return `${v.nome} (${v.comissaoPercentual}% padrão)`;
   }, []);
 
   const handleBuscarCNPJ = async () => {
@@ -181,19 +192,16 @@ export default function NovoClientePage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Vendedor do cliente</label>
-            <select
+            <SearchableSelect
+              label="Vendedor do cliente"
               value={form.vendedorId}
-              onChange={set('vendedorId')}
-              className="input-field"
-            >
-              <option value="">Nenhum</option>
-              {vendedores.filter((v) => v.ativo).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.nome} ({v.comissaoPercentual}% padrão)
-                </option>
-              ))}
-            </select>
+              onChange={(id) => setForm((p) => ({ ...p, vendedorId: id }))}
+              loadOptions={loadVendedorOptions}
+              loadLabelById={loadVendedorLabelById}
+              minChars={0}
+              placeholder="Nenhum — digite para buscar vendedor"
+              emptyHint="Lista os primeiros vendedores ativos; refine digitando o nome."
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Comissão fixa (%)</label>

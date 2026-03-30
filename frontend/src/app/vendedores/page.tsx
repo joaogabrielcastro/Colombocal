@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { PlusIcon } from "@heroicons/react/24/outline";
+import { useCallback, useEffect, useState } from "react";
+import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { type Vendedor } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
@@ -9,6 +9,8 @@ import { reportApiError } from "@/lib/report-api-error";
 
 export default function VendedoresPage() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [buscaInput, setBuscaInput] = useState("");
+  const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<null | Vendedor>(null);
   const [form, setForm] = useState<Partial<Vendedor>>({});
@@ -16,23 +18,37 @@ export default function VendedoresPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
-  const carregar = () => {
+  const carregar = useCallback(async (termo: string) => {
     setLoading(true);
-    api
-      .get<Vendedor[]>("/vendedores")
-      .then(setVendedores)
-      .catch((e) => {
-        reportApiError(e, {
-          title: "Não foi possível carregar vendedores",
-          onRetry: () => void carregar(),
-        });
-        setVendedores([]);
-      })
-      .finally(() => setLoading(false));
-  };
-  useEffect(() => {
-    carregar();
+    const params = new URLSearchParams({ take: "500" });
+    const t = termo.trim();
+    if (t) params.set("busca", t);
+    try {
+      const data = await api.get<Vendedor[]>(`/vendedores?${params}`);
+      setVendedores(data);
+    } catch (e) {
+      reportApiError(e, {
+        title: "Não foi possível carregar vendedores",
+        onRetry: () => void carregar(termo),
+      });
+      setVendedores([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    if (buscaInput === "") {
+      setBusca("");
+      return;
+    }
+    const id = setTimeout(() => setBusca(buscaInput), 320);
+    return () => clearTimeout(id);
+  }, [buscaInput]);
+
+  useEffect(() => {
+    void carregar(busca);
+  }, [busca, carregar]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +63,7 @@ export default function VendedoresPage() {
       setMostrarForm(false);
       setEditando(null);
       setForm({});
-      carregar();
+      void carregar(busca);
     } catch (e) {
       reportApiError(e, { title: "Erro ao salvar vendedor" });
       setErro(e instanceof Error ? e.message : "");
@@ -69,7 +85,7 @@ export default function VendedoresPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Vendedores</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {vendedores.length} vendedores cadastrados
+            Gestão de vendedores e comissão padrão
           </p>
         </div>
         <button
@@ -83,6 +99,28 @@ export default function VendedoresPage() {
         >
           <PlusIcon className="w-4 h-4" /> Novo Vendedor
         </button>
+      </div>
+
+      <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+        <div className="min-w-[16rem] flex-1 max-w-md">
+          <label className="block text-xs text-gray-500 mb-1">Buscar vendedor</label>
+          <div className="relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={buscaInput}
+              onChange={(e) => setBuscaInput(e.target.value)}
+              placeholder="Nome…"
+              autoComplete="off"
+              className="input-field pl-9"
+            />
+          </div>
+        </div>
+        <p className="text-sm text-gray-500 pb-2">
+          {busca.trim()
+            ? `${vendedores.length} resultado${vendedores.length === 1 ? "" : "s"}`
+            : `${vendedores.length} vendedores ativos`}
+        </p>
       </div>
 
       {mostrarForm && (
@@ -179,8 +217,12 @@ export default function VendedoresPage() {
         ) : vendedores.length === 0 ? (
           <div className="p-6">
             <EmptyState
-              title="Nenhum vendedor cadastrado"
-              description="Cadastre vendedores para registrar vendas e comissões."
+              title={busca.trim() ? "Nenhum vendedor encontrado" : "Nenhum vendedor cadastrado"}
+              description={
+                busca.trim()
+                  ? "Tente outro termo ou limpe a busca."
+                  : "Cadastre vendedores para registrar vendas e comissões."
+              }
             />
           </div>
         ) : (

@@ -1,6 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
-
-const prisma = new PrismaClient();
+const { prisma } = require("../src/lib/prisma");
 
 async function main() {
   console.log("Iniciando seed do banco de dados...");

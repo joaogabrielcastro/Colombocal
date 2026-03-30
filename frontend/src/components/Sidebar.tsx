@@ -10,7 +10,6 @@ import {
   UserIcon,
   ShoppingCartIcon,
   BanknotesIcon,
-  ArrowsRightLeftIcon,
   ChartBarIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -29,7 +28,6 @@ const coreNav: NavItem[] = [
   { href: '/produtos', label: 'Produtos', icon: CubeIcon },
   { href: '/vendas', label: 'Vendas', icon: ShoppingCartIcon },
   { href: '/cheques', label: 'Cheques', icon: BanknotesIcon },
-  { href: '/estoque', label: 'Estoque', icon: ArrowsRightLeftIcon },
 ];
 
 const cadastrosSecundarios: NavItem[] = [
@@ -47,7 +45,6 @@ const relatoriosPrincipais = [
 const relatoriosAnalise = [
   { href: '/relatorios/comissoes', label: 'Comissões' },
   { href: '/relatorios/titulos', label: 'Títulos a Receber' },
-  { href: '/relatorios/auditoria-financeira', label: 'Auditoria Financeira' },
 ];
 
 export default function Sidebar() {
@@ -198,7 +195,7 @@ export default function Sidebar() {
       <div className="px-4 py-3 border-t border-gray-700 space-y-1">
         {UI_HIDE_ADVANCED && (
           <p className="text-gray-500 text-[10px] text-center leading-snug">
-            Menu compacto: cadastros e relatórios de análise em Avançado.
+            Modo piloto: Motoristas, Vendedores, Fretes e relatórios Comissões/Títulos em Avançado.
           </p>
         )}
         <p className="text-gray-500 text-xs text-center">v1.0</p>

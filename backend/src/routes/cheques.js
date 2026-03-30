@@ -1,24 +1,19 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
-const {
-  aplicarPagamentoNosTitulos,
-  recalcularTitulos,
-} = require("../services/recebiveis");
+const { prisma } = require("../lib/prisma");
+const { recalcularTitulos, recalcularTodosTitulosCliente } = require("../services/recebiveis");
 const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
+const { parseIntField } = require("../utils/validation");
+const { parseBody } = require("../utils/zodParse");
 const {
-  parseIntField,
-  parseNumberField,
-  parseDateField,
-  ensureEnum,
-} = require("../utils/validation");
+  chequeCreateSchema,
+  chequeStatusPatchSchema,
+} = require("../schemas/cheque");
 const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
-const prisma = new PrismaClient();
-
 // GET /api/cheques
 router.get("/", async (req, res) => {
   try {
@@ -49,7 +44,10 @@ router.get("/", async (req, res) => {
       }
     }
     const where = and.length ? { AND: and } : {};
-    const [cheques, total] = await Promise.all([
+    const includeResumo =
+      req.query.resumo === "1" || req.query.resumo === "true";
+
+    const queries = [
       prisma.cheque.findMany({
         where,
         include: {
@@ -61,9 +59,41 @@ router.get("/", async (req, res) => {
         skip,
       }),
       prisma.cheque.count({ where }),
-    ]);
+    ];
+    if (includeResumo) {
+      queries.push(
+        prisma.cheque.groupBy({
+          by: ["status"],
+          where,
+          _sum: { valor: true },
+          _count: { id: true },
+        }),
+      );
+    }
+
+    const results = await Promise.all(queries);
+    const cheques = results[0];
+    const total = results[1];
     setPaginationHeaders(res, { total, take, skip });
-    res.json(cheques);
+
+    if (includeResumo) {
+      const raw = results[2];
+      const order = ["a_receber", "recebido", "depositado", "devolvido"];
+      const resumoPorStatus = raw
+        .map((row) => ({
+          status: String(row.status || "").trim(),
+          count: row._count?.id ?? 0,
+          total: parseFloat(String(row._sum?.valor ?? 0)),
+        }))
+        .sort(
+          (a, b) =>
+            order.indexOf(a.status) - order.indexOf(b.status) ||
+            a.status.localeCompare(b.status),
+        );
+      res.json({ items: cheques, resumoPorStatus });
+    } else {
+      res.json(cheques);
+    }
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -88,55 +118,35 @@ router.get("/:id", async (req, res) => {
 // status inicial: a_receber (sem pagamento) | recebido (com pagamento)
 router.post("/", async (req, res) => {
   try {
-    const {
-      clienteId,
-      vendaId,
-      valor,
-      banco,
-      numero,
-      agencia,
-      conta,
-      dataRecebimento,
-      dataCompensacao,
-      status,
-      observacoes,
-    } = req.body;
-
-    const statusInicial = ensureEnum(status || "a_receber", "status", [
-      "a_receber",
-      "recebido",
-      "depositado",
-      "devolvido",
-    ]);
-    const clienteIdNum = parseIntField(clienteId, "clienteId", { min: 1 });
-    const vendaIdNum = parseIntField(vendaId, "vendaId", {
-      required: false,
-      min: 1,
-    });
-    const valorNum = parseNumberField(valor, "valor", { min: 0.01 });
-    const dataRecebimentoDate = parseDateField(dataRecebimento, "dataRecebimento", {
-      required: false,
-    });
-    const dataCompensacaoDate = parseDateField(
-      dataCompensacao,
-      "dataCompensacao",
-      { required: false },
-    );
+    const b = parseBody(chequeCreateSchema, req.body);
+    const statusInicial = b.status ?? "a_receber";
+    const dataRecebimentoDate =
+      b.dataRecebimento instanceof Date
+        ? b.dataRecebimento
+        : b.dataRecebimento
+          ? new Date(b.dataRecebimento)
+          : null;
+    const dataCompensacaoDate =
+      b.dataCompensacao instanceof Date
+        ? b.dataCompensacao
+        : b.dataCompensacao
+          ? new Date(b.dataCompensacao)
+          : null;
 
     const cheque = await prisma.$transaction(async (tx) => {
       const novoCheque = await tx.cheque.create({
         data: {
-          clienteId: clienteIdNum,
-          vendaId: vendaIdNum,
-          valor: valorNum,
-          banco,
-          numero,
-          agencia,
-          conta,
+          clienteId: b.clienteId,
+          vendaId: b.vendaId ?? null,
+          valor: b.valor,
+          banco: b.banco ?? null,
+          numero: b.numero ?? null,
+          agencia: b.agencia ?? null,
+          conta: b.conta ?? null,
           dataRecebimento: dataRecebimentoDate || new Date(),
           dataCompensacao: dataCompensacaoDate,
           status: statusInicial,
-          observacoes,
+          observacoes: b.observacoes ?? null,
         },
       });
 
@@ -144,30 +154,26 @@ router.post("/", async (req, res) => {
       if (statusInicial === "recebido" || statusInicial === "depositado") {
         await tx.pagamento.create({
           data: {
-            clienteId: clienteIdNum,
+            clienteId: b.clienteId,
             vendaId: novoCheque.vendaId,
             tipo: "cheque",
-            valor: valorNum,
+            valor: b.valor,
             data: dataRecebimentoDate || new Date(),
             chequeId: novoCheque.id,
-            observacoes: `Cheque #${numero || novoCheque.id} - ${banco || ""}`,
+            observacoes: `Cheque #${b.numero || novoCheque.id} - ${b.banco || ""}`,
           },
         });
-        await aplicarPagamentoNosTitulos(tx, {
-          clienteId: clienteIdNum,
-          vendaId: novoCheque.vendaId,
-          valor: valorNum,
-        });
+        await recalcularTodosTitulosCliente(tx, b.clienteId);
       }
       await registrarEventoFinanceiro(tx, {
         tipo: "CHEQUE_CRIADO",
         entidade: "Cheque",
         entidadeId: novoCheque.id,
         chequeId: novoCheque.id,
-        clienteId: clienteIdNum,
+        clienteId: b.clienteId,
         vendaId: novoCheque.vendaId,
-        valor: valorNum,
-        payload: { status: statusInicial, banco: banco || null },
+        valor: b.valor,
+        payload: { status: statusInicial, banco: b.banco || null },
       });
 
       return novoCheque;
@@ -187,19 +193,15 @@ router.post("/", async (req, res) => {
 // PATCH /api/cheques/:id/status - atualizar status do cheque
 router.patch("/:id/status", async (req, res) => {
   try {
-    const { status, dataCompensacao } = req.body;
+    const body = parseBody(chequeStatusPatchSchema, req.body);
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    const statusValidado = ensureEnum(status, "status", [
-      "a_receber",
-      "recebido",
-      "depositado",
-      "devolvido",
-    ]);
-    const dataCompensacaoDate = parseDateField(
-      dataCompensacao,
-      "dataCompensacao",
-      { required: false },
-    );
+    const statusValidado = body.status;
+    const dataCompensacaoDate =
+      body.dataCompensacao instanceof Date
+        ? body.dataCompensacao
+        : body.dataCompensacao
+          ? new Date(body.dataCompensacao)
+          : null;
 
     const chequeAtual = await prisma.cheque.findUnique({
       where: { id },
@@ -243,6 +245,7 @@ router.patch("/:id/status", async (req, res) => {
             observacoes: `Cheque #${chequeAtual.numero || chequeAtual.id} - ${chequeAtual.banco || ""}`,
           },
         });
+        await recalcularTodosTitulosCliente(tx, chequeAtual.clienteId);
       }
 
       // Se voltou para a_receber/devolvido, remove pagamento e recalcula títulos

@@ -1,20 +1,23 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
-const prisma = new PrismaClient();
 
 router.get("/", async (req, res) => {
   try {
+    const { busca } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 200,
       maxTake: 500,
     });
     const where = { ativo: true };
+    if (busca && String(busca).trim()) {
+      where.nome = { contains: String(busca).trim(), mode: "insensitive" };
+    }
     const [motoristas, total] = await Promise.all([
       prisma.motorista.findMany({
         where,

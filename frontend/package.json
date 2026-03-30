@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3010",
+    "dev:clean": "node -e \"try { require('fs').rmSync('.next', { recursive: true, force: true }) } catch (e) {}\" && next dev -p 3010",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.1",
-    "axios": "^1.6.7",
     "date-fns": "^3.3.1",
     "next": "^16.1.6",
     "react": "^18.2.0",

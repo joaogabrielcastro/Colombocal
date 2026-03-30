@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ExclamationTriangleIcon,
   ArrowDownTrayIcon,
+  ArrowPathIcon,
   PrinterIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
@@ -37,7 +39,82 @@ interface FinanceiroData {
   totalEmAberto: number;
   chequesPorStatus: ChequeStatus[];
   chequesPendentes: ChequeItem[];
+  chequesPendentesCount?: number;
+  chequesPendentesValorTotal?: number;
+  chequesPendentesListaMax?: number;
   chequesDevolvidos: ChequeItem[];
+}
+
+function decimalLikeToNumber(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  const n = parseFloat(s.replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeChequesPorStatus(raw: unknown): ChequeStatus[] {
+  if (!Array.isArray(raw)) return [];
+  const merged = new Map<string, ChequeStatus>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const status = String(o.status ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_");
+
+    let count = 0;
+    if (typeof o.count === "number") count = o.count;
+    else if (o._count && typeof o._count === "object" && o._count !== null) {
+      const id = (o._count as { id?: unknown }).id;
+      count =
+        typeof id === "number" ? id : parseInt(String(id ?? 0), 10) || 0;
+    }
+
+    let total = 0;
+    if (typeof o.total === "number") total = o.total;
+    else if (typeof o.total === "string") total = decimalLikeToNumber(o.total);
+    else if (o._sum && typeof o._sum === "object" && o._sum !== null) {
+      total = decimalLikeToNumber((o._sum as { valor?: unknown }).valor);
+    }
+
+    const cur = merged.get(status) ?? { status, count: 0, total: 0 };
+    cur.count += count;
+    cur.total += total;
+    merged.set(status, cur);
+  }
+  const order = ["a_receber", "recebido", "depositado", "devolvido"];
+  return [...merged.values()].sort((a, b) => {
+    const ia = order.indexOf(a.status);
+    const ib = order.indexOf(b.status);
+    const fa = ia === -1 ? 999 : ia;
+    const fb = ib === -1 ? 999 : ib;
+    return fa - fb || a.status.localeCompare(b.status);
+  });
+}
+
+function normalizeFinanceiroPayload(data: FinanceiroData): FinanceiroData {
+  const chequesPorStatus = normalizeChequesPorStatus(data.chequesPorStatus);
+  let chequesPendentesCount = data.chequesPendentesCount;
+  let chequesPendentesValorTotal = data.chequesPendentesValorTotal;
+  if (chequesPendentesCount == null) {
+    chequesPendentesCount = chequesPorStatus
+      .filter((s) => s.status === "a_receber" || s.status === "recebido")
+      .reduce((acc, s) => acc + s.count, 0);
+  }
+  if (chequesPendentesValorTotal == null) {
+    chequesPendentesValorTotal = chequesPorStatus
+      .filter((s) => s.status === "a_receber" || s.status === "recebido")
+      .reduce((acc, s) => acc + s.total, 0);
+  }
+  return {
+    ...data,
+    chequesPorStatus,
+    chequesPendentesCount,
+    chequesPendentesValorTotal,
+  };
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -61,12 +138,17 @@ export default function FinanceiroPage() {
     "devedores",
   );
 
-  useEffect(() => {
+  const carregar = useCallback(() => {
+    setLoading(true);
     api
-      .get<FinanceiroData>("/relatorios/financeiro")
-      .then(setDados)
+      .get<FinanceiroData>("/relatorios/financeiro", { cache: "no-store" })
+      .then((raw) => setDados(normalizeFinanceiroPayload(raw)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
 
   const exportarCSV = () => {
     if (!dados) return;
@@ -125,22 +207,36 @@ export default function FinanceiroPage() {
         <h1 className="text-2xl font-bold text-gray-900">
           Relatório Financeiro
         </h1>
-        {dados && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={imprimirRelatorio}
-              className="btn-secondary flex items-center gap-1"
-            >
-              <PrinterIcon className="w-4 h-4" /> Imprimir
-            </button>
-            <button
-              onClick={exportarCSV}
-              className="btn-secondary flex items-center gap-1"
-            >
-              <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={carregar}
+            disabled={loading}
+            className="btn-secondary flex items-center gap-1"
+            title="Atualiza os números do servidor"
+          >
+            <ArrowPathIcon
+              className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+            />{" "}
+            Recarregar
+          </button>
+          {dados && (
+            <>
+              <button
+                onClick={imprimirRelatorio}
+                className="btn-secondary flex items-center gap-1"
+              >
+                <PrinterIcon className="w-4 h-4" /> Imprimir
+              </button>
+              <button
+                onClick={exportarCSV}
+                className="btn-secondary flex items-center gap-1"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {loading && (
@@ -168,7 +264,10 @@ export default function FinanceiroPage() {
             <div className="card p-4 text-center">
               <p className="text-xs text-gray-500">Cheques Pendentes</p>
               <p className="text-2xl font-bold text-yellow-600 mt-1">
-                {dados.chequesPendentes.length}
+                {dados.chequesPendentesCount ?? dados.chequesPendentes.length}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-1">
+                A receber + recebido (ainda não depositado)
               </p>
             </div>
             <div className="card p-4 text-center">
@@ -179,12 +278,14 @@ export default function FinanceiroPage() {
             </div>
           </div>
 
-          {/* Status cheques */}
-          {dados.chequesPorStatus.length > 0 && (
-            <div className="card p-4 mb-6">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                Cheques por Status
-              </h3>
+          {/* Status cheques — totais reais (API mapeia _sum/_count do Prisma) */}
+          <div className="card p-4 mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">
+              Cheques por Status
+            </h3>
+            {dados.chequesPorStatus.length === 0 ? (
+              <p className="text-sm text-gray-500">Nenhum cheque cadastrado.</p>
+            ) : (
               <div className="flex gap-3 flex-wrap">
                 {dados.chequesPorStatus.map((s) => (
                   <div
@@ -201,8 +302,8 @@ export default function FinanceiroPage() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Abas */}
           <div className="flex gap-1 mb-4 border-b border-gray-200">
@@ -214,7 +315,7 @@ export default function FinanceiroPage() {
                 },
                 {
                   key: "pendentes",
-                  label: `Cheques Pendentes (${dados.chequesPendentes.length})`,
+                  label: `Cheques Pendentes (${dados.chequesPendentesCount ?? dados.chequesPendentes.length})`,
                 },
                 {
                   key: "devolvidos",
@@ -294,11 +395,30 @@ export default function FinanceiroPage() {
 
           {aba === "pendentes" && (
             <div className="card overflow-hidden">
-              {dados.chequesPendentes.length === 0 ? (
+              {(dados.chequesPendentesCount ?? dados.chequesPendentes.length) ===
+              0 ? (
                 <div className="p-8 text-center text-gray-400">
                   Nenhum cheque pendente.
                 </div>
               ) : (
+                <>
+                  {dados.chequesPendentesListaMax != null &&
+                    (dados.chequesPendentesCount ?? 0) >
+                      dados.chequesPendentesListaMax && (
+                      <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 text-sm text-amber-950">
+                        Lista limitada aos primeiros{" "}
+                        {dados.chequesPendentesListaMax} registros. Total no
+                        sistema:{" "}
+                        <strong>{dados.chequesPendentesCount}</strong> cheques —{" "}
+                        <Link
+                          href="/cheques?status=a_receber"
+                          className="text-blue-700 underline font-medium"
+                        >
+                          ver todos em Cheques
+                        </Link>
+                        .
+                      </div>
+                    )}
                 <table className="w-full">
                   <thead>
                     <tr>
@@ -338,18 +458,25 @@ export default function FinanceiroPage() {
                     <tr className="bg-gray-50 font-bold">
                       <td className="table-cell" colSpan={5}>
                         Total
+                        {dados.chequesPendentesValorTotal != null &&
+                        (dados.chequesPendentesCount ?? 0) >
+                          dados.chequesPendentes.length
+                          ? " (lista parcial — total geral no cartão acima)"
+                          : ""}
                       </td>
                       <td className="table-cell text-right">
                         {formatMoney(
-                          dados.chequesPendentes.reduce(
-                            (s, c) => s + parseFloat(String(c.valor)),
-                            0,
-                          ),
+                          dados.chequesPendentesValorTotal ??
+                            dados.chequesPendentes.reduce(
+                              (s, c) => s + parseFloat(String(c.valor)),
+                              0,
+                            ),
                         )}
                       </td>
                     </tr>
                   </tbody>
                 </table>
+                </>
               )}
             </div>
           )}

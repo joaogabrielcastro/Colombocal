@@ -1,5 +1,7 @@
 # Scripts utilitários
 
+Esta pasta é **migração one-off / legado** (Access/MDB, CSV, Python). Não faz parte do runtime da API nem do deploy diário. Se o projeto já migrou e não precisa reimportar, pode **mover** este conteúdo para um repositório ou arquivo separado e manter aqui só um `README` com o histórico.
+
 ## Migração a partir de sistema legado
 
 Arquivos Python (`import_legacy_*.py`), exports CSV em `legacy_exports/` e JSON de plano/perfil (`legacy_import_plan.json`, `legacy_*_profile.json`) foram usados para **importação pontual** de dados antigos para o schema Prisma atual.

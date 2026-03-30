@@ -17,21 +17,45 @@ import {
   type Cliente,
   type Produto,
   type Cheque,
-  type Vendedor,
 } from "@/lib/utils";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { DetailPageSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { reportApiError } from "@/lib/report-api-error";
+import SearchableSelect from "@/components/SearchableSelect";
+
+interface ResumoFinanceiro {
+  contaCorrente: {
+    totalDebitos: number;
+    totalCreditos: number;
+    saldo: number;
+    rotulo: string;
+    ajuda: string;
+  };
+  titulosReceber: {
+    emAberto: number;
+    rotulo: string;
+    ajuda: string;
+  };
+}
 
 interface ContaData {
   cliente: Cliente;
   saldo: number;
   totalDebitos: number;
   totalCreditos: number;
+  totalTitulosEmAberto: number;
+  resumoFinanceiro?: ResumoFinanceiro;
   vendas: any[];
   pagamentos: any[];
+  titulos?: Array<{
+    id: number;
+    vencimento: string;
+    valorOriginal: number;
+    valorPago: number;
+    status: string;
+  }>;
 }
 
 interface ProdutoPreco extends Produto {
@@ -55,11 +79,11 @@ export default function ClienteDetailPage() {
   const [form, setForm] = useState<Partial<Cliente>>({});
   const [salvandoForm, setSalvandoForm] = useState(false);
   const [erro, setErro] = useState("");
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [filtroChqStatus, setFiltroChqStatus] = useState("");
   const [filtroChqIni, setFiltroChqIni] = useState("");
   const [filtroChqFim, setFiltroChqFim] = useState("");
   const [buscaChq, setBuscaChq] = useState("");
+  const [reconciliando, setReconciliando] = useState(false);
 
   useEffect(() => {
     const abaUrl = searchParams.get("aba");
@@ -77,13 +101,9 @@ export default function ClienteDetailPage() {
     api.get<Cheque[]>(`/cheques?${params}`).then(setCheques);
   };
 
-  useEffect(() => {
-    api.get<Vendedor[]>("/vendedores").then(setVendedores);
-  }, []);
-
   const carregarPrincipal = useCallback(() => {
     setLoading(true);
-    Promise.all([
+    return Promise.all([
       api.get<ContaData>(`/clientes/${id}/conta`),
       api.get<ProdutoPreco[]>(`/clientes/${id}/precos`),
     ])
@@ -112,6 +132,18 @@ export default function ClienteDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const loadVendedorOptions = useCallback(async (q: string) => {
+    const p = new URLSearchParams({ take: "80" });
+    if (q.trim()) p.set("busca", q.trim());
+    const r = await api.get<{ id: number; nome: string }[]>(`/vendedores?${p}`);
+    return r.map((v) => ({ id: v.id, label: v.nome }));
+  }, []);
+
+  const loadVendedorLabelById = useCallback(async (vid: string) => {
+    const v = await api.get<{ nome: string }>(`/vendedores/${vid}`);
+    return v.nome;
+  }, []);
+
   useEffect(() => {
     void carregarPrincipal();
   }, [carregarPrincipal]);
@@ -119,6 +151,19 @@ export default function ClienteDetailPage() {
   useEffect(() => {
     carregarCheques();
   }, [id]);
+
+  const handleReconciliarRecebiveis = async () => {
+    setReconciliando(true);
+    try {
+      await api.post(`/clientes/${id}/reconciliar-recebiveis`, {});
+      toast.success("Títulos alinhados com os pagamentos.");
+      await carregarPrincipal();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível recalcular títulos" });
+    } finally {
+      setReconciliando(false);
+    }
+  };
 
   const handleSalvarPrecos = async () => {
     setSalvandoPrecos(true);
@@ -212,38 +257,73 @@ export default function ClienteDetailPage() {
         </Link>
       </div>
 
-      {/* Saldo card */}
+      {/* Painel financeiro — mesmas definições que o relatório de títulos */}
       <div
         className={`card p-5 mb-6 border-l-4 ${conta.saldo < 0 ? "border-l-red-500" : "border-l-green-500"}`}
       >
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
+            <h2 className="text-sm font-semibold text-gray-900">
+              Resumo financeiro do cliente
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5 max-w-xl">
+              Dois números complementares: a <strong>conta corrente</strong> soma
+              vendas e pagamentos; os <strong>títulos em aberto</strong> somam o
+              que falta na carteira de recebíveis. Se divergirem, use o
+              recálculo abaixo.
+            </p>
+          </div>
+          <Link
+            href={`/relatorios/titulos?clienteId=${id}`}
+            className="text-sm text-blue-600 hover:underline whitespace-nowrap"
+          >
+            Relatório de títulos deste cliente →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+          <div className="rounded-lg bg-gray-50/80 p-3">
             <p className="text-xs text-gray-500 uppercase font-semibold">
-              Total Compras
+              Total compras (vendas)
             </p>
             <p className="text-xl font-bold text-red-600 mt-1">
               {formatMoney(conta.totalDebitos)}
             </p>
           </div>
-          <div>
+          <div className="rounded-lg bg-gray-50/80 p-3">
             <p className="text-xs text-gray-500 uppercase font-semibold">
-              Total Pago
+              Total pago
             </p>
             <p className="text-xl font-bold text-green-600 mt-1">
               {formatMoney(conta.totalCreditos)}
             </p>
           </div>
-          <div>
+          <div className="rounded-lg bg-white border border-gray-100 p-3">
             <p className="text-xs text-gray-500 uppercase font-semibold">
-              Saldo
+              Saldo da conta corrente
             </p>
             <p
               className={`text-xl font-bold mt-1 ${conta.saldo < 0 ? "text-red-600" : "text-green-600"}`}
             >
               {formatMoney(Math.abs(conta.saldo))}
-              <span className="text-sm font-normal ml-1">
-                {conta.saldo < 0 ? "(devendo)" : "(crédito)"}
+              <span className="text-sm font-normal ml-1 block sm:inline">
+                {conta.saldo < 0 ? "a receber (cliente deve)" : "crédito a favor"}
               </span>
+            </p>
+            <p className="text-[11px] text-gray-400 mt-1 text-left leading-snug">
+              {conta.resumoFinanceiro?.contaCorrente.ajuda ??
+                "Pagamentos menos faturamento em todas as vendas."}
+            </p>
+          </div>
+          <div className="rounded-lg bg-white border border-amber-100 p-3">
+            <p className="text-xs text-amber-800/90 uppercase font-semibold">
+              Títulos em aberto
+            </p>
+            <p className="text-xl font-bold text-amber-900 mt-1">
+              {formatMoney(conta.totalTitulosEmAberto ?? 0)}
+            </p>
+            <p className="text-[11px] text-gray-400 mt-1 text-left leading-snug">
+              {conta.resumoFinanceiro?.titulosReceber.ajuda ??
+                "Soma do saldo restante nos títulos a receber."}
             </p>
           </div>
         </div>
@@ -277,7 +357,23 @@ export default function ClienteDetailPage() {
 
       {/* Conta Corrente */}
       {aba === "conta" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          <div className="rounded-lg border border-blue-100 bg-blue-50/90 px-4 py-3 text-sm text-gray-700">
+            <p>
+              Crédito de uma venda passa a baixar automaticamente títulos de{" "}
+              <strong>outras</strong> vendas deste cliente. Novos pagamentos já fazem isso; se algo
+              antigo ficou incoerente com o relatório financeiro, recalcule.
+            </p>
+            <button
+              type="button"
+              disabled={reconciliando}
+              onClick={() => void handleReconciliarRecebiveis()}
+              className="btn-secondary text-xs mt-2"
+            >
+              {reconciliando ? "Recalculando…" : "Recalcular títulos (recebíveis)"}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card">
             <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-semibold text-gray-900">
@@ -358,6 +454,56 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
+          <div className="card lg:col-span-2">
+            <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2">
+              <h3 className="font-semibold text-gray-900">
+                Títulos a receber ({conta.titulos?.length ?? 0})
+              </h3>
+              <Link
+                href={`/relatorios/titulos?clienteId=${id}`}
+                className="text-blue-600 text-xs hover:underline"
+              >
+                Mesmos dados do relatório →
+              </Link>
+            </div>
+            <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+              {!conta.titulos || conta.titulos.length === 0 ? (
+                <p className="p-4 text-gray-400 text-sm text-center">
+                  Nenhum título
+                </p>
+              ) : (
+                conta.titulos.map((t) => {
+                  const aberto = Math.max(
+                    0,
+                    Number(t.valorOriginal) - Number(t.valorPago),
+                  );
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex flex-wrap justify-between gap-2 px-5 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">
+                          {t.status === "quitado" ? "Quitado" : t.status === "parcial" ? "Parcial" : "Aberto"}{" "}
+                          · venc. {formatDate(t.vencimento)}
+                        </p>
+                        <p className="text-xs text-gray-400">Título #{t.id}</p>
+                      </div>
+                      <div className="text-right text-sm">
+                        <span className="text-gray-600">
+                          Aberto:{" "}
+                          <span className="font-semibold text-amber-900">
+                            {formatMoney(aberto)}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
         </div>
       )}
 
@@ -627,32 +773,24 @@ export default function ClienteDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Vendedor do cliente
-              </label>
-              <select
+              <SearchableSelect
+                label="Vendedor do cliente"
                 value={
-                  form.vendedorId != null ? String(form.vendedorId) : ""
+                  form.vendedorId != null && form.vendedorId !== undefined
+                    ? String(form.vendedorId)
+                    : ""
                 }
-                onChange={(e) =>
+                onChange={(vid) =>
                   setForm((p) => ({
                     ...p,
-                    vendedorId: e.target.value
-                      ? parseInt(e.target.value, 10)
-                      : null,
+                    vendedorId: vid ? parseInt(vid, 10) : null,
                   }))
                 }
-                className="input-field"
-              >
-                <option value="">Nenhum</option>
-                {vendedores
-                  .filter((v) => v.ativo)
-                  .map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.nome}
-                    </option>
-                  ))}
-              </select>
+                loadOptions={loadVendedorOptions}
+                loadLabelById={loadVendedorLabelById}
+                minChars={0}
+                placeholder="Nenhum — digite para buscar"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

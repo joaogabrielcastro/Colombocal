@@ -1,18 +1,23 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-import { type Cliente, type Venda } from "@/lib/utils";
+import { formatMoney, type Cliente, type Venda } from "@/lib/utils";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
+import SearchableSelect from "@/components/SearchableSelect";
+
+function vendaOptionLabel(v: Venda) {
+  const valor = formatMoney(v.valorTotal);
+  return `Venda #${v.id} – ${new Date(v.dataVenda).toLocaleDateString("pt-BR")} – ${valor}`;
+}
 
 function NovoChequeForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preClienteId = searchParams.get("clienteId");
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [form, setForm] = useState({
     clienteId: preClienteId || "",
@@ -29,19 +34,57 @@ function NovoChequeForm() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
-  useEffect(() => {
-    api
-      .get<{ clientes: Cliente[] }>("/clientes?ativo=true")
-      .then((d) => setClientes(d.clientes));
+  const loadClienteOptions = useCallback(async (q: string) => {
+    const p = new URLSearchParams({ ativo: "true", busca: q, take: "40" });
+    const r = await api.get<{ clientes: Cliente[] }>(`/clientes?${p}`);
+    return r.clientes.map((c) => ({
+      id: c.id,
+      label: (c.nomeFantasia?.trim() || c.razaoSocial) as string,
+    }));
   }, []);
-  // Ao trocar o cliente, carrega as vendas dele
+
+  const loadClienteLabelById = useCallback(async (id: string) => {
+    const c = await api.get<Cliente>(`/clientes/${id}`);
+    return (c.nomeFantasia?.trim() || c.razaoSocial) ?? null;
+  }, []);
+
   useEffect(() => {
     if (!form.clienteId) {
       setVendas([]);
       return;
     }
-    api.get<Venda[]>(`/vendas?clienteId=${form.clienteId}`).then(setVendas);
+    let cancelled = false;
+    api
+      .get<Venda[]>(`/vendas?clienteId=${form.clienteId}&take=500`)
+      .then((rows) => {
+        if (!cancelled) setVendas(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setVendas([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [form.clienteId]);
+
+  const loadVendaOptions = useCallback(
+    async (q: string) => {
+      const qt = q.trim().toLowerCase();
+      let list = vendas;
+      if (qt) {
+        list = vendas.filter(
+          (v) =>
+            String(v.id).includes(qt) ||
+            vendaOptionLabel(v).toLowerCase().includes(qt),
+        );
+      }
+      return list.slice(0, 80).map((v) => ({
+        id: v.id,
+        label: vendaOptionLabel(v),
+      }));
+    },
+    [vendas],
+  );
   const set =
     (field: keyof typeof form) =>
     (
@@ -96,22 +139,17 @@ function NovoChequeForm() {
       <form onSubmit={handleSubmit} className="card p-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cliente *
-            </label>
-            <select
-              required
+            <SearchableSelect
+              label="Cliente *"
               value={form.clienteId}
-              onChange={set("clienteId")}
-              className="input-field"
-            >
-              <option value="">Selecione o cliente</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nomeFantasia || c.razaoSocial}
-                </option>
-              ))}
-            </select>
+              onChange={(id) =>
+                setForm((p) => ({ ...p, clienteId: id, vendaId: "" }))
+              }
+              loadOptions={loadClienteOptions}
+              loadLabelById={loadClienteLabelById}
+              minChars={2}
+              emptyHint="Digite parte do nome, fantasia ou CNPJ."
+            />
           </div>
 
           <div>
@@ -188,26 +226,22 @@ function NovoChequeForm() {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Venda vinculada (opcional)
-            </label>
-            <select
+            <SearchableSelect
+              label="Venda vinculada (opcional)"
               value={form.vendaId}
-              onChange={set("vendaId")}
-              className="input-field"
-            >
-              <option value="">Sem venda específica</option>
-              {vendas.map((v) => (
-                <option key={v.id} value={v.id}>
-                  Venda #{v.id} –{" "}
-                  {new Date(v.dataVenda).toLocaleDateString("pt-BR")} –{" "}
-                  {new Intl.NumberFormat("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  }).format(parseFloat(String(v.valorTotal)))}
-                </option>
-              ))}
-            </select>
+              onChange={(id) =>
+                setForm((p) => ({ ...p, vendaId: id }))
+              }
+              loadOptions={loadVendaOptions}
+              minChars={0}
+              disabled={!form.clienteId}
+              placeholder={
+                form.clienteId
+                  ? "Busque por nº da venda ou valor…"
+                  : "Selecione o cliente primeiro"
+              }
+              emptyHint="Deixe em branco se não houver venda específica."
+            />
           </div>
 
           <div>

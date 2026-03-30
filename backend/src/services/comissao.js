@@ -1,7 +1,8 @@
 /**
  * Regras explícitas de comissão (sem NF).
- * - emissao: usa comissaoValor gravado na venda (histórico na data da venda).
- * - caixa: proporcional ao recebido na ordem (pagamentos vinculados à venda).
+ * - emissao: prioriza comissaoValor na venda; se zero, usa valorTotal ×
+ *   comissaoPercentualAplicado (importações legadas costumam omitir comissaoValor).
+ * - caixa: proporcional ao recebido na ordem, sobre o mesmo total de comissão da ordem.
  */
 
 function parseMoney(v) {
@@ -9,14 +10,27 @@ function parseMoney(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Comissão total se a ordem estivesse 100% quitada: snapshot em comissaoValor ou
+ * derivada do percentual aplicado na venda.
+ */
+function comissaoAlvoTotalOrdem(venda) {
+  const stored = parseMoney(venda.comissaoValor);
+  if (stored > 0) return Math.round(stored * 100) / 100;
+  const total = parseMoney(venda.valorTotal);
+  const pct = parseMoney(venda.comissaoPercentualAplicado);
+  if (total <= 0 || pct <= 0) return 0;
+  return Math.round(((total * pct) / 100) * 100) / 100;
+}
+
 function comissaoPorEmissao(venda) {
-  return parseMoney(venda.comissaoValor);
+  return comissaoAlvoTotalOrdem(venda);
 }
 
 /** Pagamentos já devem ser filtrados por vendaId = venda.id */
 function comissaoPorCaixa(venda, pagamentosDaVenda) {
   const totalVenda = parseMoney(venda.valorTotal);
-  const comissaoTotal = parseMoney(venda.comissaoValor);
+  const comissaoTotal = comissaoAlvoTotalOrdem(venda);
   if (totalVenda <= 0) return 0;
   const pago = pagamentosDaVenda.reduce((acc, p) => acc + parseMoney(p.valor), 0);
   const ratio = Math.min(1, Math.max(0, pago / totalVenda));
@@ -45,6 +59,7 @@ function agregarComissoesPorVendedor(vendas, pagamentosPorVendaId, modo) {
 
 module.exports = {
   parseMoney,
+  comissaoAlvoTotalOrdem,
   comissaoPorEmissao,
   comissaoPorCaixa,
   agregarComissoesPorVendedor,

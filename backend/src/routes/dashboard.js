@@ -1,9 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("../lib/prisma");
 const { getConfig } = require("../services/configSistema");
 
-const prisma = new PrismaClient();
 
 // GET /api/dashboard
 router.get("/", async (req, res) => {
@@ -60,9 +59,10 @@ router.get("/", async (req, res) => {
         where: { ativo: true },
         select: { id: true, razaoSocial: true, nomeFantasia: true, telefone: true },
       }),
-      prisma.cheque.findMany({
-        where: { status: { in: ["recebido", "depositado"] } },
-        include: { cliente: true },
+      prisma.cheque.aggregate({
+        where: { status: { in: ["a_receber", "recebido"] } },
+        _sum: { valor: true },
+        _count: { id: true },
       }),
       prisma.produto.count({
         where: { ativo: true },
@@ -105,9 +105,8 @@ router.get("/", async (req, res) => {
       (acc, c) => acc + c.aberto,
       0,
     );
-    const totalChequesPendentes = chequesPendentes.reduce(
-      (acc, c) => acc + parseFloat(c.valor),
-      0,
+    const totalChequesPendentes = parseFloat(
+      String(chequesPendentes._sum?.valor ?? 0),
     );
 
     const faturamentoMeses = await Promise.all(
@@ -134,7 +133,7 @@ router.get("/", async (req, res) => {
       quantidadeVendasMes: aggMes._count.id,
       clientesDevendo: clientesDevendo.length,
       totalEmAberto,
-      chequesPendentes: chequesPendentes.length,
+      chequesPendentes: chequesPendentes._count?.id ?? 0,
       totalChequesPendentes,
       totalProdutosAtivos,
       ultimasVendas,

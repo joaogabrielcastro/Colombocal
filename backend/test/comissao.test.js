@@ -12,6 +12,17 @@ test("comissão emissão usa valor da venda", () => {
   );
 });
 
+test("comissão emissão: comissaoValor zero recalcula pelo percentual aplicado", () => {
+  assert.equal(
+    comissaoPorEmissao({
+      valorTotal: 1000,
+      comissaoValor: 0,
+      comissaoPercentualAplicado: 5,
+    }),
+    50,
+  );
+});
+
 test("comissão caixa proporcional ao pago", () => {
   const v = { valorTotal: 1000, comissaoValor: 50 };
   const pags = [{ valor: 500 }];

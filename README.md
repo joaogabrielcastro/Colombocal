@@ -5,11 +5,10 @@ Sistema completo de gestão comercial para distribuidora de cal.
 ## Funcionalidades
 
 - **Clientes** — Cadastro com consulta automática de CNPJ (BrasilAPI), conta corrente, preços especiais por produto
-- **Produtos** — Cadastro com controle de estoque mínimo
-- **Estoque** — Movimentações de entrada, saída, ajuste e devolução
+- **Produtos** — Cadastro de preços e unidades
 - **Motoristas** — Cadastro de motoristas para vincular às vendas
 - **Vendedores** — Cadastro com percentual de comissão
-- **Vendas** — Emissão com itens, frete, baixa automática de estoque
+- **Vendas** — Emissão com itens, frete e registro de movimentação de produto (histórico)
 - **Cheques** — Controle com ciclo de vida: Recebido → Depositado → Compensado / Devolvido
 - **Pagamentos** — Registro de pagamentos em dinheiro e transferência
 - **Dashboard** — KPIs em tempo real
@@ -92,7 +91,6 @@ Colombocal/
 │           ├── vendas.js
 │           ├── cheques.js
 │           ├── pagamentos.js
-│           ├── estoque.js
 │           ├── relatorios.js
 │           ├── dashboard.js
 │           └── cnpj.js
@@ -105,7 +103,6 @@ Colombocal/
         ├── vendedores/
         ├── vendas/
         ├── cheques/
-        ├── estoque/
         └── relatorios/
             ├── vendas/
             ├── comissoes/

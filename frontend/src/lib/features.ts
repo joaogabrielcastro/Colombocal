@@ -1,8 +1,9 @@
 /**
- * Navegação compacta (MVP / time pequeno): oculta cadastros secundários e relatórios de análise
- * no menu principal, reunindo-os em "Avançado".
+ * Modo piloto / menu compacto: cadastros secundários (motorista, vendedor, frete) e relatórios
+ * Comissões + Títulos ficam em "Avançado".
  *
- * Defina no .env.local: NEXT_PUBLIC_UI_HIDE_ADVANCED=true
+ * Docker: NEXT_PUBLIC_UI_HIDE_ADVANCED=true (compose já define).
+ * Local: crie frontend/.env.local com NEXT_PUBLIC_UI_HIDE_ADVANCED=false para menu cheio.
  */
 export const UI_HIDE_ADVANCED =
   process.env.NEXT_PUBLIC_UI_HIDE_ADVANCED === 'true';

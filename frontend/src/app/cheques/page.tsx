@@ -24,10 +24,15 @@ const STATUS_NEXT: Record<StatusCheque, StatusCheque[]> = {
   devolvido: ["recebido", "a_receber"],
 };
 
+type ResumoStatus = { status: string; count: number; total: number };
+
 function ChequesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [resumoPorStatus, setResumoPorStatus] = useState<ResumoStatus[] | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
   const pageSize = 20;
@@ -48,19 +53,30 @@ function ChequesPageContent() {
     if (dataFim) params.set("dataFim", dataFim);
     const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
     if (ordemTrim) params.set("ordem", ordemTrim);
+    params.set("resumo", "1");
     params.set("take", String(pageSize));
     params.set("skip", String((page - 1) * pageSize));
     setLoading(true);
     try {
-      const resp = await api.getWithMeta<Cheque[]>(`/cheques?${params.toString()}`);
-      setCheques(resp.data);
-      setTotal(resp.meta.totalCount ?? resp.data.length);
+      const resp = await api.getWithMeta<
+        Cheque[] | { items: Cheque[]; resumoPorStatus: ResumoStatus[] }
+      >(`/cheques?${params.toString()}`);
+      const raw = resp.data;
+      if (Array.isArray(raw)) {
+        setCheques(raw);
+        setResumoPorStatus(null);
+      } else {
+        setCheques(raw.items);
+        setResumoPorStatus(raw.resumoPorStatus);
+      }
+      setTotal(resp.meta.totalCount ?? (Array.isArray(raw) ? raw.length : raw.items.length));
     } catch (e) {
       reportApiError(e, {
         title: "Não foi possível carregar os cheques",
         onRetry: () => void carregar(),
       });
       setCheques([]);
+      setResumoPorStatus(null);
       setTotal(0);
     } finally {
       setLoading(false);
@@ -174,9 +190,17 @@ function ChequesPageContent() {
     printWindow.print();
   };
 
-  const totalPendente = cheques
-      .filter((c) => c.status === "a_receber" || c.status === "recebido")
+  const resumoMap = new Map(
+    (resumoPorStatus ?? []).map((r) => [r.status, r]),
+  );
+  const totalPendente =
+    (resumoMap.get("a_receber")?.total ?? 0) +
+    (resumoMap.get("recebido")?.total ?? 0);
+  const totalPendenteFallback = cheques
+    .filter((c) => c.status === "a_receber" || c.status === "recebido")
     .reduce((acc, c) => acc + parseFloat(String(c.valor)), 0);
+  const pendenteExibido =
+    resumoPorStatus != null ? totalPendente : totalPendenteFallback;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -185,8 +209,9 @@ function ChequesPageContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cheques</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {cheques.length} cheques
-            {totalPendente > 0 && ` • Pendente: ${formatMoney(totalPendente)}`}
+            {total} cheque{total === 1 ? "" : "s"} com os filtros atuais
+            {pendenteExibido > 0 &&
+              ` • Pendente (a receber + recebido): ${formatMoney(pendenteExibido)}`}
           </p>
         </div>
         <Link href="/cheques/novo" className="btn-primary">
@@ -195,14 +220,17 @@ function ChequesPageContent() {
       </div>
       {feedback && <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">{feedback}</div>}
 
-      {/* Filtros */}
+      {/* Filtros: aplicar ordem/venda só ao clicar Filtrar; exportações separadas */}
       <div className="card p-4 mb-4">
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex flex-wrap gap-3 items-end">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Status</label>
             <select
               value={statusFiltro}
-              onChange={(e) => setStatusFiltro(e.target.value)}
+              onChange={(e) => {
+                setStatusFiltro(e.target.value);
+                setPage(1);
+              }}
               className="input-field w-40"
             >
               <option value="">Todos</option>
@@ -212,7 +240,7 @@ function ChequesPageContent() {
               <option value="devolvido">Devolvido</option>
             </select>
           </div>
-          <div className="min-w-36">
+          <div className="min-w-[10.5rem]">
             <label className="block text-xs text-gray-500 mb-1">
               Ordem / venda
             </label>
@@ -221,6 +249,12 @@ function ChequesPageContent() {
               inputMode="numeric"
               value={ordemInput}
               onChange={(e) => setOrdemInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
+                  setPage(1);
+                }
+              }}
               className="input-field font-mono"
               placeholder="ex: 1520 ou #1520"
             />
@@ -248,26 +282,25 @@ function ChequesPageContent() {
               className="input-field"
             />
           </div>
-          <div className="flex items-end">
-            <button
-              type="button"
-              onClick={() => {
-                setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
-                setPage(1);
-              }}
-              className="btn-primary"
-            >
-              <MagnifyingGlassIcon className="w-4 h-4" /> Filtrar
-            </button>
-          </div>
-          <div className="flex items-end gap-2 ml-auto">
-            <button onClick={handleExportPdf} className="btn-secondary">
-              Exportar PDF
-            </button>
-            <button onClick={handleExportExcel} className="btn-secondary">
-              Exportar Excel
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
+              setPage(1);
+            }}
+            className="btn-primary h-10 shrink-0"
+          >
+            <MagnifyingGlassIcon className="w-4 h-4 inline -mt-0.5 mr-1" />
+            Filtrar
+          </button>
+        </div>
+        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={handleExportPdf} className="btn-secondary">
+            Exportar PDF
+          </button>
+          <button type="button" onClick={handleExportExcel} className="btn-secondary">
+            Exportar Excel
+          </button>
         </div>
       </div>
 
@@ -275,18 +308,26 @@ function ChequesPageContent() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {(["a_receber", "recebido", "depositado", "devolvido"] as StatusCheque[]).map(
           (s) => {
+            const fromResumo = resumoMap.get(s);
             const grupo = cheques.filter((c) => c.status === s);
-            const total = grupo.reduce(
-              (acc, c) => acc + parseFloat(String(c.valor)),
-              0,
-            );
+            const count =
+              fromResumo?.count ??
+              (resumoPorStatus == null ? grupo.length : 0);
+            const valorTotal =
+              fromResumo?.total ??
+              (resumoPorStatus == null
+                ? grupo.reduce(
+                    (acc, c) => acc + parseFloat(String(c.valor)),
+                    0,
+                  )
+                : 0);
             return (
               <div
                 key={s}
                 className={`card p-3 text-center cursor-pointer border-2 ${statusFiltro === s ? "border-blue-500" : "border-transparent"}`}
                 onClick={() => {
                   setStatusFiltro(statusFiltro === s ? "" : s);
-                  setTimeout(carregar, 50);
+                  setPage(1);
                 }}
               >
                 <span
@@ -294,8 +335,8 @@ function ChequesPageContent() {
                 >
                   {STATUS_CHEQUE_LABEL[s]}
                 </span>
-                <p className="font-bold text-gray-900 mt-1">{grupo.length}</p>
-                <p className="text-xs text-gray-500">{formatMoney(total)}</p>
+                <p className="font-bold text-gray-900 mt-1">{count}</p>
+                <p className="text-xs text-gray-500">{formatMoney(valorTotal)}</p>
               </div>
             );
           },
