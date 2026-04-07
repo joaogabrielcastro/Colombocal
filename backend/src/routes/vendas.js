@@ -95,7 +95,7 @@ router.get("/:id", async (req, res) => {
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
     res.json(venda);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -378,7 +378,7 @@ router.post("/", async (req, res) => {
 // DELETE /api/vendas/:id - cancelar venda
 router.delete("/:id", async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseIntField(req.params.id, "id", { min: 1 });
     const vendaExistente = await prisma.venda.findUnique({
       where: { id },
       include: {

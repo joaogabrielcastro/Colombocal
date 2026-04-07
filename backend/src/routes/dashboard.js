@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
 const { getConfig } = require("../services/configSistema");
-
+const { handleRouteError } = require("../utils/api");
 
 // GET /api/dashboard
 router.get("/", async (req, res) => {
@@ -109,22 +109,33 @@ router.get("/", async (req, res) => {
       String(chequesPendentes._sum?.valor ?? 0),
     );
 
-    const faturamentoMeses = await Promise.all(
-      [5, 4, 3, 2, 1, 0].map((i) => {
-        const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-        const inicio = new Date(d.getFullYear(), d.getMonth(), 1);
-        const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-        return prisma.venda
-          .aggregate({
-            where: { dataVenda: { gte: inicio, lte: fim } },
-            _sum: { valorTotal: true },
-          })
-          .then((agg) => ({
-            mes: d.toLocaleString("pt-BR", { month: "short", year: "2-digit" }),
-            total: parseFloat(agg._sum.valorTotal || 0),
-          }));
-      }),
+    // Faturamento dos últimos 6 meses: uma única query ao invés de 6 consultas separadas.
+    const inicioJanela = new Date(hoje.getFullYear(), hoje.getMonth() - 5, 1);
+    const rawMeses = await prisma.$queryRaw`
+      SELECT
+        DATE_TRUNC('month', "dataVenda") AS mes_inicio,
+        SUM("valorTotal")::float         AS total
+      FROM "Venda"
+      WHERE "dataVenda" >= ${inicioJanela}
+      GROUP BY DATE_TRUNC('month', "dataVenda")
+      ORDER BY mes_inicio ASC
+    `;
+
+    // Gera os 6 meses esperados (pode haver meses sem vendas) e cruza com o resultado
+    const totalPorMes = new Map(
+      rawMeses.map((r) => [
+        new Date(r.mes_inicio).toISOString().slice(0, 7), // "YYYY-MM"
+        parseFloat(String(r.total || 0)),
+      ]),
     );
+    const faturamentoMeses = [5, 4, 3, 2, 1, 0].map((i) => {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const chave = d.toISOString().slice(0, 7);
+      return {
+        mes: d.toLocaleString("pt-BR", { month: "short", year: "2-digit" }),
+        total: totalPorMes.get(chave) ?? 0,
+      };
+    });
 
     res.json({
       vendasHoje: vendasHoje.length,
@@ -143,7 +154,7 @@ router.get("/", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
@@ -304,7 +315,7 @@ router.get("/cobranca", async (req, res) => {
       topInadimplentes,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
