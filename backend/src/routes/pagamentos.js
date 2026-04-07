@@ -95,7 +95,7 @@ router.post("/", async (req, res) => {
 // DELETE /api/pagamentos/:id
 router.delete("/:id", async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseIntField(req.params.id, "id", { min: 1 });
     await prisma.$transaction(async (tx) => {
       const pagamento = await tx.pagamento.findUnique({ where: { id } });
       if (!pagamento) throw new Error("Pagamento não encontrado");

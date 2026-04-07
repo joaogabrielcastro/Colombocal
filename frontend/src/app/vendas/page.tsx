@@ -71,7 +71,7 @@ function VendasPageContent() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Vendas</h1>
-          <p className="text-gray-500 text-sm mt-1">{vendas.length} vendas • Total: {formatMoney(totalFaturamento)}</p>
+          <p className="text-gray-500 text-sm mt-1">{total} vendas • Total: {formatMoney(totalFaturamento)}</p>
         </div>
         <Link href="/vendas/nova" className="btn-primary">
           <PlusIcon className="w-4 h-4" /> Nova Venda
