@@ -24,7 +24,13 @@ interface DashboardData {
   chequesPendentes: number;
   totalChequesPendentes: number;
   totalProdutosAtivos: number;
-  ultimasVendas: any[];
+  ultimasVendas: {
+    id: number;
+    dataVenda: string;
+    valorTotal: number;
+    cliente: { razaoSocial: string; nomeFantasia?: string | null };
+    vendedor: { nome: string };
+  }[];
   faturamentoPorMes: { mes: string; total: number }[];
 }
 
@@ -284,7 +290,7 @@ export default function DashboardPage() {
                 />
               </div>
             ) : (
-              d.ultimasVendas.map((v: any) => (
+              d.ultimasVendas.map((v) => (
                 <Link
                   key={v.id}
                   href={`/vendas/${v.id}`}

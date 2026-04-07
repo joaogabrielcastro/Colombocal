@@ -116,7 +116,7 @@ router.get("/:id/precos", async (req, res) => {
     });
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleRouteError(res, error);
   }
 });
 
