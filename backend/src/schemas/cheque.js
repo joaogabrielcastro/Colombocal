@@ -31,17 +31,7 @@ const chequeStatusPatchSchema = z.object({
   dataCompensacao: optionalDateInput,
 });
 
-/**
- * Ação única e manual: cheques em recebido neste momento → depositado.
- */
-const chequeBulkMarcarRecebidoDepositadoAgoraSchema = z.object({
-  confirmacao: z.literal("AGORA_TODOS_RECEBIDO_PARA_DEPOSITADO"),
-  dataCompensacao: optionalDateInput.optional(),
-  limite: z.coerce.number().int().min(1).max(10000).optional(),
-});
-
 module.exports = {
   chequeCreateSchema,
   chequeStatusPatchSchema,
-  chequeBulkMarcarRecebidoDepositadoAgoraSchema,
 };

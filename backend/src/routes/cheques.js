@@ -8,7 +8,6 @@ const { parseBody } = require("../utils/zodParse");
 const {
   chequeCreateSchema,
   chequeStatusPatchSchema,
-  chequeBulkMarcarRecebidoDepositadoAgoraSchema,
 } = require("../schemas/cheque");
 const {
   parsePagination,
@@ -150,75 +149,6 @@ router.get("/", async (req, res) => {
     } else {
       res.json(cheques);
     }
-  } catch (error) {
-    handleRouteError(res, error);
-  }
-});
-
-// POST /api/cheques/bulk-marcar-recebido-depositado-agora
-// Uma vez: todos os cheques em recebido NESTE momento → depositado (data compensação).
-router.post("/bulk-marcar-recebido-depositado-agora", async (req, res) => {
-  try {
-    const body = parseBody(chequeBulkMarcarRecebidoDepositadoAgoraSchema, req.body);
-    const dataCompensacaoDate =
-      body.dataCompensacao instanceof Date
-        ? body.dataCompensacao
-        : body.dataCompensacao
-          ? new Date(body.dataCompensacao)
-          : null;
-
-    const take = body.limite ?? 10000;
-    const candidatos = await prisma.cheque.findMany({
-      where: { status: "recebido" },
-      select: { id: true },
-      orderBy: { id: "asc" },
-      take,
-    });
-
-    let atualizados = 0;
-    let ignorados = 0;
-    const erros = [];
-
-    for (const { id } of candidatos) {
-      try {
-        const feito = await prisma.$transaction(async (tx) => {
-          const chequeAtual = await tx.cheque.findUnique({
-            where: { id },
-            include: { pagamento: true },
-          });
-          if (!chequeAtual || chequeAtual.status !== "recebido") {
-            return false;
-          }
-          await aplicarMudancaStatusCheque(
-            tx,
-            chequeAtual,
-            "depositado",
-            dataCompensacaoDate,
-          );
-          return true;
-        });
-        if (feito) atualizados++;
-        else ignorados++;
-      } catch (e) {
-        erros.push({ id, erro: e instanceof Error ? e.message : String(e) });
-      }
-    }
-
-    const recebidoRestantes = await prisma.cheque.count({
-      where: { status: "recebido" },
-    });
-
-    res.json({
-      ok: true,
-      mensagem:
-        "Processamento único: cheques que estavam em Recebido foram marcados como Depositado.",
-      candidatos: candidatos.length,
-      atualizados,
-      ignorados,
-      erros: erros.slice(0, 50),
-      errosTotal: erros.length,
-      recebidoRestantes,
-    });
   } catch (error) {
     handleRouteError(res, error);
   }

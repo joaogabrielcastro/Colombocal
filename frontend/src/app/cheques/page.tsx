@@ -45,7 +45,6 @@ function ChequesPageContent() {
   const [ordemInput, setOrdemInput] = useState(ordemInicial);
   const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
   const [atualizando, setAtualizando] = useState<number | null>(null);
-  const [bulkLoading, setBulkLoading] = useState(false);
 
   const carregar = async () => {
     const params = new URLSearchParams();
@@ -95,46 +94,6 @@ function ChequesPageContent() {
     router.replace(`/cheques${params.toString() ? `?${params.toString()}` : ""}`);
     carregar();
   }, [statusFiltro, dataInicio, dataFim, ordemFiltro, page]);
-
-  const CONFIRM_RECEBIDO_DEPOSITADO = "AGORA_TODOS_RECEBIDO_PARA_DEPOSITADO";
-
-  /** Só altera cheques em Recebido no momento da chamada; não muda cadastro futuro. */
-  const bulkMarcarRecebidoDepositadoAgora = async () => {
-    if (
-      !window.confirm(
-        'Ação única e manual: todos os cheques que estão em "Recebido" AGORA passam para "Depositado" (com data de compensação).\n\nNovos cheques seguem o fluxo normal (A receber → Recebido → Depositado).\n\nContinuar?',
-      )
-    ) {
-      return;
-    }
-    const digitado = window.prompt(
-      `Para confirmar, digite exatamente:\n${CONFIRM_RECEBIDO_DEPOSITADO}`,
-    );
-    if (digitado !== CONFIRM_RECEBIDO_DEPOSITADO) {
-      setFeedback("Operação cancelada.");
-      return;
-    }
-    setBulkLoading(true);
-    setFeedback("");
-    try {
-      const r = await api.post<{
-        atualizados: number;
-        candidatos: number;
-        recebidoRestantes: number;
-        errosTotal: number;
-      }>("/cheques/bulk-marcar-recebido-depositado-agora", {
-        confirmacao: CONFIRM_RECEBIDO_DEPOSITADO,
-      });
-      setFeedback(
-        `Concluído: ${r.atualizados} de ${r.candidatos} cheques atualizados. Restam ${r.recebidoRestantes} em "Recebido".${r.errosTotal > 0 ? ` Erros: ${r.errosTotal}.` : ""}`,
-      );
-      await carregar();
-    } catch (e) {
-      reportApiError(e, { title: "Não foi possível executar a ação em massa" });
-    } finally {
-      setBulkLoading(false);
-    }
-  };
 
   const handleMudarStatus = async (id: number, novoStatus: string) => {
     setAtualizando(id);
@@ -255,20 +214,9 @@ function ChequesPageContent() {
               ` • Pendente (a receber + recebido): ${formatMoney(pendenteExibido)}`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 justify-end">
-          <button
-            type="button"
-            disabled={bulkLoading}
-            onClick={() => void bulkMarcarRecebidoDepositadoAgora()}
-            className="btn-secondary text-sm text-green-900 border-green-200 bg-green-50 hover:bg-green-100 disabled:opacity-50"
-            title="Só os cheques em Recebido neste momento"
-          >
-            Recebido → Depositado (agora)
-          </button>
-          <Link href="/cheques/novo" className="btn-primary">
-            <PlusIcon className="w-4 h-4" /> Novo Cheque
-          </Link>
-        </div>
+        <Link href="/cheques/novo" className="btn-primary">
+          <PlusIcon className="w-4 h-4" /> Novo Cheque
+        </Link>
       </div>
       {feedback && <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">{feedback}</div>}
 
