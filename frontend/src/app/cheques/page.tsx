@@ -45,6 +45,7 @@ function ChequesPageContent() {
   const [ordemInput, setOrdemInput] = useState(ordemInicial);
   const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
   const [atualizando, setAtualizando] = useState<number | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const carregar = async () => {
     const params = new URLSearchParams();
@@ -94,6 +95,52 @@ function ChequesPageContent() {
     router.replace(`/cheques${params.toString() ? `?${params.toString()}` : ""}`);
     carregar();
   }, [statusFiltro, dataInicio, dataFim, ordemFiltro, page]);
+
+  /** Só altera cheques que estão em a_receber no momento da chamada; não muda o fluxo de cheques novos. */
+  const bulkMarcarAReceberAgora = async (
+    modo: "recebido" | "depositado",
+  ) => {
+    const confirmacao =
+      modo === "recebido"
+        ? "AGORA_TODOS_A_RECEBER_PARA_RECEBIDO"
+        : "AGORA_TODOS_A_RECEBER_PARA_DEPOSITADO";
+    const label =
+      modo === "recebido"
+        ? "Recebido (físico recebido, ainda não depositado)"
+        : "Depositado (compensado no banco)";
+    if (
+      !window.confirm(
+        `Ação única e manual: todos os cheques que estão em "A receber" AGORA passam para "${label}".\n\nCheques que você cadastrar depois continuam entrando em "A receber" como sempre.\n\nContinuar?`,
+      )
+    ) {
+      return;
+    }
+    const digitado = window.prompt(
+      `Para confirmar, digite exatamente:\n${confirmacao}`,
+    );
+    if (digitado !== confirmacao) {
+      setFeedback("Operação cancelada.");
+      return;
+    }
+    setBulkLoading(true);
+    setFeedback("");
+    try {
+      const r = await api.post<{
+        atualizados: number;
+        candidatos: number;
+        aReceberRestantes: number;
+        errosTotal: number;
+      }>("/cheques/bulk-marcar-a-receber-agora", { confirmacao });
+      setFeedback(
+        `Concluído: ${r.atualizados} de ${r.candidatos} cheques atualizados. Restam ${r.aReceberRestantes} em "A receber".${r.errosTotal > 0 ? ` Erros: ${r.errosTotal}.` : ""}`,
+      );
+      await carregar();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível executar a ação em massa" });
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const handleMudarStatus = async (id: number, novoStatus: string) => {
     setAtualizando(id);
@@ -214,9 +261,29 @@ function ChequesPageContent() {
               ` • Pendente (a receber + recebido): ${formatMoney(pendenteExibido)}`}
           </p>
         </div>
-        <Link href="/cheques/novo" className="btn-primary">
-          <PlusIcon className="w-4 h-4" /> Novo Cheque
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <button
+            type="button"
+            disabled={bulkLoading}
+            onClick={() => void bulkMarcarAReceberAgora("recebido")}
+            className="btn-secondary text-sm text-amber-900 border-amber-200 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
+            title="Só os cheques em A receber neste momento; não altera cadastros futuros"
+          >
+            A receber → Recebido (agora)
+          </button>
+          <button
+            type="button"
+            disabled={bulkLoading}
+            onClick={() => void bulkMarcarAReceberAgora("depositado")}
+            className="btn-secondary text-sm text-green-900 border-green-200 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+            title="Só os cheques em A receber neste momento; não altera cadastros futuros"
+          >
+            A receber → Depositado (agora)
+          </button>
+          <Link href="/cheques/novo" className="btn-primary">
+            <PlusIcon className="w-4 h-4" /> Novo Cheque
+          </Link>
+        </div>
       </div>
       {feedback && <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">{feedback}</div>}
 

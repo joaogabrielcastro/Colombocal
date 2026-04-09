@@ -8,12 +8,68 @@ const { parseBody } = require("../utils/zodParse");
 const {
   chequeCreateSchema,
   chequeStatusPatchSchema,
+  chequeBulkMarcarAReceberAgoraSchema,
 } = require("../schemas/cheque");
 const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
+
+/**
+ * Mesma regra do PATCH /:id/status (pagamento + títulos), dentro de tx.
+ * @param {import("@prisma/client").Prisma.TransactionClient} tx
+ */
+async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataCompensacaoDate) {
+  const id = chequeAtual.id;
+  const data = { status: statusValidado };
+  if (statusValidado === "depositado") {
+    data.dataCompensacao = dataCompensacaoDate || new Date();
+  }
+
+  await tx.cheque.update({ where: { id }, data });
+  await registrarEventoFinanceiro(tx, {
+    tipo: "CHEQUE_STATUS_ALTERADO",
+    entidade: "Cheque",
+    entidadeId: chequeAtual.id,
+    chequeId: chequeAtual.id,
+    clienteId: chequeAtual.clienteId,
+    vendaId: chequeAtual.vendaId,
+    valor: parseFloat(String(chequeAtual.valor)),
+    payload: { de: chequeAtual.status, para: statusValidado },
+  });
+
+  const temPagamento = !!chequeAtual.pagamento;
+  const precisaPagamento =
+    statusValidado === "recebido" || statusValidado === "depositado";
+
+  if (precisaPagamento && !temPagamento) {
+    await tx.pagamento.create({
+      data: {
+        clienteId: chequeAtual.clienteId,
+        vendaId: chequeAtual.vendaId,
+        tipo: "cheque",
+        valor: chequeAtual.valor,
+        data: chequeAtual.dataRecebimento,
+        chequeId: chequeAtual.id,
+        observacoes: `Cheque #${chequeAtual.numero || chequeAtual.id} - ${chequeAtual.banco || ""}`,
+      },
+    });
+    await recalcularTodosTitulosCliente(tx, chequeAtual.clienteId);
+  }
+
+  if (
+    (statusValidado === "a_receber" || statusValidado === "devolvido") &&
+    temPagamento
+  ) {
+    await tx.pagamento.deleteMany({ where: { chequeId: chequeAtual.id } });
+    await recalcularTitulos(tx, {
+      clienteId: chequeAtual.clienteId,
+      vendaId: chequeAtual.vendaId,
+    });
+  }
+}
+
 // GET /api/cheques
 router.get("/", async (req, res) => {
   try {
@@ -94,6 +150,81 @@ router.get("/", async (req, res) => {
     } else {
       res.json(cheques);
     }
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// POST /api/cheques/bulk-marcar-a-receber-agora
+// Uma vez: todos os cheques que estão em a_receber NESTE momento → recebido OU depositado.
+// Não altera o fluxo de cheques novos; só executa quando você chama este endpoint.
+router.post("/bulk-marcar-a-receber-agora", async (req, res) => {
+  try {
+    const body = parseBody(chequeBulkMarcarAReceberAgoraSchema, req.body);
+    const alvo =
+      body.confirmacao === "AGORA_TODOS_A_RECEBER_PARA_RECEBIDO"
+        ? "recebido"
+        : "depositado";
+    const dataCompensacaoDate =
+      body.dataCompensacao instanceof Date
+        ? body.dataCompensacao
+        : body.dataCompensacao
+          ? new Date(body.dataCompensacao)
+          : null;
+
+    const take = body.limite ?? 10000;
+    const candidatos = await prisma.cheque.findMany({
+      where: { status: "a_receber" },
+      select: { id: true },
+      orderBy: { id: "asc" },
+      take,
+    });
+
+    let atualizados = 0;
+    let ignorados = 0;
+    const erros = [];
+
+    for (const { id } of candidatos) {
+      try {
+        const feito = await prisma.$transaction(async (tx) => {
+          const chequeAtual = await tx.cheque.findUnique({
+            where: { id },
+            include: { pagamento: true },
+          });
+          if (!chequeAtual || chequeAtual.status !== "a_receber") {
+            return false;
+          }
+          await aplicarMudancaStatusCheque(
+            tx,
+            chequeAtual,
+            alvo,
+            dataCompensacaoDate,
+          );
+          return true;
+        });
+        if (feito) atualizados++;
+        else ignorados++;
+      } catch (e) {
+        erros.push({ id, erro: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    const restantes = await prisma.cheque.count({
+      where: { status: "a_receber" },
+    });
+
+    res.json({
+      ok: true,
+      alvo,
+      mensagem:
+        "Processamento único concluído. Cheques novos continuam entrando como antes.",
+      candidatos: candidatos.length,
+      atualizados,
+      ignorados,
+      erros: erros.slice(0, 50),
+      errosTotal: erros.length,
+      aReceberRestantes: restantes,
+    });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -210,55 +341,13 @@ router.patch("/:id/status", async (req, res) => {
     if (!chequeAtual)
       return res.status(404).json({ error: "Cheque não encontrado" });
 
-    const data = { status: statusValidado };
-    if (statusValidado === "depositado") {
-      data.dataCompensacao = dataCompensacaoDate || new Date();
-    }
-
     await prisma.$transaction(async (tx) => {
-      await tx.cheque.update({ where: { id }, data });
-      await registrarEventoFinanceiro(tx, {
-        tipo: "CHEQUE_STATUS_ALTERADO",
-        entidade: "Cheque",
-        entidadeId: chequeAtual.id,
-        chequeId: chequeAtual.id,
-        clienteId: chequeAtual.clienteId,
-        vendaId: chequeAtual.vendaId,
-        valor: parseFloat(chequeAtual.valor),
-        payload: { de: chequeAtual.status, para: statusValidado },
-      });
-
-      const temPagamento = !!chequeAtual.pagamento;
-      const precisaPagamento =
-        statusValidado === "recebido" || statusValidado === "depositado";
-
-      // Se mudou para recebido/depositado e ainda não tem pagamento, cria
-      if (precisaPagamento && !temPagamento) {
-        await tx.pagamento.create({
-          data: {
-            clienteId: chequeAtual.clienteId,
-            vendaId: chequeAtual.vendaId,
-            tipo: "cheque",
-            valor: chequeAtual.valor,
-            data: chequeAtual.dataRecebimento,
-            chequeId: chequeAtual.id,
-            observacoes: `Cheque #${chequeAtual.numero || chequeAtual.id} - ${chequeAtual.banco || ""}`,
-          },
-        });
-        await recalcularTodosTitulosCliente(tx, chequeAtual.clienteId);
-      }
-
-      // Se voltou para a_receber/devolvido, remove pagamento e recalcula títulos
-      if (
-        (statusValidado === "a_receber" || statusValidado === "devolvido") &&
-        temPagamento
-      ) {
-        await tx.pagamento.deleteMany({ where: { chequeId: chequeAtual.id } });
-        await recalcularTitulos(tx, {
-          clienteId: chequeAtual.clienteId,
-          vendaId: chequeAtual.vendaId,
-        });
-      }
+      await aplicarMudancaStatusCheque(
+        tx,
+        chequeAtual,
+        statusValidado,
+        dataCompensacaoDate,
+      );
     });
 
     const cheque = await prisma.cheque.findUnique({
