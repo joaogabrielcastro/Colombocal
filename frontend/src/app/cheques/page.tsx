@@ -96,29 +96,21 @@ function ChequesPageContent() {
     carregar();
   }, [statusFiltro, dataInicio, dataFim, ordemFiltro, page]);
 
-  /** Só altera cheques que estão em a_receber no momento da chamada; não muda o fluxo de cheques novos. */
-  const bulkMarcarAReceberAgora = async (
-    modo: "recebido" | "depositado",
-  ) => {
-    const confirmacao =
-      modo === "recebido"
-        ? "AGORA_TODOS_A_RECEBER_PARA_RECEBIDO"
-        : "AGORA_TODOS_A_RECEBER_PARA_DEPOSITADO";
-    const label =
-      modo === "recebido"
-        ? "Recebido (físico recebido, ainda não depositado)"
-        : "Depositado (compensado no banco)";
+  const CONFIRM_RECEBIDO_DEPOSITADO = "AGORA_TODOS_RECEBIDO_PARA_DEPOSITADO";
+
+  /** Só altera cheques em Recebido no momento da chamada; não muda cadastro futuro. */
+  const bulkMarcarRecebidoDepositadoAgora = async () => {
     if (
       !window.confirm(
-        `Ação única e manual: todos os cheques que estão em "A receber" AGORA passam para "${label}".\n\nCheques que você cadastrar depois continuam entrando em "A receber" como sempre.\n\nContinuar?`,
+        'Ação única e manual: todos os cheques que estão em "Recebido" AGORA passam para "Depositado" (com data de compensação).\n\nNovos cheques seguem o fluxo normal (A receber → Recebido → Depositado).\n\nContinuar?',
       )
     ) {
       return;
     }
     const digitado = window.prompt(
-      `Para confirmar, digite exatamente:\n${confirmacao}`,
+      `Para confirmar, digite exatamente:\n${CONFIRM_RECEBIDO_DEPOSITADO}`,
     );
-    if (digitado !== confirmacao) {
+    if (digitado !== CONFIRM_RECEBIDO_DEPOSITADO) {
       setFeedback("Operação cancelada.");
       return;
     }
@@ -128,11 +120,13 @@ function ChequesPageContent() {
       const r = await api.post<{
         atualizados: number;
         candidatos: number;
-        aReceberRestantes: number;
+        recebidoRestantes: number;
         errosTotal: number;
-      }>("/cheques/bulk-marcar-a-receber-agora", { confirmacao });
+      }>("/cheques/bulk-marcar-recebido-depositado-agora", {
+        confirmacao: CONFIRM_RECEBIDO_DEPOSITADO,
+      });
       setFeedback(
-        `Concluído: ${r.atualizados} de ${r.candidatos} cheques atualizados. Restam ${r.aReceberRestantes} em "A receber".${r.errosTotal > 0 ? ` Erros: ${r.errosTotal}.` : ""}`,
+        `Concluído: ${r.atualizados} de ${r.candidatos} cheques atualizados. Restam ${r.recebidoRestantes} em "Recebido".${r.errosTotal > 0 ? ` Erros: ${r.errosTotal}.` : ""}`,
       );
       await carregar();
     } catch (e) {
@@ -265,20 +259,11 @@ function ChequesPageContent() {
           <button
             type="button"
             disabled={bulkLoading}
-            onClick={() => void bulkMarcarAReceberAgora("recebido")}
-            className="btn-secondary text-sm text-amber-900 border-amber-200 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
-            title="Só os cheques em A receber neste momento; não altera cadastros futuros"
-          >
-            A receber → Recebido (agora)
-          </button>
-          <button
-            type="button"
-            disabled={bulkLoading}
-            onClick={() => void bulkMarcarAReceberAgora("depositado")}
+            onClick={() => void bulkMarcarRecebidoDepositadoAgora()}
             className="btn-secondary text-sm text-green-900 border-green-200 bg-green-50 hover:bg-green-100 disabled:opacity-50"
-            title="Só os cheques em A receber neste momento; não altera cadastros futuros"
+            title="Só os cheques em Recebido neste momento"
           >
-            A receber → Depositado (agora)
+            Recebido → Depositado (agora)
           </button>
           <Link href="/cheques/novo" className="btn-primary">
             <PlusIcon className="w-4 h-4" /> Novo Cheque

@@ -32,15 +32,10 @@ const chequeStatusPatchSchema = z.object({
 });
 
 /**
- * Ação única e manual: só roda quando você chama a API (não afeta cheques futuros automaticamente).
- * - AGORA_TODOS_A_RECEBER_PARA_RECEBIDO → status recebido
- * - AGORA_TODOS_A_RECEBER_PARA_DEPOSITADO → status depositado (+ data compensação)
+ * Ação única e manual: cheques em recebido neste momento → depositado.
  */
-const chequeBulkMarcarAReceberAgoraSchema = z.object({
-  confirmacao: z.enum([
-    "AGORA_TODOS_A_RECEBER_PARA_RECEBIDO",
-    "AGORA_TODOS_A_RECEBER_PARA_DEPOSITADO",
-  ]),
+const chequeBulkMarcarRecebidoDepositadoAgoraSchema = z.object({
+  confirmacao: z.literal("AGORA_TODOS_RECEBIDO_PARA_DEPOSITADO"),
   dataCompensacao: optionalDateInput.optional(),
   limite: z.coerce.number().int().min(1).max(10000).optional(),
 });
@@ -48,5 +43,5 @@ const chequeBulkMarcarAReceberAgoraSchema = z.object({
 module.exports = {
   chequeCreateSchema,
   chequeStatusPatchSchema,
-  chequeBulkMarcarAReceberAgoraSchema,
+  chequeBulkMarcarRecebidoDepositadoAgoraSchema,
 };

@@ -8,7 +8,7 @@ const { parseBody } = require("../utils/zodParse");
 const {
   chequeCreateSchema,
   chequeStatusPatchSchema,
-  chequeBulkMarcarAReceberAgoraSchema,
+  chequeBulkMarcarRecebidoDepositadoAgoraSchema,
 } = require("../schemas/cheque");
 const {
   parsePagination,
@@ -155,16 +155,11 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/cheques/bulk-marcar-a-receber-agora
-// Uma vez: todos os cheques que estão em a_receber NESTE momento → recebido OU depositado.
-// Não altera o fluxo de cheques novos; só executa quando você chama este endpoint.
-router.post("/bulk-marcar-a-receber-agora", async (req, res) => {
+// POST /api/cheques/bulk-marcar-recebido-depositado-agora
+// Uma vez: todos os cheques em recebido NESTE momento → depositado (data compensação).
+router.post("/bulk-marcar-recebido-depositado-agora", async (req, res) => {
   try {
-    const body = parseBody(chequeBulkMarcarAReceberAgoraSchema, req.body);
-    const alvo =
-      body.confirmacao === "AGORA_TODOS_A_RECEBER_PARA_RECEBIDO"
-        ? "recebido"
-        : "depositado";
+    const body = parseBody(chequeBulkMarcarRecebidoDepositadoAgoraSchema, req.body);
     const dataCompensacaoDate =
       body.dataCompensacao instanceof Date
         ? body.dataCompensacao
@@ -174,7 +169,7 @@ router.post("/bulk-marcar-a-receber-agora", async (req, res) => {
 
     const take = body.limite ?? 10000;
     const candidatos = await prisma.cheque.findMany({
-      where: { status: "a_receber" },
+      where: { status: "recebido" },
       select: { id: true },
       orderBy: { id: "asc" },
       take,
@@ -191,13 +186,13 @@ router.post("/bulk-marcar-a-receber-agora", async (req, res) => {
             where: { id },
             include: { pagamento: true },
           });
-          if (!chequeAtual || chequeAtual.status !== "a_receber") {
+          if (!chequeAtual || chequeAtual.status !== "recebido") {
             return false;
           }
           await aplicarMudancaStatusCheque(
             tx,
             chequeAtual,
-            alvo,
+            "depositado",
             dataCompensacaoDate,
           );
           return true;
@@ -209,21 +204,20 @@ router.post("/bulk-marcar-a-receber-agora", async (req, res) => {
       }
     }
 
-    const restantes = await prisma.cheque.count({
-      where: { status: "a_receber" },
+    const recebidoRestantes = await prisma.cheque.count({
+      where: { status: "recebido" },
     });
 
     res.json({
       ok: true,
-      alvo,
       mensagem:
-        "Processamento único concluído. Cheques novos continuam entrando como antes.",
+        "Processamento único: cheques que estavam em Recebido foram marcados como Depositado.",
       candidatos: candidatos.length,
       atualizados,
       ignorados,
       erros: erros.slice(0, 50),
       errosTotal: erros.length,
-      aReceberRestantes: restantes,
+      recebidoRestantes,
     });
   } catch (error) {
     handleRouteError(res, error);
