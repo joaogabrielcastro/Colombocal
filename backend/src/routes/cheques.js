@@ -77,9 +77,24 @@ router.get("/", async (req, res) => {
       defaultTake: 100,
       maxTake: 500,
     });
+    const includeResumo =
+      req.query.resumo === "1" || req.query.resumo === "true";
+
+    if (status && String(status).trim() === "depositado") {
+      setPaginationHeaders(res, { total: 0, take, skip });
+      if (includeResumo) {
+        return res.json({ items: [], resumoPorStatus: [] });
+      }
+      return res.json([]);
+    }
+
     const and = [];
     if (clienteId) and.push({ clienteId: parseInt(clienteId, 10) });
-    if (status) and.push({ status });
+    if (status && String(status).trim()) {
+      and.push({ status: String(status).trim() });
+    } else {
+      and.push({ status: { not: "depositado" } });
+    }
     if (dataInicio || dataFim) {
       const dr = {};
       if (dataInicio) dr.gte = new Date(dataInicio);
@@ -99,8 +114,6 @@ router.get("/", async (req, res) => {
       }
     }
     const where = and.length ? { AND: and } : {};
-    const includeResumo =
-      req.query.resumo === "1" || req.query.resumo === "true";
 
     const queries = [
       prisma.cheque.findMany({
@@ -133,7 +146,7 @@ router.get("/", async (req, res) => {
 
     if (includeResumo) {
       const raw = results[2];
-      const order = ["a_receber", "recebido", "depositado", "devolvido"];
+      const order = ["a_receber", "recebido", "devolvido"];
       const resumoPorStatus = raw
         .map((row) => ({
           status: String(row.status || "").trim(),

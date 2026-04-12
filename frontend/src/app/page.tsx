@@ -126,12 +126,6 @@ export default function DashboardPage() {
             }).format(new Date())}
           </p>
         </div>
-        <Link
-          href="/cobranca"
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          Painel de cobrança →
-        </Link>
       </div>
 
       {/* Stats grid */}

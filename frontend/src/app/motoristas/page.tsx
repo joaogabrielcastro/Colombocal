@@ -15,6 +15,7 @@ export default function MotoristasPage() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const carregar = () => {
     setLoading(true);
@@ -53,6 +54,21 @@ export default function MotoristasPage() {
 
   const handleEditar = (m: Motorista) => { setEditando(m); setForm(m); setMostrarForm(true); setErro(''); };
   const set = (f: keyof Motorista) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [f]: e.target.value }));
+  const handleExcluir = async (motorista: Motorista) => {
+    const ok = window.confirm(
+      `Deseja inativar o motorista "${motorista.nome}"? Esta ação remove o motorista das listagens ativas.`,
+    );
+    if (!ok) return;
+    setDeletingId(motorista.id);
+    try {
+      await api.delete(`/motoristas/${motorista.id}`);
+      carregar();
+    } catch (e) {
+      reportApiError(e, { title: 'Não foi possível excluir o motorista' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="p-6">
@@ -129,7 +145,16 @@ export default function MotoristasPage() {
                   <td className="table-cell">{m.veiculo || '-'}</td>
                   <td className="table-cell font-mono">{m.placa || '-'}</td>
                   <td className="table-cell">
-                    <button onClick={() => handleEditar(m)} className="text-blue-600 hover:underline text-sm font-medium">Editar</button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => handleEditar(m)} className="text-blue-600 hover:underline text-sm font-medium">Editar</button>
+                      <button
+                        onClick={() => void handleExcluir(m)}
+                        disabled={deletingId === m.id}
+                        className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deletingId === m.id ? 'Excluindo...' : 'Excluir'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

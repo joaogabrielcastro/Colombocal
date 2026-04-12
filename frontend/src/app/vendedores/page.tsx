@@ -17,6 +17,7 @@ export default function VendedoresPage() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const carregar = useCallback(async (termo: string) => {
     setLoading(true);
@@ -77,6 +78,21 @@ export default function VendedoresPage() {
     setForm(v);
     setMostrarForm(true);
     setErro("");
+  };
+  const handleExcluir = async (vendedor: Vendedor) => {
+    const ok = window.confirm(
+      `Deseja inativar o vendedor "${vendedor.nome}"? Esta ação remove o vendedor das listagens ativas.`,
+    );
+    if (!ok) return;
+    setDeletingId(vendedor.id);
+    try {
+      await api.delete(`/vendedores/${vendedor.id}`);
+      void carregar(busca);
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível excluir o vendedor" });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -244,12 +260,21 @@ export default function VendedoresPage() {
                     {parseFloat(String(v.comissaoPercentual)).toFixed(2)}%
                   </td>
                   <td className="table-cell">
-                    <button
-                      onClick={() => handleEditar(v)}
-                      className="text-blue-600 hover:underline text-sm font-medium"
-                    >
-                      Editar
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleEditar(v)}
+                        className="text-blue-600 hover:underline text-sm font-medium"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => void handleExcluir(v)}
+                        disabled={deletingId === v.id}
+                        className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deletingId === v.id ? "Excluindo..." : "Excluir"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

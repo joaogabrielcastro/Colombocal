@@ -22,6 +22,7 @@ export default function ClientesPage() {
   const [buscaInput, setBuscaInput] = useState("");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const carregar = useCallback((b: string, p: number) => {
     const params = new URLSearchParams({
@@ -57,6 +58,22 @@ export default function ClientesPage() {
     setBusca(buscaInput);
   };
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const handleExcluir = async (cliente: Cliente) => {
+    const nome = cliente.nomeFantasia || cliente.razaoSocial;
+    const ok = window.confirm(
+      `Deseja inativar o cliente "${nome}"? Esta ação remove o cliente das listagens ativas.`,
+    );
+    if (!ok) return;
+    setDeletingId(cliente.id);
+    try {
+      await api.delete(`/clientes/${cliente.id}`);
+      carregar(busca, page);
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível excluir o cliente" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="p-6">
@@ -161,12 +178,21 @@ export default function ClientesPage() {
                   <td className="table-cell">{c.telefone || "-"}</td>
                   <td className="table-cell">{formatMoney(c.fretePadrao)}</td>
                   <td className="table-cell">
-                    <Link
-                      href={`/clientes/${c.id}`}
-                      className="text-blue-600 hover:underline text-sm font-medium"
-                    >
-                      Ver
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/clientes/${c.id}`}
+                        className="text-blue-600 hover:underline text-sm font-medium"
+                      >
+                        Ver
+                      </Link>
+                      <button
+                        onClick={() => void handleExcluir(c)}
+                        disabled={deletingId === c.id}
+                        className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deletingId === c.id ? "Excluindo..." : "Excluir"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

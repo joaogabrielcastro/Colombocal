@@ -86,9 +86,6 @@ function FretesContent() {
             na venda ou edição aqui.
           </p>
         </div>
-        <Link href="/cobranca" className="btn-secondary text-sm">
-          Painel de cobrança
-        </Link>
       </div>
 
       <div className="mb-4">

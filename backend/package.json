@@ -13,6 +13,7 @@
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
     "db:reset": "prisma migrate reset --force",
+    "reset:financeiro": "node scripts/reset-financeiro-legacy.js",
     "legacy:mdb-notes": "node scripts/legacy-mdb-notes.js",
     "legacy:plan": "python scripts/import_legacy_csv_to_new_db.py --csv-dir scripts/legacy_exports --out scripts/legacy_import_plan.json --min-date 2020-01-01",
     "legacy:import:dry": "python scripts/import_legacy_apply.py --csv-dir scripts/legacy_exports --min-date 2020-01-01",

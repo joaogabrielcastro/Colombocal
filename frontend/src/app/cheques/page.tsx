@@ -209,7 +209,7 @@ function ChequesPageContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cheques</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {total} cheque{total === 1 ? "" : "s"} com os filtros atuais
+            {total} cheque{total === 1 ? "" : "s"} com os filtros atuais (depositados não são listados)
             {pendenteExibido > 0 &&
               ` • Pendente (a receber + recebido): ${formatMoney(pendenteExibido)}`}
           </p>
@@ -233,10 +233,9 @@ function ChequesPageContent() {
               }}
               className="input-field w-40"
             >
-              <option value="">Todos</option>
+              <option value="">Todos (exceto depositados)</option>
               <option value="a_receber">A Receber</option>
               <option value="recebido">Recebido</option>
-              <option value="depositado">Depositado</option>
               <option value="devolvido">Devolvido</option>
             </select>
           </div>
@@ -305,8 +304,8 @@ function ChequesPageContent() {
       </div>
 
       {/* Resumo por status */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {(["a_receber", "recebido", "depositado", "devolvido"] as StatusCheque[]).map(
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+        {(["a_receber", "recebido", "devolvido"] as StatusCheque[]).map(
           (s) => {
             const fromResumo = resumoMap.get(s);
             const grupo = cheques.filter((c) => c.status === s);

@@ -13,7 +13,6 @@ import {
   ChartBarIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  ClipboardDocumentCheckIcon,
   ReceiptPercentIcon,
   EllipsisHorizontalCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -23,7 +22,6 @@ type NavItem = { href: string; label: string; icon: React.ComponentType<{ classN
 
 const coreNav: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: HomeIcon },
-  { href: '/cobranca', label: 'Cobrança', icon: ClipboardDocumentCheckIcon },
   { href: '/clientes', label: 'Clientes', icon: UserGroupIcon },
   { href: '/produtos', label: 'Produtos', icon: CubeIcon },
   { href: '/vendas', label: 'Vendas', icon: ShoppingCartIcon },
