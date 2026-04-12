@@ -15,6 +15,7 @@ export default function ProdutosPage() {
   const [salvando, setSalvando] = useState(false);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [erro, setErro] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const carregar = () => {
     setLoading(true);
@@ -61,6 +62,22 @@ export default function ProdutosPage() {
     setForm(p);
     setMostrarForm(true);
     setErro("");
+  };
+
+  const handleExcluir = async (p: Produto) => {
+    const ok = window.confirm(
+      `Inativar o produto "${p.nome}" (${p.codigo})? Ele deixa de aparecer na lista e nas vendas como ativo.`,
+    );
+    if (!ok) return;
+    setDeletingId(p.id);
+    try {
+      await api.delete(`/produtos/${p.id}`);
+      carregar();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível excluir o produto" });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const set =
@@ -225,12 +242,21 @@ export default function ProdutosPage() {
                   <td className="table-cell">{p.unidade}</td>
                   <td className="table-cell">{formatMoney(p.precoPadrao)}</td>
                   <td className="table-cell">
-                    <button
-                      onClick={() => handleEditar(p)}
-                      className="text-blue-600 hover:underline text-sm font-medium"
-                    >
-                      Editar
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleEditar(p)}
+                        className="text-blue-600 hover:underline text-sm font-medium"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => void handleExcluir(p)}
+                        disabled={deletingId === p.id}
+                        className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deletingId === p.id ? "Excluindo..." : "Excluir"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
