@@ -65,7 +65,7 @@ Você pode editar o CSV manualmente antes do `apply`. Linhas com CNPJ inválido 
 
   Use o `.cleaned.csv` no `apply`.
 
-- **Nomes no mapa e no `apply`:** o `scan` passa a preencher a coluna **`nome`** (quando existir NOME/RAZAO/FANT no Access ou no CSV). O `apply` grava **`razaoSocial`** e **`nomeFantasia`** com esse nome quando a coluna vier preenchida.
+- **Nome, telefone, cidade e UF no mapa e no `apply`:** o `scan` preenche **`nome`**, **`telefone`**, **`cidade`** e **`estado`** quando essas colunas existirem no Access/CSV (`NOME/RAZAO/FANT`, `TELEFONE/FONE/TEL`, `CIDADE/MUNICIPIO`, `UF/ESTADO`). O `apply` atualiza `razaoSocial`/`nomeFantasia` com `nome` e também atualiza `telefone`, `cidade` e `estado` quando vierem preenchidos no mapa.
 
 - **Inativar só os cadastros placeholder legados** (não apaga; some da lista de ativos como o botão Excluir):
 

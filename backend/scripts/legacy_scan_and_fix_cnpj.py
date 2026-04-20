@@ -190,6 +190,54 @@ NAME_COL_CANDIDATES = (
     "DESCR",
 )
 
+CITY_COL_CANDIDATES = (
+    "CIDADE",
+    "CIDADE_NOME",
+    "MUNICIPIO",
+    "MUNICÍPIO",
+    "MUN",
+    "CID",
+)
+
+STATE_COL_CANDIDATES = (
+    "UF",
+    "ESTADO",
+    "EST",
+    "SIGLAUF",
+    "UFCLI",
+)
+
+PHONE_COL_CANDIDATES = (
+    "TELEFONE",
+    "FONE",
+    "TEL",
+    "CELULAR",
+    "CEL",
+    "CONTATO",
+    "FAX",
+)
+
+
+def normalize_text_field(raw, max_len: int) -> str:
+    if raw is None:
+        return ""
+    txt = str(raw).strip()
+    if not txt:
+        return ""
+    return txt[:max_len]
+
+
+def normalize_uf(raw) -> str:
+    if raw is None:
+        return ""
+    txt = str(raw).strip().upper()
+    if not txt:
+        return ""
+    letters = "".join(ch for ch in txt if "A" <= ch <= "Z")
+    if len(letters) >= 2:
+        return letters[:2]
+    return ""
+
 
 def pick_column(cols: list[str], candidates: tuple[str, ...]) -> str | None:
     upper_map = {c.upper(): c for c in cols}
@@ -259,10 +307,17 @@ def scan_table(cur, table: str, mdb_label: str) -> list[dict]:
         safe_code = f"[{code_col}]"
         safe_doc = f"[{doc_col}]"
         nome_col = pick_column(cols, NAME_COL_CANDIDATES)
-        nome_sel = f", [{nome_col}]" if nome_col else ""
+        cidade_col = pick_column(cols, CITY_COL_CANDIDATES)
+        estado_col = pick_column(cols, STATE_COL_CANDIDATES)
+        telefone_col = pick_column(cols, PHONE_COL_CANDIDATES)
+        extra_cols: list[str] = []
+        for maybe_col in (nome_col, cidade_col, estado_col, telefone_col):
+            if maybe_col and maybe_col not in extra_cols:
+                extra_cols.append(maybe_col)
+        extra_sel = "".join(f", [{c}]" for c in extra_cols)
         try:
             cur.execute(
-                f"SELECT TOP 20000 {safe_code}, {safe_doc}{nome_sel} FROM [{table}] "
+                f"SELECT TOP 20000 {safe_code}, {safe_doc}{extra_sel} FROM [{table}] "
                 f"WHERE {safe_doc} IS NOT NULL AND {safe_code} IS NOT NULL"
             )
             for row in cur.fetchall():
@@ -270,14 +325,19 @@ def scan_table(cur, table: str, mdb_label: str) -> list[dict]:
                 cnpj = normalize_cnpj_field(row[1])
                 if not cod or not cnpj:
                     continue
-                nome_txt = ""
-                if nome_col and len(row) > 2 and row[2] is not None:
-                    nome_txt = str(row[2]).strip()[:150]
+                extra_data = {extra_cols[i]: row[2 + i] for i in range(len(extra_cols))}
+                nome_txt = normalize_text_field(extra_data.get(nome_col), 150) if nome_col else ""
+                cidade_txt = normalize_text_field(extra_data.get(cidade_col), 80) if cidade_col else ""
+                estado_txt = normalize_uf(extra_data.get(estado_col)) if estado_col else ""
+                telefone_txt = normalize_text_field(extra_data.get(telefone_col), 40) if telefone_col else ""
                 out.append(
                     {
                         "legacy_codigo": cod,
                         "cnpj": cnpj,
                         "nome": nome_txt,
+                        "cidade": cidade_txt,
+                        "estado": estado_txt,
+                        "telefone": telefone_txt,
                         "fonte": f"{mdb_label}:{table}",
                         "metodo": "colunas_nomeadas",
                     }
@@ -324,14 +384,14 @@ def scan_table(cur, table: str, mdb_label: str) -> list[dict]:
 def _write_map_csv(merged: list[dict], out: str) -> None:
     out_path = Path(out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["legacy_codigo", "cnpj", "nome", "fonte", "metodo"]
+    fieldnames = ["legacy_codigo", "cnpj", "nome", "cidade", "estado", "telefone", "fonte", "metodo"]
     with out_path.open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         w.writeheader()
         for r in merged:
             row = {k: (r.get(k) or "") for k in fieldnames}
             w.writerow(row)
-    print(f"[OK] Mapa: {len(merged)} códigos com CNPJ válido → {out_path}")
+    print(f"[OK] Mapa: {len(merged)} codigos com CNPJ valido -> {out_path}")
 
 
 def merge_maps(rows: list[dict]) -> list[dict]:
@@ -357,7 +417,11 @@ def merge_maps(rows: list[dict]) -> list[dict]:
         elif score(r) == score(prev):
             len_r = len((r.get("nome") or "").strip())
             len_p = len((prev.get("nome") or "").strip())
-            if len_r > len_p:
+            meta_r = len((r.get("cidade") or "").strip()) + len((r.get("estado") or "").strip()) * 3
+            meta_p = len((prev.get("cidade") or "").strip()) + len((prev.get("estado") or "").strip()) * 3
+            phone_r = len((r.get("telefone") or "").strip())
+            phone_p = len((prev.get("telefone") or "").strip())
+            if (meta_r, phone_r, len_r) > (meta_p, phone_p, len_p):
                 by_code[cod] = r
 
     return sorted(by_code.values(), key=lambda x: x["legacy_codigo"])
@@ -389,6 +453,9 @@ def scan_csv_geral(path: Path) -> list[dict]:
         code_col = find_column_name(list(r.fieldnames), CODE_COL_CANDIDATES)
         doc_col = find_column_name(list(r.fieldnames), DOC_COL_CANDIDATES)
         nome_col = find_column_name(list(r.fieldnames), NAME_COL_CANDIDATES)
+        cidade_col = find_column_name(list(r.fieldnames), CITY_COL_CANDIDATES)
+        estado_col = find_column_name(list(r.fieldnames), STATE_COL_CANDIDATES)
+        telefone_col = find_column_name(list(r.fieldnames), PHONE_COL_CANDIDATES)
         if not code_col or not doc_col:
             cols = [c.strip() for c in r.fieldnames]
             print(
@@ -401,14 +468,18 @@ def scan_csv_geral(path: Path) -> list[dict]:
             cnpj = normalize_cnpj_field(row.get(doc_col))
             if not cod or not cnpj:
                 continue
-            nome_txt = ""
-            if nome_col and row.get(nome_col):
-                nome_txt = str(row.get(nome_col)).strip()[:150]
+            nome_txt = normalize_text_field(row.get(nome_col), 150) if nome_col else ""
+            cidade_txt = normalize_text_field(row.get(cidade_col), 80) if cidade_col else ""
+            estado_txt = normalize_uf(row.get(estado_col)) if estado_col else ""
+            telefone_txt = normalize_text_field(row.get(telefone_col), 40) if telefone_col else ""
             out.append(
                 {
                     "legacy_codigo": cod,
                     "cnpj": cnpj,
                     "nome": nome_txt,
+                    "cidade": cidade_txt,
+                    "estado": estado_txt,
+                    "telefone": telefone_txt,
                     "fonte": f"{path.name}",
                     "metodo": "csv_export",
                 }
@@ -542,11 +613,17 @@ def cmd_filter_map(args: argparse.Namespace) -> None:
             if args.drop_scan_celula and metodo.startswith("scan_celula"):
                 continue
             nome_txt = (r.get("nome") or r.get("NOME") or "").strip()[:150]
+            cidade_txt = normalize_text_field(r.get("cidade") or r.get("CIDADE"), 80)
+            estado_txt = normalize_uf(r.get("estado") or r.get("ESTADO") or r.get("UF"))
+            telefone_txt = normalize_text_field(r.get("telefone") or r.get("TELEFONE") or r.get("TEL"), 40)
             raw.append(
                 {
                     "legacy_codigo": cod,
                     "cnpj": cnpj,
                     "nome": nome_txt,
+                    "cidade": cidade_txt,
+                    "estado": estado_txt,
+                    "telefone": telefone_txt,
                     "fonte": (r.get("fonte") or "").strip() or "csv",
                     "metodo": metodo or "filtered",
                 }
@@ -555,7 +632,7 @@ def cmd_filter_map(args: argparse.Namespace) -> None:
     merged = merge_maps(raw)
     _write_map_csv(merged, args.out)
     print(
-        f"[OK] filter-map: {in_path.name} → {len(merged)} linhas (após regra e dedupe por código)",
+        f"[OK] filter-map: {in_path.name} -> {len(merged)} linhas (apos regra e dedupe por codigo)",
         file=sys.stderr,
     )
 
@@ -678,8 +755,20 @@ def cmd_apply(args: argparse.Namespace) -> None:
             cod = norm_code(r.get("legacy_codigo") or r.get("CODI") or "")
             cnpj = normalize_cnpj_field(r.get("cnpj") or r.get("CNPJ") or "")
             nome = (r.get("nome") or r.get("NOME") or "").strip()[:150]
+            cidade = normalize_text_field(r.get("cidade") or r.get("CIDADE"), 80)
+            estado = normalize_uf(r.get("estado") or r.get("ESTADO") or r.get("UF"))
+            telefone = normalize_text_field(r.get("telefone") or r.get("TELEFONE") or r.get("TEL"), 40)
             if cod and cnpj:
-                rows.append({"legacy_codigo": cod, "cnpj": cnpj, "nome": nome})
+                rows.append(
+                    {
+                        "legacy_codigo": cod,
+                        "cnpj": cnpj,
+                        "nome": nome,
+                        "cidade": cidade,
+                        "estado": estado,
+                        "telefone": telefone,
+                    }
+                )
 
     env_path = Path(args.env).resolve() if getattr(args, "env", None) else None
     try:
@@ -708,7 +797,7 @@ def cmd_apply(args: argparse.Namespace) -> None:
 
             cur.execute(
                 """
-                SELECT id, cnpj, observacoes FROM "Cliente"
+                SELECT id, cnpj, observacoes, "razaoSocial", "nomeFantasia", telefone, cidade, estado FROM "Cliente"
                 WHERE ativo = true
                   AND (
                     cnpj = %s
@@ -733,6 +822,8 @@ def cmd_apply(args: argparse.Namespace) -> None:
                     skipped += 1
                     continue
                 nome = (r.get("nome") or "").strip()[:150]
+                cidade = normalize_text_field(r.get("cidade"), 80)
+                estado = normalize_uf(r.get("estado"))
                 razao = nome if nome else f"Cliente importação legado {cod}"
                 fantasia = nome if nome else razao
                 obs = f"{token} [LEGACY_IMPORT_MAP]"
@@ -743,9 +834,9 @@ def cmd_apply(args: argparse.Namespace) -> None:
                             cnpj, "razaoSocial", "nomeFantasia", telefone, cidade, estado, endereco,
                             observacoes, "fretePadrao", ativo, "createdAt", "updatedAt"
                         )
-                        VALUES (%s, %s, %s, NULL, NULL, NULL, NULL, %s, 0, true, now(), now())
+                        VALUES (%s, %s, %s, NULL, %s, %s, NULL, %s, 0, true, now(), now())
                         """,
-                        (new_cnpj, razao, fantasia, obs[:4000]),
+                        (new_cnpj, razao, fantasia, cidade or None, estado or None, obs[:4000]),
                     )
                     created += 1
                 else:
@@ -755,7 +846,7 @@ def cmd_apply(args: argparse.Namespace) -> None:
                     )
                     would_create += 1
                 continue
-            cliente_id, cnpj_atual, _obs = row
+            cliente_id, cnpj_atual, _obs, razao_atual, fantasia_atual, telefone_atual, cidade_atual, estado_atual = row
 
             cur.execute(
                 'SELECT id FROM "Cliente" WHERE cnpj = %s AND id <> %s',
@@ -767,7 +858,12 @@ def cmd_apply(args: argparse.Namespace) -> None:
                 continue
 
             nome = (r.get("nome") or "").strip()[:150]
-            if cnpj_atual == new_cnpj and not nome:
+            cidade = normalize_text_field(r.get("cidade"), 80)
+            estado = normalize_uf(r.get("estado"))
+            same_nome = (not nome) or ((razao_atual or "") == nome and (fantasia_atual or "") == nome)
+            same_cidade = (not cidade) or ((cidade_atual or "") == cidade)
+            same_estado = (not estado) or ((estado_atual or "").upper() == estado)
+            if cnpj_atual == new_cnpj and same_nome and same_cidade and same_estado:
                 skipped += 1
                 continue
 
@@ -780,26 +876,37 @@ def cmd_apply(args: argparse.Namespace) -> None:
                         SET cnpj = %s,
                             "razaoSocial" = %s,
                             "nomeFantasia" = %s,
+                            cidade = COALESCE(NULLIF(%s, ''), cidade),
+                            estado = COALESCE(NULLIF(%s, ''), estado),
                             observacoes = LEFT(COALESCE(observacoes,'') || %s, 4000),
                             "updatedAt" = now()
                         WHERE id = %s
                         """,
-                        (new_cnpj, nome, nome, note, cliente_id),
+                        (new_cnpj, nome, nome, cidade, estado, note, cliente_id),
                     )
                 else:
                     cur.execute(
                         """
                         UPDATE "Cliente"
                         SET cnpj = %s,
+                            cidade = COALESCE(NULLIF(%s, ''), cidade),
+                            estado = COALESCE(NULLIF(%s, ''), estado),
                             observacoes = LEFT(COALESCE(observacoes,'') || %s, 4000),
                             "updatedAt" = now()
                         WHERE id = %s
                         """,
-                        (new_cnpj, note, cliente_id),
+                        (new_cnpj, cidade, estado, note, cliente_id),
                     )
                 updated += cur.rowcount
             else:
-                extra = f" nome→{nome[:40]}…" if nome else ""
+                changes = []
+                if nome:
+                    changes.append(f"nome->{nome[:40]}...")
+                if cidade:
+                    changes.append(f"cidade->{cidade[:24]}")
+                if estado:
+                    changes.append(f"uf->{estado}")
+                extra = f" {' | '.join(changes)}" if changes else ""
                 print(f"[DRY-RUN] id={cliente_id} {cnpj_atual} -> {new_cnpj} ({cod}){extra}")
                 would_update += 1
 

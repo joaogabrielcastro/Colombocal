@@ -126,7 +126,7 @@ export default function ClientesPage() {
       <div className="card overflow-hidden">
         {loading ? (
           <div className="p-4">
-            <TableListSkeleton rows={10} cols={6} />
+            <TableListSkeleton rows={10} cols={5} />
           </div>
         ) : clientes.length === 0 ? (
           <div className="p-6">
@@ -153,7 +153,6 @@ export default function ClientesPage() {
                 <th className="table-header">Razão Social / Fantasia</th>
                 <th className="table-header">CNPJ</th>
                 <th className="table-header">Cidade / UF</th>
-                <th className="table-header">Telefone</th>
                 <th className="table-header">Frete Padrão</th>
                 <th className="table-header"></th>
               </tr>
@@ -175,7 +174,6 @@ export default function ClientesPage() {
                       ? `${c.cidade}${c.estado ? " - " + c.estado : ""}`
                       : "-"}
                   </td>
-                  <td className="table-cell">{c.telefone || "-"}</td>
                   <td className="table-cell">{formatMoney(c.fretePadrao)}</td>
                   <td className="table-cell">
                     <div className="flex items-center gap-3">
