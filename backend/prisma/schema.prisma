@@ -94,7 +94,7 @@ model Venda {
   clienteId       Int
   vendedorId      Int
   motoristaId     Int?
-  // Frete: valor na venda é a fonte principal; FreteMovimento espelha/atualiza para histórico e tela Fretes.
+  // Frete: fonte da verdade operacional é Venda (valor + recibo). FreteMovimento espelha o 1º movimento por venda para histórico/listagem; criado/atualizado pela API de venda (PATCH/POST).
   frete           Decimal  @default(0) @db.Decimal(10, 2)
   freteRecibo     Boolean  @default(false)  // recibo de frete emitido?
   freteReciboNum  String?                   // número do recibo de frete
@@ -211,7 +211,7 @@ model TituloReceber {
   @@index([vendaId])
 }
 
-// Movimento de frete (listagem, recibo, legados). Valor/recibo também existem em Venda; manter alinhados via API de venda.
+// Espelho/histórico de frete (listagem / legados sem venda). Não editar valor isolado sem passar pela Venda — ver sincronização em routes/vendas.js.
 model FreteMovimento {
   id         Int      @id @default(autoincrement())
   vendaId    Int? // opcional: fretes legados sem ordem vinculada no banco novo

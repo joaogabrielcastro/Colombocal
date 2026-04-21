@@ -6,11 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { formatMoney, formatDate } from "@/lib/utils";
 import api, { apiFetchWithMeta } from "@/lib/api";
 import type { FreteMovimento } from "@/lib/utils";
-import { FreteOrientacaoPainel } from "@/components/FreteOrientacao";
-import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { reportApiError } from "@/lib/report-api-error";
-import { ListPageSkeleton } from "@/components/ui/skeletons";
+import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 
 type FreteListRow = FreteMovimento & {
   cliente: {
@@ -23,7 +21,6 @@ type FreteListRow = FreteMovimento & {
     dataVenda: string;
     valorTotal: unknown;
     freteRecibo?: boolean;
-    freteReciboNum?: string | null;
   } | null;
 };
 
@@ -80,16 +77,15 @@ function FretesContent() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fretes</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Histórico de fretes</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Movimentações com recibo (emitido, número e data) conforme cadastro
-            na venda ou edição aqui.
+            Lista de movimentações (espelho do frete da venda). Para alterar valor ou recibo, use a{' '}
+            <Link href="/vendas" className="text-blue-600 hover:underline">
+              venda
+            </Link>
+            .
           </p>
         </div>
-      </div>
-
-      <div className="mb-4">
-        <FreteOrientacaoPainel variant="default" />
       </div>
 
       <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
@@ -105,7 +101,7 @@ function FretesContent() {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Recibo</label>
+          <label className="block text-xs text-gray-500 mb-1">Pagamento</label>
           <select
             value={reciboEmitido}
             onChange={(e) => {
@@ -115,8 +111,8 @@ function FretesContent() {
             className="input-field min-w-44"
           >
             <option value="">Todos</option>
-            <option value="true">Com recibo</option>
-            <option value="false">Sem recibo / pendente</option>
+            <option value="true">Pago</option>
+            <option value="false">Pendente</option>
           </select>
         </div>
         <button
@@ -155,7 +151,7 @@ function FretesContent() {
                   <th className="table-header">Cliente</th>
                   <th className="table-header">Venda</th>
                   <th className="table-header text-right">Valor</th>
-                  <th className="table-header">Recibo</th>
+                  <th className="table-header">Frete pago</th>
                 </tr>
               </thead>
               <tbody>
@@ -191,22 +187,15 @@ function FretesContent() {
                     <td className="table-cell">
                       <span
                         className={
-                          r.reciboEmitido || r.reciboNumero
+                          r.reciboEmitido
                             ? "text-green-700"
                             : "text-amber-700"
                         }
                       >
-                        {r.reciboEmitido || r.reciboNumero
-                          ? [
-                              r.reciboNumero
-                                ? `Nº ${r.reciboNumero}`
-                                : "Emitido",
-                              r.reciboData
-                                ? formatDate(r.reciboData)
-                                : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")
+                        {r.reciboEmitido
+                          ? r.reciboData
+                            ? `Pago em ${formatDate(r.reciboData)}`
+                            : "Pago"
                           : "Pendente"}
                       </span>
                     </td>

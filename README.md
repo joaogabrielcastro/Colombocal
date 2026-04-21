@@ -106,7 +106,6 @@ Colombocal/
         └── relatorios/
             ├── vendas/
             ├── comissoes/
-            ├── faturamento/
             └── financeiro/
 ```
 

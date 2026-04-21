@@ -1,6 +1,7 @@
 /**
- * Modo piloto / menu compacto: cadastros secundários (motorista, vendedor, frete) e relatórios
- * Comissões + Títulos ficam em "Avançado".
+ * Modo piloto / menu compacto: itens com `advancedOnly` em `lib/navigation.ts` somem da barra
+ * principal e ficam em "Avançado" (motoristas, vendedores; relatório Títulos em análise).
+ * Frete não tem item próprio: cadastro na venda; listagem histórica em /fretes (link na tela Vendas).
  *
  * Docker: NEXT_PUBLIC_UI_HIDE_ADVANCED=true (compose já define).
  * Local: crie frontend/.env.local com NEXT_PUBLIC_UI_HIDE_ADVANCED=false para menu cheio.

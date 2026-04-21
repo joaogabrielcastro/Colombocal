@@ -10,7 +10,7 @@ const { handleRouteError } = require("../utils/api");
  * Uso único: quita todos os títulos, remove cheques e pagamentos vinculados a cheques,
  * e cria pagamentos de ajuste para zerar saldo devedor na conta corrente (vendas − pagamentos).
  * Protegido por ADMIN_RESET_SECRET ou RESET_FINANCE_SECRET no .env.
- * Alternativa sem API: npm run reset:financeiro (na pasta backend).
+ * Alternativa sem API: npm run legacy:reset-financeiro (na pasta backend). Ver docs/migracao-legado.md.
  */
 router.post("/reset-financeiro-legacy", async (req, res) => {
   try {

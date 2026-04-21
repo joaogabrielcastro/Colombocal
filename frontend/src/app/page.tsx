@@ -139,12 +139,12 @@ export default function DashboardPage() {
           href="/vendas"
         />
         <StatCard
-          title="Faturamento do Mês"
+          title="Vendas do mês (valor)"
           value={formatMoney(d.faturamentoMes)}
           sub={`${d.quantidadeVendasMes} vendas`}
           icon={ArrowTrendingUpIcon}
           color="bg-green-100 text-green-600"
-          href="/relatorios/faturamento"
+          href="/relatorios/vendas"
         />
         <StatCard
           title="Clientes Devendo"
@@ -180,7 +180,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Gráfico faturamento */}
+      {/* Gráfico: vendas por mês */}
       {d.faturamentoPorMes &&
         d.faturamentoPorMes.length > 0 &&
         (() => {
@@ -196,7 +196,7 @@ export default function DashboardPage() {
             <div className="card mb-6">
               <div className="px-5 py-4 border-b border-gray-100">
                 <h2 className="font-semibold text-gray-900">
-                  Faturamento — Últimos 6 Meses
+                  Vendas — últimos 6 meses
                 </h2>
               </div>
               <div className="px-5 py-5 flex justify-center overflow-x-auto">

@@ -183,7 +183,7 @@ function RelatorioTitulosContent() {
           Parcelas em aberto por título (aging). Não é o mesmo número que o saldo da conta corrente.
         </p>
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          <p className="font-medium text-amber-900">Por que aparece R$ em aberto e na conta o cliente está com crédito?</p>
+          <p className="font-medium text-amber-900">Por que aparece R$ em aberto aqui e outro valor na conta do cliente?</p>
           <p className="mt-2 text-amber-900/90">
             Cada linha desta tela mostra <strong>um título</strong> (parcela da venda). O valor{" "}
             <strong>Aberto</strong> é só daquela linha: valor original do título menos o que foi
@@ -192,8 +192,8 @@ function RelatorioTitulosContent() {
           </p>
           <p className="mt-2 text-amber-900/90">
             Já a <strong>Conta corrente</strong> do cliente soma <strong>todas</strong> as vendas e{" "}
-            <strong>todos</strong> os pagamentos. Se em outra venda o cliente pagou a mais, isso vira{" "}
-            <strong>crédito</strong> no saldo geral — mas o título da primeira venda pode continuar{" "}
+            <strong>todos</strong> os pagamentos e mostra só o que ainda está{" "}
+            <strong>em aberto</strong> (sem saldo a favor do cliente). Um título específico pode continuar{" "}
             <span className="font-medium">parcial</span> até você baixar proporcionalmente nessa venda ou
             quitar esse título.
           </p>

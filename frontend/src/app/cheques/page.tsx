@@ -16,11 +16,12 @@ import * as XLSX from "xlsx";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 
-// Fluxo com devolução: a_receber -> recebido -> depositado, com desvios para devolvido
+// Fluxo operacional: a_receber -> recebido -> repassado, com desvios para devolvido
 const STATUS_NEXT: Record<StatusCheque, StatusCheque[]> = {
   a_receber: ["recebido", "devolvido"],
-  recebido: ["depositado", "a_receber", "devolvido"],
-  depositado: ["devolvido"],
+  recebido: ["repassado", "a_receber", "devolvido"],
+  repassado: ["devolvido"],
+  depositado: ["devolvido"], // legado
   devolvido: ["recebido", "a_receber"],
 };
 
@@ -38,19 +39,82 @@ function ChequesPageContent() {
   const pageSize = 20;
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
-  const [statusFiltro, setStatusFiltro] = useState(searchParams.get("status") || "");
+  const [statusFiltro, setStatusFiltro] = useState(
+    searchParams.get("status") || "todos",
+  );
   const [dataInicio, setDataInicio] = useState(searchParams.get("dataInicio") || "");
   const [dataFim, setDataFim] = useState(searchParams.get("dataFim") || "");
+  const [clienteInput, setClienteInput] = useState(searchParams.get("cliente") || "");
+  const [clienteFiltro, setClienteFiltro] = useState(searchParams.get("cliente") || "");
+  const [bancoInput, setBancoInput] = useState(searchParams.get("banco") || "");
+  const [bancoFiltro, setBancoFiltro] = useState(searchParams.get("banco") || "");
+  const [numeroInput, setNumeroInput] = useState(searchParams.get("numero") || "");
+  const [numeroFiltro, setNumeroFiltro] = useState(searchParams.get("numero") || "");
+  const [valorMinInput, setValorMinInput] = useState(searchParams.get("valorMin") || "");
+  const [valorMinFiltro, setValorMinFiltro] = useState(searchParams.get("valorMin") || "");
+  const [valorMaxInput, setValorMaxInput] = useState(searchParams.get("valorMax") || "");
+  const [valorMaxFiltro, setValorMaxFiltro] = useState(searchParams.get("valorMax") || "");
   const ordemInicial = searchParams.get("ordem") || "";
   const [ordemInput, setOrdemInput] = useState(ordemInicial);
   const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
   const [atualizando, setAtualizando] = useState<number | null>(null);
+  const aplicarFiltros = () => {
+    setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
+    setClienteFiltro(clienteInput.trim());
+    setBancoFiltro(bancoInput.trim());
+    setNumeroFiltro(numeroInput.trim());
+    setValorMinFiltro(valorMinInput.trim());
+    setValorMaxFiltro(valorMaxInput.trim());
+    setPage(1);
+  };
+
+  useEffect(() => {
+    const status = searchParams.get("status") || "todos";
+    const di = searchParams.get("dataInicio") || "";
+    const df = searchParams.get("dataFim") || "";
+    const cliente = searchParams.get("cliente") || "";
+    const banco = searchParams.get("banco") || "";
+    const numero = searchParams.get("numero") || "";
+    const valorMin = searchParams.get("valorMin") || "";
+    let valorMax = searchParams.get("valorMax") || "";
+    if (valorMax.trim() !== "") {
+      const n = Number(valorMax.replace(",", "."));
+      if (!Number.isNaN(n) && n <= 0) valorMax = "";
+    }
+    const ordem = searchParams.get("ordem") || "";
+    const parsedPage = parseInt(searchParams.get("page") || "1", 10) || 1;
+    setStatusFiltro(status);
+    setDataInicio(di);
+    setDataFim(df);
+    setClienteInput(cliente);
+    setClienteFiltro(cliente);
+    setBancoInput(banco);
+    setBancoFiltro(banco);
+    setNumeroInput(numero);
+    setNumeroFiltro(numero);
+    setValorMinInput(valorMin);
+    setValorMinFiltro(valorMin);
+    setValorMaxInput(valorMax);
+    setValorMaxFiltro(valorMax);
+    setOrdemInput(ordem);
+    setOrdemFiltro(ordem);
+    setPage(parsedPage);
+  }, [searchParams]);
 
   const carregar = async () => {
     const params = new URLSearchParams();
-    if (statusFiltro) params.set("status", statusFiltro);
+    params.set("status", statusFiltro || "todos");
     if (dataInicio) params.set("dataInicio", dataInicio);
     if (dataFim) params.set("dataFim", dataFim);
+    if (clienteFiltro) params.set("cliente", clienteFiltro);
+    if (bancoFiltro) params.set("banco", bancoFiltro);
+    if (numeroFiltro) params.set("numero", numeroFiltro);
+    if (valorMinFiltro) params.set("valorMin", valorMinFiltro);
+    const vmaxTrim = valorMaxFiltro.trim();
+    if (vmaxTrim !== "") {
+      const n = Number(vmaxTrim.replace(",", "."));
+      if (!Number.isNaN(n) && n > 0) params.set("valorMax", vmaxTrim);
+    }
     const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
     if (ordemTrim) params.set("ordem", ordemTrim);
     params.set("resumo", "1");
@@ -85,15 +149,35 @@ function ChequesPageContent() {
 
   useEffect(() => {
     const params = new URLSearchParams();
-    if (statusFiltro) params.set("status", statusFiltro);
+    params.set("status", statusFiltro || "todos");
     if (dataInicio) params.set("dataInicio", dataInicio);
     if (dataFim) params.set("dataFim", dataFim);
+    if (clienteFiltro) params.set("cliente", clienteFiltro);
+    if (bancoFiltro) params.set("banco", bancoFiltro);
+    if (numeroFiltro) params.set("numero", numeroFiltro);
+    if (valorMinFiltro) params.set("valorMin", valorMinFiltro);
+    const vmaxTrim = valorMaxFiltro.trim();
+    if (vmaxTrim !== "") {
+      const n = Number(vmaxTrim.replace(",", "."));
+      if (!Number.isNaN(n) && n > 0) params.set("valorMax", vmaxTrim);
+    }
     const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
     if (ordemTrim) params.set("ordem", ordemTrim);
     if (page > 1) params.set("page", String(page));
     router.replace(`/cheques${params.toString() ? `?${params.toString()}` : ""}`);
     carregar();
-  }, [statusFiltro, dataInicio, dataFim, ordemFiltro, page]);
+  }, [
+    statusFiltro,
+    dataInicio,
+    dataFim,
+    clienteFiltro,
+    bancoFiltro,
+    numeroFiltro,
+    valorMinFiltro,
+    valorMaxFiltro,
+    ordemFiltro,
+    page,
+  ]);
 
   const handleMudarStatus = async (id: number, novoStatus: string) => {
     setAtualizando(id);
@@ -117,7 +201,7 @@ function ChequesPageContent() {
       numeroCheque: c.numero || "",
       venda: c.venda ? `Venda #${c.venda.id}` : "-",
       valor: parseFloat(String(c.valor)),
-      dataRecebimento: formatDate(c.dataRecebimento),
+      preDatado: formatDate(c.dataRecebimento),
       dataCompensacao: formatDate(c.dataCompensacao),
       status: STATUS_CHEQUE_LABEL[c.status],
     }));
@@ -175,7 +259,7 @@ function ChequesPageContent() {
                 <th>Banco / Nº</th>
                 <th>Venda</th>
                 <th>Valor</th>
-                <th>Recebido em</th>
+                <th>Pré-datado</th>
                 <th>Compensado em</th>
                 <th>Status</th>
               </tr>
@@ -209,7 +293,10 @@ function ChequesPageContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cheques</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {total} cheque{total === 1 ? "" : "s"} com os filtros atuais (depositados não são listados)
+            {total} cheque{total === 1 ? "" : "s"} com os filtros atuais
+            {statusFiltro === "todos"
+              ? " (todos os status)"
+              : ""}
             {pendenteExibido > 0 &&
               ` • Pendente (a receber + recebido): ${formatMoney(pendenteExibido)}`}
           </p>
@@ -220,9 +307,9 @@ function ChequesPageContent() {
       </div>
       {feedback && <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">{feedback}</div>}
 
-      {/* Filtros: aplicar ordem/venda só ao clicar Filtrar; exportações separadas */}
+      {/* Filtros: aplicar somente ao clicar em Filtrar; exportações separadas */}
       <div className="card p-4 mb-4">
-        <div className="flex flex-wrap gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Status</label>
             <select
@@ -231,15 +318,46 @@ function ChequesPageContent() {
                 setStatusFiltro(e.target.value);
                 setPage(1);
               }}
-              className="input-field w-40"
+              className="input-field"
             >
-              <option value="">Todos (exceto depositados)</option>
+              <option value="todos">Todos (incluindo repassados)</option>
               <option value="a_receber">A Receber</option>
               <option value="recebido">Recebido</option>
+              <option value="repassado">Repassado</option>
               <option value="devolvido">Devolvido</option>
             </select>
           </div>
-          <div className="min-w-[10.5rem]">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+            <input
+              type="text"
+              value={clienteInput}
+              onChange={(e) => setClienteInput(e.target.value)}
+              className="input-field"
+              placeholder="Nome fantasia, razão ou CNPJ"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Banco</label>
+            <input
+              type="text"
+              value={bancoInput}
+              onChange={(e) => setBancoInput(e.target.value)}
+              className="input-field"
+              placeholder="Ex.: Bradesco"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Nº cheque</label>
+            <input
+              type="text"
+              value={numeroInput}
+              onChange={(e) => setNumeroInput(e.target.value)}
+              className="input-field"
+              placeholder="Ex.: 003579"
+            />
+          </div>
+          <div>
             <label className="block text-xs text-gray-500 mb-1">
               Ordem / venda
             </label>
@@ -250,8 +368,7 @@ function ChequesPageContent() {
               onChange={(e) => setOrdemInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
-                  setPage(1);
+                  aplicarFiltros();
                 }
               }}
               className="input-field font-mono"
@@ -261,6 +378,8 @@ function ChequesPageContent() {
               Nº ordem do cheque ou ID da venda
             </p>
           </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end mt-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">
               Data Início
@@ -281,16 +400,67 @@ function ChequesPageContent() {
               className="input-field"
             />
           </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Valor mínimo
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={valorMinInput}
+              onChange={(e) => setValorMinInput(e.target.value)}
+              className="input-field"
+              placeholder="0,00"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Valor máximo
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={valorMaxInput}
+              onChange={(e) => setValorMaxInput(e.target.value)}
+              className="input-field"
+              placeholder="0,00"
+            />
+          </div>
           <button
             type="button"
             onClick={() => {
-              setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
-              setPage(1);
+              aplicarFiltros();
             }}
             className="btn-primary h-10 shrink-0"
           >
             <MagnifyingGlassIcon className="w-4 h-4 inline -mt-0.5 mr-1" />
             Filtrar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setStatusFiltro("todos");
+              setDataInicio("");
+              setDataFim("");
+              setOrdemInput("");
+              setOrdemFiltro("");
+              setClienteInput("");
+              setClienteFiltro("");
+              setBancoInput("");
+              setBancoFiltro("");
+              setNumeroInput("");
+              setNumeroFiltro("");
+              setValorMinInput("");
+              setValorMinFiltro("");
+              setValorMaxInput("");
+              setValorMaxFiltro("");
+              setPage(1);
+            }}
+            className="btn-secondary h-10 shrink-0"
+          >
+            Limpar
           </button>
         </div>
         <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap justify-end gap-2">
@@ -304,8 +474,8 @@ function ChequesPageContent() {
       </div>
 
       {/* Resumo por status */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-        {(["a_receber", "recebido", "devolvido"] as StatusCheque[]).map(
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {(["a_receber", "recebido", "repassado", "devolvido"] as StatusCheque[]).map(
           (s) => {
             const fromResumo = resumoMap.get(s);
             const grupo = cheques.filter((c) => c.status === s);
@@ -325,7 +495,7 @@ function ChequesPageContent() {
                 key={s}
                 className={`card p-3 text-center cursor-pointer border-2 ${statusFiltro === s ? "border-blue-500" : "border-transparent"}`}
                 onClick={() => {
-                  setStatusFiltro(statusFiltro === s ? "" : s);
+                  setStatusFiltro(statusFiltro === s ? "todos" : s);
                   setPage(1);
                 }}
               >
@@ -361,7 +531,7 @@ function ChequesPageContent() {
                 <th className="table-header">Banco / Nº</th>
                 <th className="table-header">Venda</th>
                 <th className="table-header">Valor</th>
-                <th className="table-header">Recebido em</th>
+                <th className="table-header">Pré-datado</th>
                 <th className="table-header">Compensado em</th>
                 <th className="table-header">Status</th>
                 <th className="table-header">Ações</th>

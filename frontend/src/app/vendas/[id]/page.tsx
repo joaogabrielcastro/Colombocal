@@ -2,7 +2,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeftIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowLeftIcon,
+  PrinterIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import {
   formatMoney,
   formatDate,
@@ -14,7 +18,6 @@ import {
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { DetailPageSkeleton } from "@/components/ui/skeletons";
-import { FreteOrientacaoPainel } from "@/components/FreteOrientacao";
 import { reportApiError } from "@/lib/report-api-error";
 
 export default function VendaDetailPage() {
@@ -35,7 +38,6 @@ export default function VendaDetailPage() {
   const [freteForm, setFreteForm] = useState({
     valor: "",
     recibo: false,
-    num: "",
     data: "",
   });
   const [salvandoFrete, setSalvandoFrete] = useState(false);
@@ -73,7 +75,6 @@ export default function VendaDetailPage() {
     setFreteForm({
       valor: String(parseFloat(String(venda.frete))),
       recibo: f0?.reciboEmitido ?? venda.freteRecibo,
-      num: String(f0?.reciboNumero ?? venda.freteReciboNum ?? ""),
       data: toInputDate(f0?.reciboData),
     });
   }, [venda]);
@@ -91,11 +92,11 @@ export default function VendaDetailPage() {
       const updated = await api.patch<Venda>(`/vendas/${id}`, {
         frete: valor,
         freteRecibo: freteForm.recibo,
-        freteReciboNum: freteForm.num.trim() || null,
+        freteReciboNum: null,
         freteReciboData: freteForm.data.trim() || null,
       });
       setVenda(updated);
-      toast.success("Frete e recibo atualizados");
+      toast.success("Frete atualizado");
     } catch (err: unknown) {
       reportApiError(err, { title: "Erro ao salvar frete" });
     } finally {
@@ -149,6 +150,118 @@ export default function VendaDetailPage() {
     }
   };
 
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const imprimirOrdemServico = () => {
+    if (!venda) return;
+    const w = window.open("", "_blank");
+    if (!w) return;
+
+    const clienteNome = venda.cliente.nomeFantasia || venda.cliente.razaoSocial;
+    const enderecoCliente = [
+      venda.cliente.endereco,
+      venda.cliente.cidade,
+      venda.cliente.estado,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+    const itensRows = venda.itens
+      .map(
+        (item) => `
+        <tr>
+          <td>${escapeHtml(item.produto.nome)}</td>
+          <td style="text-align:right">${escapeHtml(formatQuantidade(item.quantidade, item.produto.unidade))}</td>
+        </tr>`,
+      )
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Ordem de Serviço - Venda #${venda.id}</title>
+  <style>
+    body { font-family: Arial, sans-serif; color:#111827; margin: 24px; }
+    h1 { margin:0; font-size:20px; }
+    .meta { margin-top:6px; color:#4b5563; font-size:12px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top: 18px; }
+    .box { border:1px solid #e5e7eb; border-radius:8px; padding:10px; }
+    .label { color:#6b7280; font-size:11px; text-transform: uppercase; font-weight: 700; }
+    .value { margin-top:3px; font-size:14px; }
+    table { width:100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border:1px solid #e5e7eb; padding:8px; font-size:12px; }
+    th { background:#f9fafb; text-align:left; }
+    .obs { margin-top: 16px; border:1px dashed #d1d5db; border-radius:8px; padding:10px; min-height:56px; font-size:12px; }
+    .assinatura { margin-top: 36px; display:grid; grid-template-columns: 1fr 1fr; gap:32px; }
+    .linha { border-top:1px solid #9ca3af; padding-top:6px; text-align:center; font-size:12px; color:#374151; }
+  </style>
+</head>
+<body>
+  <h1>Ordem de Serviço - Entrega</h1>
+  <div class="meta">Venda #${venda.id} • Data ${formatDate(venda.dataVenda)}</div>
+
+  <div class="grid">
+    <div class="box">
+      <div class="label">Cliente</div>
+      <div class="value">${escapeHtml(clienteNome)}</div>
+    </div>
+    <div class="box">
+      <div class="label">Motorista</div>
+      <div class="value">${escapeHtml(venda.motorista?.nome || "-")}</div>
+    </div>
+    <div class="box">
+      <div class="label">Telefone</div>
+      <div class="value">${escapeHtml(venda.cliente.telefone || "-")}</div>
+    </div>
+    <div class="box">
+      <div class="label">Veículo / Placa</div>
+      <div class="value">${escapeHtml(
+        [venda.motorista?.veiculo, venda.motorista?.placa].filter(Boolean).join(" - ") || "-",
+      )}</div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:10px;">
+    <div class="label">Endereço / Local</div>
+    <div class="value">${escapeHtml(enderecoCliente || "-")}</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Produto</th>
+        <th style="text-align:right">Quantidade</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itensRows}
+    </tbody>
+  </table>
+
+  <div class="obs">
+    <div class="label">Observações</div>
+    <div style="margin-top:6px;">${escapeHtml(venda.observacoes || "Sem observações.")}</div>
+  </div>
+
+  <div class="assinatura">
+    <div class="linha">Assinatura do Motorista</div>
+    <div class="linha">Assinatura do Recebedor</div>
+  </div>
+</body>
+</html>`;
+
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
+
   if (loading) return <DetailPageSkeleton />;
   if (!venda)
     return (
@@ -181,6 +294,10 @@ export default function VendaDetailPage() {
           </h1>
           <p className="text-gray-500 text-sm">{formatDate(venda.dataVenda)}</p>
         </div>
+        <button onClick={imprimirOrdemServico} className="btn-secondary">
+          <PrinterIcon className="w-4 h-4" />
+          Imprimir O.S.
+        </button>
         <button
           onClick={handleCancelar}
           disabled={cancelando}
@@ -277,17 +394,14 @@ export default function VendaDetailPage() {
       </div>
 
       <div className="card p-5 mb-4">
-        <h3 className="font-semibold text-gray-900 mb-2">Frete e recibo</h3>
-        <div className="mb-3">
-          <FreteOrientacaoPainel variant="compact" />
-        </div>
+        <h3 className="font-semibold text-gray-900 mb-2">Frete e pagamento</h3>
         <p className="text-xs text-gray-500 mb-3">
           O primeiro movimento de frete da venda é mantido alinhado com os campos
-          abaixo (valor, recibo emitido, número e data).
+          abaixo (valor, frete pago e data do pagamento).
         </p>
         <form
           onSubmit={salvarFreteRecibo}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6 pb-6 border-b border-gray-100"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6 pb-6 border-b border-gray-100"
         >
           <div>
             <label className="block text-xs text-gray-500 mb-1">
@@ -313,26 +427,12 @@ export default function VendaDetailPage() {
                 }
                 className="rounded border-gray-300"
               />
-              Recibo emitido
+              Frete pago
             </label>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Nº do recibo
-            </label>
-            <input
-              type="text"
-              value={freteForm.num}
-              onChange={(e) =>
-                setFreteForm((s) => ({ ...s, num: e.target.value }))
-              }
-              className="input-field"
-              placeholder="Opcional"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Data do recibo
+              Data do pagamento
             </label>
             <input
               type="date"
@@ -343,13 +443,13 @@ export default function VendaDetailPage() {
               className="input-field"
             />
           </div>
-          <div className="md:col-span-2 lg:col-span-4">
+          <div className="md:col-span-2 lg:col-span-3">
             <button
               type="submit"
               disabled={salvandoFrete}
               className="btn-primary text-sm"
             >
-              {salvandoFrete ? "Salvando…" : "Salvar frete / recibo"}
+              {salvandoFrete ? "Salvando…" : "Salvar frete"}
             </button>
           </div>
         </form>
@@ -360,8 +460,7 @@ export default function VendaDetailPage() {
               <li key={f.id} className="py-2 flex justify-between gap-2">
                 <span className="text-gray-700">
                   {formatDate(f.data)} •{" "}
-                  {f.reciboEmitido ? "Recibo emitido" : "Sem recibo"}
-                  {f.reciboNumero ? ` (${f.reciboNumero})` : ""}
+                  {f.reciboEmitido ? "Frete pago" : "Pagamento pendente"}
                   {f.reciboData ? ` • ${formatDate(f.reciboData)}` : ""}
                 </span>
                 <span className="font-medium shrink-0">
@@ -423,7 +522,7 @@ export default function VendaDetailPage() {
             }
           >
             {formatMoney(saldoVenda)}
-            {saldoVenda >= 0 ? " (quitado ou crédito)" : " (a receber)"}
+            {saldoVenda >= 0 ? " (quitado)" : " (a receber)"}
           </span>
         </p>
         {venda.pagamentos && venda.pagamentos.length > 0 ? (

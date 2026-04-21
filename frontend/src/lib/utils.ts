@@ -25,11 +25,17 @@ export function formatQuantidade(
   return `${num.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })} ${unidade}`;
 }
 
-export type StatusCheque = "a_receber" | "recebido" | "depositado" | "devolvido";
+export type StatusCheque =
+  | "a_receber"
+  | "recebido"
+  | "repassado"
+  | "depositado"
+  | "devolvido";
 
 export const STATUS_CHEQUE_LABEL: Record<StatusCheque, string> = {
   a_receber: "A Receber",
   recebido: "Recebido",
+  repassado: "Repassado",
   depositado: "Depositado",
   devolvido: "Devolvido",
 };
@@ -37,6 +43,7 @@ export const STATUS_CHEQUE_LABEL: Record<StatusCheque, string> = {
 export const STATUS_CHEQUE_COLOR: Record<StatusCheque, string> = {
   a_receber: "bg-orange-100 text-orange-800",
   recebido: "bg-yellow-100 text-yellow-800",
+  repassado: "bg-emerald-100 text-emerald-800",
   depositado: "bg-green-100 text-green-800",
   devolvido: "bg-red-100 text-red-800",
 };
@@ -45,12 +52,6 @@ export function toInputDate(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
   return d.toISOString().split("T")[0];
-}
-
-export function classNames(
-  ...classes: (string | undefined | null | false)[]
-): string {
-  return classes.filter(Boolean).join(" ");
 }
 
 // Tipos principais
@@ -127,6 +128,8 @@ export interface Venda {
   pagamentos?: Pagamento[];
   titulos?: TituloReceber[];
   fretes?: FreteMovimento[];
+  /** Soma do saldo em aberto nos títulos desta venda (API GET /vendas). */
+  saldoEmAbertoTitulos?: number;
 }
 
 export interface TituloReceber {
@@ -183,7 +186,7 @@ export interface Pagamento {
   venda?: { id: number; dataVenda: string; valorTotal: number } | null;
 }
 
-/** Resumo do recibo de frete (primeiro movimento ou flags na venda) para listagens e relatórios. */
+/** Resumo do status de pagamento do frete (primeiro movimento ou flags na venda). */
 export function formatFreteReciboLinha(v: {
   frete?: unknown;
   freteRecibo?: boolean;
@@ -193,13 +196,10 @@ export function formatFreteReciboLinha(v: {
   const freteVal = parseFloat(String(v.frete ?? 0));
   const f = v.fretes?.[0];
   if (freteVal <= 0 && !f) return "—";
-  const num = f?.reciboNumero || v.freteReciboNum || "";
   const dataStr = f?.reciboData ? formatDate(f.reciboData) : "";
-  const ok = f?.reciboEmitido || v.freteRecibo || !!String(num).trim();
-  if (!ok && freteVal > 0) return "Pendente";
-  const parts: string[] = [];
-  if (String(num).trim()) parts.push(`Nº ${num}`);
-  if (dataStr) parts.push(dataStr);
-  if (parts.length === 0 && ok) parts.push("Emitido");
-  return parts.join(" · ") || "—";
+  const pago = f?.reciboEmitido || v.freteRecibo;
+  if (!pago && freteVal > 0) return "Pagamento pendente";
+  if (pago && dataStr) return `Pago em ${dataStr}`;
+  if (pago) return "Pago";
+  return "—";
 }

@@ -3,6 +3,7 @@ const { z } = require("zod");
 const chequeStatusEnum = z.enum([
   "a_receber",
   "recebido",
+  "repassado",
   "depositado",
   "devolvido",
 ]);

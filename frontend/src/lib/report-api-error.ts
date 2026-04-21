@@ -3,7 +3,7 @@
 import { toast } from 'sonner';
 import { ApiError } from './api';
 
-export type ReportApiErrorOptions = {
+type ReportApiErrorOptions = {
   /** Texto curto no topo do toast */
   title?: string;
   /** Inclui botão "Tentar novamente" */

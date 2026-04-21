@@ -60,10 +60,17 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { nome, codigo, precoPadrao, unidade } = req.body;
+    const codigoTrim =
+      codigo != null && String(codigo).trim() !== ""
+        ? String(codigo).trim()
+        : null;
+    const codigoFinal =
+      codigoTrim ||
+      `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     const produto = await prisma.produto.create({
       data: {
         nome,
-        codigo,
+        codigo: codigoFinal,
         precoPadrao,
         unidade: unidade || "ton",
       },

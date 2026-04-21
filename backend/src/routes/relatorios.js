@@ -23,7 +23,7 @@ function getDateRange(dataInicio, dataFim) {
 // GET /api/relatorios/vendas
 router.get("/vendas", async (req, res) => {
   try {
-    const { dataInicio, dataFim, clienteId, vendedorId, produtoId } = req.query;
+    const { dataInicio, dataFim, clienteId, vendedorId, produtoId, busca } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 200,
       maxTake: 1000,
@@ -36,12 +36,21 @@ router.get("/vendas", async (req, res) => {
     if (produtoId) {
       where.itens = { some: { produtoId: parseInt(produtoId, 10) } };
     }
+    if (busca && String(busca).trim()) {
+      const term = String(busca).trim();
+      where.OR = [
+        { cliente: { nomeFantasia: { contains: term, mode: "insensitive" } } },
+        { cliente: { razaoSocial: { contains: term, mode: "insensitive" } } },
+        { vendedor: { nome: { contains: term, mode: "insensitive" } } },
+        { observacoes: { contains: term, mode: "insensitive" } },
+      ];
+    }
 
     const aggWhere = { ...where };
-    const [totaisAgg, vendas, total] = await Promise.all([
+    const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg] = await Promise.all([
       prisma.venda.aggregate({
         where: aggWhere,
-        _sum: { valorTotal: true },
+        _sum: { valorTotal: true, frete: true },
         _count: { id: true },
       }),
       prisma.venda.findMany({
@@ -58,22 +67,123 @@ router.get("/vendas", async (req, res) => {
         skip,
       }),
       prisma.venda.count({ where }),
+      prisma.venda.groupBy({
+        by: ["vendedorId"],
+        where,
+        _sum: { valorTotal: true, frete: true },
+        _count: { id: true },
+      }),
+      prisma.venda.groupBy({
+        by: ["clienteId"],
+        where,
+        _sum: { valorTotal: true },
+        _count: { id: true },
+      }),
+      prisma.itemVenda.groupBy({
+        by: ["produtoId"],
+        where: { venda: where },
+        _sum: { quantidade: true, subtotal: true },
+        _count: { id: true },
+      }),
     ]);
 
     const totalFaturamento = parseFloat(totaisAgg._sum.valorTotal || 0);
+    const totalFrete = parseFloat(totaisAgg._sum.frete || 0);
     const totalQuantidade = vendas.reduce(
       (acc, v) =>
         acc + v.itens.reduce((a, i) => a + parseFloat(i.quantidade), 0),
       0,
     );
 
+    const vendedorIds = porVendedorAgg.map((x) => x.vendedorId).filter(Boolean);
+    const clienteIds = porClienteAgg.map((x) => x.clienteId).filter(Boolean);
+    const produtoIds = porProdutoAgg.map((x) => x.produtoId).filter(Boolean);
+
+    const [vendedores, clientes, produtos] = await Promise.all([
+      vendedorIds.length
+        ? prisma.vendedor.findMany({
+            where: { id: { in: vendedorIds } },
+            select: { id: true, nome: true, comissaoPercentual: true },
+          })
+        : [],
+      clienteIds.length
+        ? prisma.cliente.findMany({
+            where: { id: { in: clienteIds } },
+            select: { id: true, razaoSocial: true, nomeFantasia: true },
+          })
+        : [],
+      produtoIds.length
+        ? prisma.produto.findMany({
+            where: { id: { in: produtoIds } },
+            select: { id: true, nome: true, unidade: true },
+          })
+        : [],
+    ]);
+
+    const vendedorMap = new Map(vendedores.map((x) => [x.id, x]));
+    const clienteMap = new Map(clientes.map((x) => [x.id, x]));
+    const produtoMap = new Map(produtos.map((x) => [x.id, x]));
+
+    const resumoRepresentantes = porVendedorAgg
+      .map((x) => {
+        const vendedor = vendedorMap.get(x.vendedorId);
+        const faturamento = parseFloat(x._sum?.valorTotal || 0);
+        const frete = parseFloat(x._sum?.frete || 0);
+        const quantidadeVendas = x._count?.id || 0;
+        return {
+          vendedorId: x.vendedorId,
+          vendedorNome: vendedor?.nome || `Vendedor #${x.vendedorId}`,
+          comissaoPercentual: parseFloat(vendedor?.comissaoPercentual || 0),
+          faturamento,
+          frete,
+          quantidadeVendas,
+          ticketMedio: quantidadeVendas > 0 ? faturamento / quantidadeVendas : 0,
+          participacao: totalFaturamento > 0 ? (faturamento / totalFaturamento) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.faturamento - a.faturamento);
+
+    const resumoClientes = porClienteAgg
+      .map((x) => {
+        const cliente = clienteMap.get(x.clienteId);
+        const faturamento = parseFloat(x._sum?.valorTotal || 0);
+        const quantidadeVendas = x._count?.id || 0;
+        return {
+          clienteId: x.clienteId,
+          clienteNome:
+            cliente?.nomeFantasia?.trim() || cliente?.razaoSocial || `Cliente #${x.clienteId}`,
+          faturamento,
+          quantidadeVendas,
+          ticketMedio: quantidadeVendas > 0 ? faturamento / quantidadeVendas : 0,
+        };
+      })
+      .sort((a, b) => b.faturamento - a.faturamento);
+
+    const resumoProdutos = porProdutoAgg
+      .map((x) => {
+        const produto = produtoMap.get(x.produtoId);
+        return {
+          produtoId: x.produtoId,
+          produtoNome: produto?.nome || `Produto #${x.produtoId}`,
+          unidade: produto?.unidade || "",
+          quantidade: parseFloat(x._sum?.quantidade || 0),
+          faturamento: parseFloat(x._sum?.subtotal || 0),
+          quantidadeItens: x._count?.id || 0,
+        };
+      })
+      .sort((a, b) => b.faturamento - a.faturamento);
+
     setPaginationHeaders(res, { total, take, skip });
     res.json({
       vendas,
       totalFaturamento,
+      totalFrete,
       totalQuantidade,
       quantidade: vendas.length,
       totalRegistros: total,
+      resumoRepresentantes,
+      resumoClientes,
+      resumoProdutos,
     });
   } catch (error) {
     handleRouteError(res, error);
@@ -201,70 +311,6 @@ router.get("/comissoes", async (req, res) => {
   }
 });
 
-// GET /api/relatorios/faturamento
-router.get("/faturamento", async (req, res) => {
-  try {
-    const { dataInicio, dataFim } = req.query;
-    const vendaWhere = {};
-    if (dataInicio || dataFim)
-      vendaWhere.dataVenda = getDateRange(dataInicio, dataFim);
-
-    const vendas = await prisma.venda.findMany({
-      where: vendaWhere,
-      include: { cliente: true, itens: { include: { produto: true } } },
-      orderBy: { dataVenda: "asc" },
-    });
-
-    // Por cliente
-    const porCliente = {};
-    for (const v of vendas) {
-      const key = v.clienteId;
-      if (!porCliente[key]) {
-        porCliente[key] = { cliente: v.cliente, total: 0, quantidadeVendas: 0 };
-      }
-      porCliente[key].total += parseFloat(v.valorTotal);
-      porCliente[key].quantidadeVendas++;
-    }
-
-    // Por produto
-    const porProduto = {};
-    for (const v of vendas) {
-      for (const item of v.itens) {
-        const key = item.produtoId;
-        if (!porProduto[key]) {
-          porProduto[key] = { produto: item.produto, total: 0, quantidade: 0 };
-        }
-        porProduto[key].total += parseFloat(item.subtotal);
-        porProduto[key].quantidade += parseFloat(item.quantidade);
-      }
-    }
-
-    // Por mês
-    const porMes = {};
-    for (const v of vendas) {
-      const mes = `${v.dataVenda.getFullYear()}-${String(v.dataVenda.getMonth() + 1).padStart(2, "0")}`;
-      if (!porMes[mes]) porMes[mes] = { mes, total: 0, quantidadeVendas: 0 };
-      porMes[mes].total += parseFloat(v.valorTotal);
-      porMes[mes].quantidadeVendas++;
-    }
-
-    const totalGeral = vendas.reduce(
-      (acc, v) => acc + parseFloat(v.valorTotal),
-      0,
-    );
-
-    res.json({
-      totalGeral,
-      quantidadeVendas: vendas.length,
-      porCliente: Object.values(porCliente).sort((a, b) => b.total - a.total),
-      porProduto: Object.values(porProduto).sort((a, b) => b.total - a.total),
-      porMes: Object.values(porMes).sort((a, b) => a.mes.localeCompare(b.mes)),
-    });
-  } catch (error) {
-    handleRouteError(res, error);
-  }
-});
-
 function sumDecimal(v) {
   if (v == null || v === "") return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -282,7 +328,7 @@ function normalizeChequeStatusSlug(raw) {
 }
 
 function mapChequeGroupBy(rows) {
-  const order = ["a_receber", "recebido", "depositado", "devolvido"];
+  const order = ["a_receber", "recebido", "repassado", "depositado", "devolvido"];
   const merged = new Map();
   for (const row of rows) {
     const status = normalizeChequeStatusSlug(row.status);
@@ -363,16 +409,14 @@ router.get("/financeiro", async (req, res) => {
 
     const contasClientes = clientes.map((c) => {
       const agg = aggMap.get(c.id) || { debito: 0, credito: 0 };
-      const saldo = agg.credito - agg.debito; // negativo = em aberto
+      const saldo = Math.max(0, agg.debito - agg.credito);
       return { cliente: c, debito: agg.debito, credito: agg.credito, saldo };
     });
 
     const clientesDevedores = contasClientes
-      .filter((c) => c.saldo < 0)
-      .sort((a, b) => a.saldo - b.saldo);
-    const totalEmAberto = Math.abs(
-      clientesDevedores.reduce((acc, c) => acc + c.saldo, 0),
-    );
+      .filter((c) => c.saldo > 0)
+      .sort((a, b) => b.saldo - a.saldo);
+    const totalEmAberto = clientesDevedores.reduce((acc, c) => acc + c.saldo, 0);
 
     res.json({
       contasClientes,

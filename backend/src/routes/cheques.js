@@ -22,7 +22,7 @@ const {
 async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataCompensacaoDate) {
   const id = chequeAtual.id;
   const data = { status: statusValidado };
-  if (statusValidado === "depositado") {
+  if (statusValidado === "depositado" || statusValidado === "repassado") {
     data.dataCompensacao = dataCompensacaoDate || new Date();
   }
 
@@ -40,7 +40,9 @@ async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataC
 
   const temPagamento = !!chequeAtual.pagamento;
   const precisaPagamento =
-    statusValidado === "recebido" || statusValidado === "depositado";
+    statusValidado === "recebido" ||
+    statusValidado === "depositado" ||
+    statusValidado === "repassado";
 
   if (precisaPagamento && !temPagamento) {
     await tx.pagamento.create({
@@ -72,7 +74,18 @@ async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataC
 // GET /api/cheques
 router.get("/", async (req, res) => {
   try {
-    const { clienteId, status, dataInicio, dataFim, ordem } = req.query;
+    const {
+      clienteId,
+      status,
+      dataInicio,
+      dataFim,
+      ordem,
+      cliente,
+      banco,
+      numero,
+      valorMin,
+      valorMax,
+    } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 100,
       maxTake: 500,
@@ -80,21 +93,21 @@ router.get("/", async (req, res) => {
     const includeResumo =
       req.query.resumo === "1" || req.query.resumo === "true";
 
-    if (status && String(status).trim() === "depositado") {
-      setPaginationHeaders(res, { total: 0, take, skip });
-      if (includeResumo) {
-        return res.json({ items: [], resumoPorStatus: [] });
-      }
-      return res.json([]);
-    }
-
     const and = [];
     if (clienteId) and.push({ clienteId: parseInt(clienteId, 10) });
     if (status && String(status).trim()) {
-      and.push({ status: String(status).trim() });
-    } else {
-      and.push({ status: { not: "depositado" } });
+      const statusNorm = String(status).trim();
+      if (statusNorm === "todos" || statusNorm === "all") {
+        // sem filtro de status (inclui repassado / depositado)
+      } else if (statusNorm === "fila") {
+        and.push({ status: { notIn: ["repassado", "depositado"] } });
+      } else if (statusNorm === "finalizado") {
+        and.push({ status: { in: ["repassado", "depositado"] } });
+      } else {
+        and.push({ status: statusNorm });
+      }
     }
+    // sem ?status= na query: lista completa (igual a status=todos). Use status=fila para excluir repassado/legado.
     if (dataInicio || dataFim) {
       const dr = {};
       if (dataInicio) dr.gte = new Date(dataInicio);
@@ -112,6 +125,40 @@ router.get("/", async (req, res) => {
           OR: [{ numeroOrdem: n }, { vendaId: n }],
         });
       }
+    }
+    if (cliente && String(cliente).trim()) {
+      const term = String(cliente).trim();
+      and.push({
+        cliente: {
+          OR: [
+            { nomeFantasia: { contains: term, mode: "insensitive" } },
+            { razaoSocial: { contains: term, mode: "insensitive" } },
+            { cnpj: { contains: term } },
+          ],
+        },
+      });
+    }
+    if (banco && String(banco).trim()) {
+      and.push({ banco: { contains: String(banco).trim(), mode: "insensitive" } });
+    }
+    if (numero && String(numero).trim()) {
+      and.push({ numero: { contains: String(numero).trim() } });
+    }
+    if (
+      (valorMin != null && String(valorMin).trim() !== "") ||
+      (valorMax != null && String(valorMax).trim() !== "")
+    ) {
+      const vr = {};
+      if (valorMin != null && String(valorMin).trim() !== "") {
+        const min = Number(String(valorMin).replace(",", "."));
+        if (!Number.isNaN(min)) vr.gte = min;
+      }
+      if (valorMax != null && String(valorMax).trim() !== "") {
+        const max = Number(String(valorMax).replace(",", "."));
+        // 0 ou inválido = sem teto (evita lista vazia com "máx. 0" no formulário)
+        if (!Number.isNaN(max) && max > 0) vr.lte = max;
+      }
+      if (Object.keys(vr).length) and.push({ valor: vr });
     }
     const where = and.length ? { AND: and } : {};
 
@@ -146,7 +193,7 @@ router.get("/", async (req, res) => {
 
     if (includeResumo) {
       const raw = results[2];
-      const order = ["a_receber", "recebido", "devolvido"];
+      const order = ["a_receber", "recebido", "repassado", "devolvido", "depositado"];
       const resumoPorStatus = raw
         .map((row) => ({
           status: String(row.status || "").trim(),
@@ -219,7 +266,11 @@ router.post("/", async (req, res) => {
       });
 
       // Pagamento só é criado quando o cheque foi efetivamente recebido
-      if (statusInicial === "recebido" || statusInicial === "depositado") {
+      if (
+        statusInicial === "recebido" ||
+        statusInicial === "depositado" ||
+        statusInicial === "repassado"
+      ) {
         await tx.pagamento.create({
           data: {
             clienteId: b.clienteId,

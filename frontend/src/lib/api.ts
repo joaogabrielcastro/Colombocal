@@ -88,7 +88,16 @@ export async function apiFetch<T>(path: string, options?: FetchOptions): Promise
 export async function apiFetchWithMeta<T>(
   path: string,
   options?: FetchOptions,
-): Promise<{ data: T; meta: { totalCount: number | null; pageSize: number | null; pageOffset: number | null } }> {
+): Promise<{
+  data: T;
+  meta: {
+    totalCount: number | null;
+    pageSize: number | null;
+    pageOffset: number | null;
+    /** Soma de valorTotal de todas as vendas que batem com o filtro (não só a página). */
+    sumValorTotal: number | null;
+  };
+}> {
   const maxRetries = options?.retries ?? 1;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -120,12 +129,20 @@ export async function apiFetchWithMeta<T>(
         return Number.isNaN(n) ? null : n;
       };
 
+      const parseHeaderFloat = (name: string) => {
+        const v = res.headers.get(name);
+        if (v == null) return null;
+        const n = parseFloat(v);
+        return Number.isNaN(n) ? null : n;
+      };
+
       return {
         data: parsed as T,
         meta: {
           totalCount: parseHeaderInt('x-total-count'),
           pageSize: parseHeaderInt('x-page-size'),
           pageOffset: parseHeaderInt('x-page-offset'),
+          sumValorTotal: parseHeaderFloat('x-sum-valor-total'),
         },
       };
     } catch (e) {

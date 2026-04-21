@@ -15,7 +15,6 @@ import {
   type Motorista,
 } from "@/lib/utils";
 import api from "@/lib/api";
-import { FreteOrientacaoPainel } from "@/components/FreteOrientacao";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
 
@@ -60,7 +59,9 @@ function NovaVendaForm() {
   ]);
 
   const [freteRecibo, setFreteRecibo] = useState(false);
-  const [freteReciboNum, setFreteReciboNum] = useState("");
+  const [freteReciboData, setFreteReciboData] = useState(
+    new Date().toISOString().split("T")[0],
+  );
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -269,7 +270,8 @@ function NovaVendaForm() {
         motoristaId: motoristaId || undefined,
         frete: freteVal,
         freteRecibo,
-        freteReciboNum: freteRecibo ? freteReciboNum : undefined,
+        freteReciboNum: null,
+        freteReciboData: freteRecibo ? freteReciboData : null,
         dataVenda,
         observacoes,
         itens: itensValidos,
@@ -370,7 +372,7 @@ function NovaVendaForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Recibo de Frete
+                Pagamento do frete
               </label>
               <label className="flex items-center gap-2 mt-2 cursor-pointer">
                 <input
@@ -380,21 +382,17 @@ function NovaVendaForm() {
                   className="w-4 h-4 rounded"
                 />
                 <span className="text-sm text-gray-700">
-                  Emitir recibo de frete
+                  Frete pago
                 </span>
               </label>
               {freteRecibo && (
                 <input
-                  type="text"
-                  placeholder="Número do recibo"
-                  value={freteReciboNum}
-                  onChange={(e) => setFreteReciboNum(e.target.value)}
+                  type="date"
+                  value={freteReciboData}
+                  onChange={(e) => setFreteReciboData(e.target.value)}
                   className="input-field mt-2"
                 />
               )}
-            </div>
-            <div className="col-span-full">
-              <FreteOrientacaoPainel variant="compact" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -530,7 +528,7 @@ function NovaVendaForm() {
               </div>
               {freteRecibo && (
                 <div className="text-xs text-blue-600 text-right">
-                  Recibo de frete{freteReciboNum ? `: ${freteReciboNum}` : ""}
+                  Frete pago{freteReciboData ? ` em ${new Date(freteReciboData).toLocaleDateString("pt-BR")}` : ""}
                 </div>
               )}
             </div>

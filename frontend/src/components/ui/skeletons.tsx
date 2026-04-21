@@ -1,4 +1,4 @@
-export function SkeletonBox({
+function SkeletonBox({
   className,
   ...rest
 }: React.HTMLAttributes<HTMLDivElement>) {
@@ -10,7 +10,7 @@ export function SkeletonBox({
   );
 }
 
-export function PageHeaderSkeleton() {
+function PageHeaderSkeleton() {
   return (
     <div className="mb-6 space-y-2">
       <SkeletonBox className="h-8 w-48" />
@@ -20,7 +20,7 @@ export function PageHeaderSkeleton() {
 }
 
 /** Grade de cards estilo dashboard */
-export function DashboardStatGridSkeleton({ cards = 4 }: { cards?: number }) {
+function DashboardStatGridSkeleton({ cards = 4 }: { cards?: number }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       {Array.from({ length: cards }).map((_, i) => (
@@ -125,23 +125,6 @@ export function DetailPageSkeleton() {
         </div>
       </div>
       <SkeletonBox className="h-32 w-full rounded-xl" />
-    </div>
-  );
-}
-
-export function CobrancaPanelSkeleton() {
-  return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <PageHeaderSkeleton />
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <SkeletonBox key={i} className="h-20 rounded-xl" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SkeletonBox className="h-72 rounded-xl" />
-        <SkeletonBox className="h-72 rounded-xl" />
-      </div>
     </div>
   );
 }

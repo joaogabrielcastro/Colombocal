@@ -10,7 +10,12 @@ import SearchableSelect from "@/components/SearchableSelect";
 
 function vendaOptionLabel(v: Venda) {
   const valor = formatMoney(v.valorTotal);
-  return `Venda #${v.id} – ${new Date(v.dataVenda).toLocaleDateString("pt-BR")} – ${valor}`;
+  const base = `Venda #${v.id} – ${new Date(v.dataVenda).toLocaleDateString("pt-BR")} – ${valor}`;
+  const saldo =
+    v.saldoEmAbertoTitulos != null && v.saldoEmAbertoTitulos > 0
+      ? ` · em aberto ${formatMoney(v.saldoEmAbertoTitulos)}`
+      : "";
+  return `${base}${saldo}`;
 }
 
 function NovoChequeForm() {
@@ -55,7 +60,9 @@ function NovoChequeForm() {
     }
     let cancelled = false;
     api
-      .get<Venda[]>(`/vendas?clienteId=${form.clienteId}&take=500`)
+      .get<Venda[]>(
+        `/vendas?clienteId=${form.clienteId}&take=500&saldoEmAberto=true`,
+      )
       .then((rows) => {
         if (!cancelled) setVendas(rows);
       })
@@ -125,7 +132,7 @@ function NovoChequeForm() {
           <h1 className="text-2xl font-bold text-gray-900">Registrar Cheque</h1>
           <p className="text-gray-500 text-sm">
             Cheques A Receber não afetam o saldo até serem marcados como
-            Recebidos
+            Recebidos. Depois, podem ser Repassados para circular.
           </p>
         </div>
       </div>
@@ -170,7 +177,7 @@ function NovoChequeForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Data de Recebimento
+              Data do pré-datado
             </label>
             <input
               type="date"
@@ -240,7 +247,7 @@ function NovoChequeForm() {
                   ? "Busque por nº da venda ou valor…"
                   : "Selecione o cliente primeiro"
               }
-              emptyHint="Deixe em branco se não houver venda específica."
+              emptyHint="Só aparecem vendas com parcela em aberto no título. Deixe em branco se não houver venda específica."
             />
           </div>
 
@@ -257,7 +264,7 @@ function NovoChequeForm() {
                 A Receber (cheque prometido, ainda não entregue)
               </option>
               <option value="recebido">Recebido (cheque em mãos)</option>
-              <option value="depositado">Depositado</option>
+              <option value="repassado">Repassado (circulação)</option>
               <option value="devolvido">Devolvido</option>
             </select>
           </div>

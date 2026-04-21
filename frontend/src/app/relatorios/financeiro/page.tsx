@@ -15,6 +15,7 @@ interface ContaCliente {
   cliente: { id: number; razaoSocial: string; nomeFantasia?: string };
   saldo: number;
   debito: number;
+  /** Soma de valor pago nos títulos a receber (nome técnico na API: credito). */
   credito: number;
 }
 
@@ -30,7 +31,8 @@ interface ChequeItem {
   valor: number;
   banco: string;
   numero: string;
-  dataCompensacao: string;
+  dataRecebimento?: string;
+  dataCompensacao?: string | null;
   status: string;
 }
 
@@ -85,7 +87,13 @@ function normalizeChequesPorStatus(raw: unknown): ChequeStatus[] {
     cur.total += total;
     merged.set(status, cur);
   }
-  const order = ["a_receber", "recebido", "depositado", "devolvido"];
+  const order = [
+    "a_receber",
+    "recebido",
+    "repassado",
+    "depositado",
+    "devolvido",
+  ];
   return [...merged.values()].sort((a, b) => {
     const ia = order.indexOf(a.status);
     const ib = order.indexOf(b.status);
@@ -120,6 +128,7 @@ function normalizeFinanceiroPayload(data: FinanceiroData): FinanceiroData {
 const STATUS_LABEL: Record<string, string> = {
   a_receber: "A Receber",
   recebido: "Recebido",
+  repassado: "Repassado",
   depositado: "Depositado",
   devolvido: "Devolvido",
 };
@@ -127,6 +136,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   a_receber: "bg-orange-100 text-orange-800",
   recebido: "bg-blue-100 text-blue-800",
+  repassado: "bg-emerald-100 text-emerald-800",
   depositado: "bg-green-100 text-green-800",
   devolvido: "bg-red-100 text-red-800",
 };
@@ -155,7 +165,7 @@ export default function FinanceiroPage() {
     let csv = "";
     if (aba === "devedores") {
       csv =
-        "Cliente,Débitos,Créditos,Saldo\n" +
+        "Cliente,Débitos,Pagamentos,Em aberto\n" +
         dados.clientesDevedores
           .map(
             (c) =>
@@ -166,7 +176,7 @@ export default function FinanceiroPage() {
       const lista =
         aba === "pendentes" ? dados.chequesPendentes : dados.chequesDevolvidos;
       csv =
-        "Cliente,Banco,Número,Vencimento,Valor,Status\n" +
+        "Cliente,Banco,Número,Pre-datado,Compensação,Valor,Status\n" +
         lista
           .map((c) =>
             [
@@ -176,7 +186,8 @@ export default function FinanceiroPage() {
               ),
               c.banco.replace(/[,;"]/g, " "),
               c.numero,
-              formatDate(c.dataCompensacao),
+              formatDate(c.dataRecebimento),
+              c.dataCompensacao ? formatDate(c.dataCompensacao) : "",
               parseFloat(String(c.valor)).toFixed(2),
               c.status,
             ].join(","),
@@ -203,10 +214,19 @@ export default function FinanceiroPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Relatório Financeiro
-        </h1>
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Relatório Financeiro
+          </h1>
+          <p className="text-gray-500 text-sm mt-1 max-w-2xl">
+            Os valores de <strong>clientes devedores</strong> vêm da{" "}
+            <strong>carteira de títulos</strong> (valor original − pago em cada
+            título), não da mesma conta corrente “vendas − pagamentos” da ficha
+            do cliente. Cheques incluem <strong>repassado</strong> (circulação) e{" "}
+            <strong>depositado</strong> apenas como legado.
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -267,7 +287,7 @@ export default function FinanceiroPage() {
                 {dados.chequesPendentesCount ?? dados.chequesPendentes.length}
               </p>
               <p className="text-[10px] text-gray-400 mt-1">
-                A receber + recebido (ainda não depositado)
+                A receber + recebido (ainda não finalizado)
               </p>
             </div>
             <div className="card p-4 text-center">
@@ -344,16 +364,20 @@ export default function FinanceiroPage() {
                   <thead>
                     <tr>
                       <th className="table-header">Cliente</th>
-                      <th className="table-header text-right">Total Débitos</th>
                       <th className="table-header text-right">
-                        Total Créditos
+                        Original (títulos)
                       </th>
-                      <th className="table-header text-right">Saldo</th>
+                      <th className="table-header text-right">
+                        Pago (títulos)
+                      </th>
+                      <th className="table-header text-right">
+                        Em aberto (títulos)
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {dados.clientesDevedores
-                      .sort((a, b) => a.saldo - b.saldo)
+                      .sort((a, b) => b.saldo - a.saldo)
                       .map((c) => (
                         <tr key={c.cliente.id} className="table-row">
                           <td className="table-cell">
@@ -381,7 +405,7 @@ export default function FinanceiroPage() {
                       ))}
                     <tr className="bg-gray-50 font-bold">
                       <td className="table-cell" colSpan={3}>
-                        Total em Aberto
+                        Total em aberto (títulos)
                       </td>
                       <td className="table-cell text-right text-red-600">
                         {formatMoney(dados.totalEmAberto)}
@@ -425,7 +449,8 @@ export default function FinanceiroPage() {
                       <th className="table-header">Cliente</th>
                       <th className="table-header">Banco</th>
                       <th className="table-header">Número</th>
-                      <th className="table-header">Previsão Comp.</th>
+                      <th className="table-header">Pré-datado</th>
+                      <th className="table-header">Compensação</th>
                       <th className="table-header">Status</th>
                       <th className="table-header text-right">Valor</th>
                     </tr>
@@ -438,6 +463,9 @@ export default function FinanceiroPage() {
                         </td>
                         <td className="table-cell">{c.banco}</td>
                         <td className="table-cell">{c.numero}</td>
+                        <td className="table-cell">
+                          {formatDate(c.dataRecebimento)}
+                        </td>
                         <td className="table-cell">
                           {c.dataCompensacao
                             ? formatDate(c.dataCompensacao)
@@ -456,7 +484,7 @@ export default function FinanceiroPage() {
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-bold">
-                      <td className="table-cell" colSpan={5}>
+                      <td className="table-cell" colSpan={6}>
                         Total
                         {dados.chequesPendentesValorTotal != null &&
                         (dados.chequesPendentesCount ?? 0) >
@@ -494,7 +522,8 @@ export default function FinanceiroPage() {
                       <th className="table-header">Cliente</th>
                       <th className="table-header">Banco</th>
                       <th className="table-header">Número</th>
-                      <th className="table-header">Data Receb.</th>
+                      <th className="table-header">Pré-datado</th>
+                      <th className="table-header">Compensação</th>
                       <th className="table-header text-right">Valor</th>
                     </tr>
                   </thead>
@@ -512,7 +541,12 @@ export default function FinanceiroPage() {
                         <td className="table-cell">{c.banco}</td>
                         <td className="table-cell">{c.numero}</td>
                         <td className="table-cell">
-                          {formatDate(c.dataCompensacao)}
+                          {formatDate(c.dataRecebimento)}
+                        </td>
+                        <td className="table-cell">
+                          {c.dataCompensacao
+                            ? formatDate(c.dataCompensacao)
+                            : "—"}
                         </td>
                         <td className="table-cell text-right font-semibold text-red-600">
                           {formatMoney(c.valor)}
@@ -520,7 +554,7 @@ export default function FinanceiroPage() {
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-bold">
-                      <td className="table-cell" colSpan={4}>
+                      <td className="table-cell" colSpan={5}>
                         Total Devolvido
                       </td>
                       <td className="table-cell text-right text-red-600">

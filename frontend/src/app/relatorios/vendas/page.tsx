@@ -9,7 +9,10 @@ import {
   formatMoney,
   formatDate,
   formatFreteReciboLinha,
+  type Cliente,
+  type Produto,
   type Venda,
+  type Vendedor,
 } from "@/lib/utils";
 import api, { apiFetchWithMeta } from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
@@ -18,16 +21,58 @@ import * as XLSX from "xlsx";
 interface RelVendas {
   vendas: Venda[];
   totalFaturamento: number;
+  totalFrete?: number;
   totalQuantidade: number;
   quantidade: number;
   totalRegistros?: number;
+  resumoRepresentantes?: Array<{
+    vendedorId: number;
+    vendedorNome: string;
+    comissaoPercentual: number;
+    faturamento: number;
+    frete: number;
+    quantidadeVendas: number;
+    ticketMedio: number;
+    participacao: number;
+  }>;
+  resumoClientes?: Array<{
+    clienteId: number;
+    clienteNome: string;
+    faturamento: number;
+    quantidadeVendas: number;
+    ticketMedio: number;
+  }>;
+  resumoProdutos?: Array<{
+    produtoId: number;
+    produtoNome: string;
+    unidade: string;
+    quantidade: number;
+    faturamento: number;
+    quantidadeItens: number;
+  }>;
 }
+
+type SortRepKey = "nome" | "quantidade" | "participacao" | "total";
 
 export default function RelatorioVendasPage() {
   const [data, setData] = useState<RelVendas | null>(null);
   const [loading, setLoading] = useState(false);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [busca, setBusca] = useState("");
+  const [vendedorId, setVendedorId] = useState("");
+  const [clienteId, setClienteId] = useState("");
+  const [produtoId, setProdutoId] = useState("");
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [repSort, setRepSort] = useState<{
+    key: SortRepKey;
+    dir: "asc" | "desc";
+  }>({
+    key: "total",
+    dir: "desc",
+  });
 
   // Default: mês corrente
   useEffect(() => {
@@ -39,12 +84,21 @@ export default function RelatorioVendasPage() {
     setDataInicio(ini);
     setDataFim(fim);
     buscar(ini, fim);
+    void Promise.all([
+      api.get<Vendedor[]>("/vendedores?take=500"),
+      api.get<{ clientes: Cliente[] }>("/clientes?ativo=true&take=500"),
+      api.get<Produto[]>("/produtos?ativo=true&take=500"),
+    ]).then(([vendedoresResp, clientesResp, produtosResp]) => {
+      setVendedores(vendedoresResp);
+      setClientes(clientesResp.clientes);
+      setProdutos(produtosResp);
+    });
   }, []);
 
   const exportarCSV = () => {
     if (!data) return;
     const header =
-      "Data,Cliente,Vendedor,Valor Total,Frete,Recibo frete\n";
+      "Data,Cliente,Vendedor,Valor Total,Frete,Frete pago\n";
     const rows = data.vendas
       .map((v) =>
         [
@@ -158,7 +212,7 @@ export default function RelatorioVendasPage() {
       </style></head><body>
       <h1>Relatório de Vendas</h1>
       <p style="color:#6b7280;font-size:12px">Período: ${dataInicio} a ${dataFim} · Gerado em ${new Date().toLocaleString("pt-BR")}</p>
-      <table><thead><tr><th>#</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Total</th><th>Frete</th><th>Recibo</th></tr></thead>
+      <table><thead><tr><th>#</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Total</th><th>Frete</th><th>Frete pago</th></tr></thead>
       <tbody>${rows}</tbody></table>
       </body></html>`);
     w.document.close();
@@ -166,10 +220,27 @@ export default function RelatorioVendasPage() {
     w.print();
   };
 
-  const buscar = (ini?: string, fim?: string) => {
+  const buscar = (
+    ini?: string,
+    fim?: string,
+    override?: Partial<{
+      busca: string;
+      vendedorId: string;
+      clienteId: string;
+      produtoId: string;
+    }>,
+  ) => {
     const params = new URLSearchParams();
     if (ini ?? dataInicio) params.set("dataInicio", ini ?? dataInicio);
     if (fim ?? dataFim) params.set("dataFim", fim ?? dataFim);
+    const buscaEff = (override?.busca ?? busca).trim();
+    const vendedorEff = override?.vendedorId ?? vendedorId;
+    const clienteEff = override?.clienteId ?? clienteId;
+    const produtoEff = override?.produtoId ?? produtoId;
+    if (buscaEff) params.set("busca", buscaEff);
+    if (vendedorEff) params.set("vendedorId", vendedorEff);
+    if (clienteEff) params.set("clienteId", clienteEff);
+    if (produtoEff) params.set("produtoId", produtoEff);
     params.set("take", "500");
     params.set("skip", "0");
     setLoading(true);
@@ -183,7 +254,7 @@ export default function RelatorioVendasPage() {
       .finally(() => setLoading(false));
   };
 
-  // Agrupar por cliente
+  // Agregações (preferem o resumo completo retornado pela API)
   const porCliente: Record<
     number,
     { nome: string; total: number; quantidade: number }
@@ -232,12 +303,79 @@ export default function RelatorioVendasPage() {
     });
   });
 
+  const resumoRepresentantes =
+    data?.resumoRepresentantes?.map((r) => ({
+      nome: r.vendedorNome,
+      total: r.faturamento,
+      frete: r.frete,
+      quantidade: r.quantidadeVendas,
+      ticketMedio: r.ticketMedio,
+      participacao: r.participacao,
+    })) ??
+    Object.values(porVendedor)
+      .sort((a, b) => b.total - a.total)
+      .map((x) => ({
+        nome: x.nome,
+        total: x.total,
+        frete: 0,
+        quantidade: x.quantidade,
+        ticketMedio: x.quantidade > 0 ? x.total / x.quantidade : 0,
+        participacao: data && data.totalFaturamento > 0 ? (x.total / data.totalFaturamento) * 100 : 0,
+      }));
+
+  const resumoClientes =
+    data?.resumoClientes?.map((r) => ({
+      nome: r.clienteNome,
+      total: r.faturamento,
+      quantidade: r.quantidadeVendas,
+    })) ??
+    Object.values(porCliente).sort((a, b) => b.total - a.total);
+
+  const resumoProdutos =
+    data?.resumoProdutos?.map((r) => ({
+      nome: r.produtoNome,
+      quantidade: r.quantidade,
+      total: r.faturamento,
+      unidade: r.unidade || "",
+    })) ??
+    Object.values(porProduto).sort((a, b) => b.total - a.total);
+
+  const resumoRepresentantesOrdenado = [...resumoRepresentantes].sort((a, b) => {
+    const dir = repSort.dir === "asc" ? 1 : -1;
+    if (repSort.key === "nome") {
+      return a.nome.localeCompare(b.nome, "pt-BR") * dir;
+    }
+    if (repSort.key === "quantidade") {
+      return (a.quantidade - b.quantidade) * dir;
+    }
+    if (repSort.key === "participacao") {
+      return (a.participacao - b.participacao) * dir;
+    }
+    return (a.total - b.total) * dir;
+  });
+
+  const toggleRepSort = (key: SortRepKey) => {
+    setRepSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "nome" ? "asc" : "desc" },
+    );
+  };
+
+  const sortIndicator = (key: SortRepKey) =>
+    repSort.key === key ? (repSort.dir === "asc" ? " ↑" : " ↓") : "";
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
           Relatório de Vendas
         </h1>
+        <div className="mt-2">
+          <Link href="/relatorios/comissoes" className="text-sm text-blue-600 hover:underline">
+            Abrir relatório de comissões (com impressão) →
+          </Link>
+        </div>
         {data?.totalRegistros != null && data.totalRegistros > data.vendas.length && (
           <p className="text-sm text-amber-700 mt-1">
             Exibindo {data.vendas.length} de {data.totalRegistros} vendas no período (limite 500 por consulta). Ajuste datas ou exporte em lotes.
@@ -246,7 +384,7 @@ export default function RelatorioVendasPage() {
       </div>
 
       <div className="card p-4 mb-6">
-        <div className="flex gap-3 flex-wrap">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">
               Data Início
@@ -267,9 +405,83 @@ export default function RelatorioVendasPage() {
               className="input-field"
             />
           </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Representante</label>
+            <select
+              value={vendedorId}
+              onChange={(e) => setVendedorId(e.target.value)}
+              className="input-field"
+            >
+              <option value="">Todos</option>
+              {vendedores.map((v) => (
+                <option key={v.id} value={String(v.id)}>
+                  {v.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+            <select
+              value={clienteId}
+              onChange={(e) => setClienteId(e.target.value)}
+              className="input-field"
+            >
+              <option value="">Todos</option>
+              {clientes.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.nomeFantasia || c.razaoSocial}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Produto</label>
+            <select
+              value={produtoId}
+              onChange={(e) => setProdutoId(e.target.value)}
+              className="input-field"
+            >
+              <option value="">Todos</option>
+              {produtos.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Busca</label>
+            <input
+              type="text"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Cliente, representante ou observação"
+              className="input-field"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap items-end mt-3">
           <div className="flex items-end">
             <button onClick={() => buscar()} className="btn-primary">
               <MagnifyingGlassIcon className="w-4 h-4" /> Gerar
+            </button>
+            <button
+              onClick={() => {
+                setBusca("");
+                setVendedorId("");
+                setClienteId("");
+                setProdutoId("");
+                buscar(dataInicio, dataFim, {
+                  busca: "",
+                  vendedorId: "",
+                  clienteId: "",
+                  produtoId: "",
+                });
+              }}
+              className="btn-secondary flex items-center gap-1"
+            >
+              Limpar
             </button>
             {data && (
               <>
@@ -306,31 +518,102 @@ export default function RelatorioVendasPage() {
       {data && !loading && (
         <>
           {/* Totais */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="card p-4 text-center">
               <p className="text-sm text-gray-500">Vendas no período</p>
               <p className="text-3xl font-bold text-gray-900 mt-1">
-                {data.quantidade}
+                {data.totalRegistros ?? data.quantidade}
               </p>
             </div>
             <div className="card p-4 text-center">
-              <p className="text-sm text-gray-500">Faturamento total</p>
+              <p className="text-sm text-gray-500">Total vendido (período)</p>
               <p className="text-3xl font-bold text-green-700 mt-1">
                 {formatMoney(data.totalFaturamento)}
               </p>
             </div>
             <div className="card p-4 text-center">
+              <p className="text-sm text-gray-500">Frete total</p>
+              <p className="text-3xl font-bold text-indigo-700 mt-1">
+                {formatMoney(data.totalFrete ?? 0)}
+              </p>
+            </div>
+            <div className="card p-4 text-center">
               <p className="text-sm text-gray-500">Ticket médio</p>
               <p className="text-3xl font-bold text-blue-600 mt-1">
-                {data.quantidade > 0
-                  ? formatMoney(data.totalFaturamento / data.quantidade)
+                {(data.totalRegistros ?? data.quantidade) > 0
+                  ? formatMoney(
+                      data.totalFaturamento / (data.totalRegistros ?? data.quantidade),
+                    )
                   : "-"}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-            {/* Por cliente */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+            <div className="card overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100">
+                <h3 className="font-semibold">Por Representante (Completo)</h3>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="table-header">
+                      <button
+                        type="button"
+                        onClick={() => toggleRepSort("nome")}
+                        className="hover:underline"
+                      >
+                        Representante{sortIndicator("nome")}
+                      </button>
+                    </th>
+                    <th className="table-header text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleRepSort("quantidade")}
+                        className="hover:underline"
+                      >
+                        Qtd{sortIndicator("quantidade")}
+                      </button>
+                    </th>
+                    <th className="table-header text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleRepSort("participacao")}
+                        className="hover:underline"
+                      >
+                        Part. %{sortIndicator("participacao")}
+                      </button>
+                    </th>
+                    <th className="table-header text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleRepSort("total")}
+                        className="hover:underline"
+                      >
+                        Total{sortIndicator("total")}
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumoRepresentantesOrdenado.map((r, i) => (
+                    <tr key={i} className="table-row">
+                      <td className="table-cell font-medium">{r.nome}</td>
+                      <td className="table-cell text-right text-gray-500">
+                        {r.quantidade}
+                      </td>
+                      <td className="table-cell text-right text-gray-500">
+                        {r.participacao.toFixed(2)}%
+                      </td>
+                      <td className="table-cell text-right font-semibold">
+                        {formatMoney(r.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
             <div className="card overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100">
                 <h3 className="font-semibold">Por Cliente</h3>
@@ -344,24 +627,21 @@ export default function RelatorioVendasPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.values(porCliente)
-                    .sort((a, b) => b.total - a.total)
-                    .map((c, i) => (
-                      <tr key={i} className="table-row">
-                        <td className="table-cell font-medium">{c.nome}</td>
-                        <td className="table-cell text-right text-gray-500">
-                          {c.quantidade}
-                        </td>
-                        <td className="table-cell text-right font-semibold">
-                          {formatMoney(c.total)}
-                        </td>
-                      </tr>
-                    ))}
+                  {resumoClientes.map((c, i) => (
+                    <tr key={i} className="table-row">
+                      <td className="table-cell font-medium">{c.nome}</td>
+                      <td className="table-cell text-right text-gray-500">
+                        {c.quantidade}
+                      </td>
+                      <td className="table-cell text-right font-semibold">
+                        {formatMoney(c.total)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
-            {/* Por produto */}
             <div className="card overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100">
                 <h3 className="font-semibold">Por Produto</h3>
@@ -375,19 +655,17 @@ export default function RelatorioVendasPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.values(porProduto)
-                    .sort((a, b) => b.total - a.total)
-                    .map((p, i) => (
-                      <tr key={i} className="table-row">
-                        <td className="table-cell font-medium">{p.nome}</td>
-                        <td className="table-cell text-right text-gray-500">
-                          {p.quantidade.toLocaleString("pt-BR")} {p.unidade}
-                        </td>
-                        <td className="table-cell text-right font-semibold">
-                          {formatMoney(p.total)}
-                        </td>
-                      </tr>
-                    ))}
+                  {resumoProdutos.map((p, i) => (
+                    <tr key={i} className="table-row">
+                      <td className="table-cell font-medium">{p.nome}</td>
+                      <td className="table-cell text-right text-gray-500">
+                        {p.quantidade.toLocaleString("pt-BR")} {p.unidade}
+                      </td>
+                      <td className="table-cell text-right font-semibold">
+                        {formatMoney(p.total)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -407,7 +685,7 @@ export default function RelatorioVendasPage() {
                     <th className="table-header">Cliente</th>
                     <th className="table-header">Vendedor</th>
                     <th className="table-header text-right">Frete</th>
-                    <th className="table-header">Recibo frete</th>
+                    <th className="table-header">Frete pago</th>
                     <th className="table-header text-right">Total</th>
                   </tr>
                 </thead>

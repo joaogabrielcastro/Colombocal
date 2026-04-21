@@ -3,7 +3,8 @@
  * sem precisar subir o servidor. Requer confirmação explícita.
  *
  * Uso (na pasta backend):
- *   node scripts/reset-financeiro-legacy.js --confirm
+ *   npm run legacy:reset-financeiro -- --confirm
+ *   ou: node scripts/reset-financeiro-legacy.js --confirm
  *
  * Carrega variáveis de backend/.env (DATABASE_URL).
  */

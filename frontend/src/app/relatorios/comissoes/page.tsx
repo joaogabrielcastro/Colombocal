@@ -128,11 +128,117 @@ export default function ComissoesPage() {
   const totalComissao = dados.reduce((acc, d) => acc + d.comissao, 0);
   const totalVendas = dados.reduce((acc, d) => acc + d.totalVendas, 0);
 
-  const imprimirRelatorio = () => {
-    const tituloAnterior = document.title;
-    document.title = `Comissões por Vendedor - ${dataInicio} a ${dataFim}`;
-    window.print();
-    document.title = tituloAnterior;
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const quantidadeItensVenda = (v: VendaComissaoLinha & { itens?: Array<{ quantidade?: unknown }> }) => {
+    const itens = v.itens;
+    if (!Array.isArray(itens)) return 0;
+    return itens.reduce(
+      (acc, i) => acc + parseFloat(String(i?.quantidade ?? 0)),
+      0,
+    );
+  };
+
+  /** Abre só o representante escolhido; na impressão do navegador use “Salvar como PDF”. */
+  const imprimirRepresentante = (d: ComissaoVendedor) => {
+    const w = window.open("", "_blank");
+    if (!w) return;
+
+    const ini = dataInicio
+      ? new Date(dataInicio + "T12:00:00").toLocaleDateString("pt-BR")
+      : "";
+    const fim = dataFim
+      ? new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR")
+      : "";
+    const modoLabel =
+      modo === "caixa"
+        ? "Caixa (proporcional ao recebido na ordem)"
+        : "Emissão (valor na venda)";
+
+    const rowsHtml = d.vendas
+      .map((v) => {
+        const vx = v as VendaComissaoLinha & {
+          cliente?: { nomeFantasia?: string; razaoSocial?: string };
+          dataVenda?: string;
+          valorTotal?: unknown;
+          comissaoCalculada?: number;
+          itens?: Array<{ quantidade?: unknown }>;
+        };
+        const comLinha =
+          vx.comissaoCalculada ??
+          (parseFloat(String(vx.valorTotal ?? 0)) * d.percentual) / 100;
+        const qtd = quantidadeItensVenda(vx);
+        const cliente =
+          vx.cliente?.nomeFantasia?.trim() || vx.cliente?.razaoSocial || "—";
+        return `<tr>
+          <td>${escapeHtml(formatDate(String(vx.dataVenda ?? "")))}</td>
+          <td class="num">${escapeHtml(formatMoney(parseFloat(String(vx.valorTotal ?? 0))))}</td>
+          <td class="num">${escapeHtml(formatMoney(comLinha))}</td>
+          <td class="num">${qtd.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</td>
+          <td>${escapeHtml(cliente)}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const totalQtd = d.vendas.reduce(
+      (acc, v) => acc + quantidadeItensVenda(v as VendaComissaoLinha & { itens?: Array<{ quantidade?: unknown }> }),
+      0,
+    );
+
+    w.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Comissões — ${escapeHtml(d.vendedor.nome)} — ${dataInicio} a ${dataFim}</title>
+  <style>
+    body { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #111; margin: 16px; }
+    h1 { font-size: 14px; margin: 0 0 8px 0; }
+    .periodo { margin-bottom: 12px; line-height: 1.5; }
+    .modo { color: #444; margin-bottom: 16px; }
+    .rep { font-weight: 700; margin: 12px 0 8px 0; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: top; }
+    th { background: #f3f4f6; text-align: left; }
+    td.num, th.num { text-align: right; white-space: nowrap; }
+    .tt { margin-top: 12px; font-weight: 700; }
+    .hint { margin-top: 16px; font-size: 10px; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Comissões — ${escapeHtml(d.vendedor.nome)}</h1>
+  <div class="periodo">
+    <div>PERÍODO INICIAL: ${escapeHtml(ini)}</div>
+    <div>PERÍODO FINAL: ${escapeHtml(fim)}</div>
+  </div>
+  <div class="modo">Regra: ${escapeHtml(modoLabel)}</div>
+  <div class="rep">${escapeHtml(String(d.vendedor.id).padStart(6, "0"))} — ${escapeHtml(d.vendedor.nome)}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Emissão</th>
+        <th class="num">Base cálculo</th>
+        <th class="num">Comissão</th>
+        <th class="num">Quantidade</th>
+        <th>Cliente</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml || `<tr><td colspan="5" style="text-align:center;color:#666">Nenhuma venda no período.</td></tr>`}</tbody>
+  </table>
+  <div class="tt">
+    TT REPRESENTANTE — Base: ${escapeHtml(formatMoney(d.totalVendas))} · Comissão: ${escapeHtml(formatMoney(d.comissao))} · Quantidade: ${totalQtd.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })} · Vendas: ${d.quantidadeVendas}
+  </div>
+  <p class="hint">Use o diálogo de impressão do navegador e escolha “Salvar como PDF” para gerar o PDF deste representante.</p>
+</body>
+</html>`);
+    w.document.close();
+    w.focus();
+    w.print();
   };
 
   return (
@@ -147,7 +253,7 @@ export default function ComissoesPage() {
         </p>
       </div>
 
-      <div className="card p-4 mb-6">
+      <div className="card p-4 mb-6 print:hidden">
         <div className="flex gap-3 flex-wrap">
           <div>
             <label className="block text-xs text-gray-500 mb-1">
@@ -192,20 +298,13 @@ export default function ComissoesPage() {
               Salvar regra padrão
             </button>
             {dados.length > 0 && (
-              <>
-                <button
-                  onClick={imprimirRelatorio}
-                  className="btn-secondary flex items-center gap-1"
-                >
-                  <PrinterIcon className="w-4 h-4" /> Imprimir
-                </button>
-                <button
-                  onClick={exportarCSV}
-                  className="btn-secondary flex items-center gap-1"
-                >
-                  <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={exportarCSV}
+                className="btn-secondary flex items-center gap-1"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+              </button>
             )}
           </div>
         </div>
@@ -238,26 +337,25 @@ export default function ComissoesPage() {
           {/* Por vendedor */}
           {dados.map((d) => (
             <div key={d.vendedor.id} className="card mb-3 overflow-hidden">
-              <button
-                className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                onClick={() =>
-                  setExpandido(
-                    expandido === d.vendedor.id ? null : d.vendedor.id,
-                  )
-                }
-              >
-                <div className="flex items-center gap-4">
-                  <div className="text-left">
-                    <p className="font-semibold text-gray-900">
-                      {d.vendedor.nome}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {d.quantidadeVendas} vendas • comissão:{" "}
-                      {d.percentual.toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
+              <div className="flex flex-wrap items-stretch justify-between gap-2 px-5 py-4 border-b border-gray-100">
+                <button
+                  type="button"
+                  className="flex-1 min-w-[200px] text-left rounded-lg hover:bg-gray-50 transition-colors px-2 py-1 -ml-2"
+                  onClick={() =>
+                    setExpandido(
+                      expandido === d.vendedor.id ? null : d.vendedor.id,
+                    )
+                  }
+                >
+                  <p className="font-semibold text-gray-900">
+                    {d.vendedor.nome}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {d.quantidadeVendas} vendas • comissão:{" "}
+                    {d.percentual.toFixed(2)}%
+                  </p>
+                </button>
+                <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                   <div className="text-right">
                     <p className="text-xs text-gray-500">Vendas</p>
                     <p className="font-semibold">
@@ -270,8 +368,17 @@ export default function ComissoesPage() {
                       {formatMoney(d.comissao)}
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => imprimirRepresentante(d)}
+                    className="btn-secondary flex items-center gap-1 text-sm shrink-0 print:hidden"
+                    title="Abre só este representante; no navegador use Salvar como PDF"
+                  >
+                    <PrinterIcon className="w-4 h-4" />
+                    PDF (este)
+                  </button>
                 </div>
-              </button>
+              </div>
               {expandido === d.vendedor.id && d.vendas.length > 0 && (
                 <div className="border-t border-gray-100">
                   <table className="w-full">

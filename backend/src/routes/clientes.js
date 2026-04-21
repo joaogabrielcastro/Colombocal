@@ -158,7 +158,7 @@ router.get("/:id/conta", async (req, res) => {
       (acc, p) => acc + parseFloat(p.valor),
       0,
     );
-    const saldo = totalCreditos - totalDebitos;
+    const saldo = Math.max(0, totalDebitos - totalCreditos);
     const resumoFinanceiro = resumoFinanceiroCliente({
       totalDebitos,
       totalCreditos,
@@ -201,7 +201,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/clientes/:id/reconciliar-recebiveis — reaplica pagamentos nos títulos (crédito entre vendas)
+// POST /api/clientes/:id/reconciliar-recebiveis — reaplica pagamentos nos títulos (baixa entre vendas)
 router.post("/:id/reconciliar-recebiveis", async (req, res) => {
   try {
     const clienteId = parseInt(req.params.id, 10);

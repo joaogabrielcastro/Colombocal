@@ -66,7 +66,7 @@ export default function ProdutosPage() {
 
   const handleExcluir = async (p: Produto) => {
     const ok = window.confirm(
-      `Inativar o produto "${p.nome}" (${p.codigo})? Ele deixa de aparecer na lista e nas vendas como ativo.`,
+      `Inativar o produto "${p.nome}"? Ele deixa de aparecer na lista e nas vendas como ativo.`,
     );
     if (!ok) return;
     setDeletingId(p.id);
@@ -135,34 +135,21 @@ export default function ProdutosPage() {
                     className="input-field"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Código *
-                    </label>
-                    <input
-                      required
-                      value={form.codigo || ""}
-                      onChange={set("codigo")}
-                      className="input-field"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Unidade
-                    </label>
-                    <select
-                      value={form.unidade || "ton"}
-                      onChange={set("unidade")}
-                      className="input-field"
-                    >
-                      <option value="ton">Tonelada (ton)</option>
-                      <option value="saco">Saco</option>
-                      <option value="kg">Kg</option>
-                      <option value="m3">M³</option>
-                      <option value="un">Unidade</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Unidade
+                  </label>
+                  <select
+                    value={form.unidade || "ton"}
+                    onChange={set("unidade")}
+                    className="input-field"
+                  >
+                    <option value="ton">Tonelada (ton)</option>
+                    <option value="saco">Saco</option>
+                    <option value="kg">Kg</option>
+                    <option value="m3">M³</option>
+                    <option value="un">Unidade</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -199,7 +186,7 @@ export default function ProdutosPage() {
       <div className="card overflow-hidden">
         {loading ? (
           <div className="p-4">
-            <TableListSkeleton rows={8} cols={5} />
+            <TableListSkeleton rows={8} cols={4} />
           </div>
         ) : produtos.length === 0 ? (
           <div className="p-6">
@@ -213,7 +200,7 @@ export default function ProdutosPage() {
                   onClick={() => {
                     setMostrarForm(true);
                     setEditando(null);
-                    setForm({});
+                    setForm({ unidade: "ton" });
                   }}
                 >
                   Novo produto
@@ -226,7 +213,6 @@ export default function ProdutosPage() {
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="table-header">Produto</th>
-                <th className="table-header">Código</th>
                 <th className="table-header">Unidade</th>
                 <th className="table-header">Preço Padrão</th>
                 <th className="table-header"></th>
@@ -236,9 +222,6 @@ export default function ProdutosPage() {
               {produtos.map((p) => (
                 <tr key={p.id} className="table-row">
                   <td className="table-cell font-medium">{p.nome}</td>
-                  <td className="table-cell font-mono text-sm text-gray-500">
-                    {p.codigo}
-                  </td>
                   <td className="table-cell">{p.unidade}</td>
                   <td className="table-cell">{formatMoney(p.precoPadrao)}</td>
                   <td className="table-cell">

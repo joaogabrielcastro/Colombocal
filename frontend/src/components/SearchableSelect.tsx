@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
-export type SearchableOption = { id: number; label: string };
+type SearchableOption = { id: number; label: string };
 
 type SearchableSelectProps = {
   label: string;

@@ -18,10 +18,11 @@ function totalTitulosEmAberto(titulos) {
 }
 
 /**
- * Conta corrente: pagamentos − vendas (positivo = crédito a favor do cliente).
+ * Conta corrente em aberto: vendas − pagamentos, nunca negativo.
+ * Regra de negócio atual: não trabalhamos com saldo positivo para o cliente.
  */
 function saldoContaCorrente(totalDebitos, totalCreditos) {
-  return totalCreditos - totalDebitos;
+  return Math.max(0, totalDebitos - totalCreditos);
 }
 
 /**
@@ -42,7 +43,7 @@ function resumoFinanceiroCliente({ totalDebitos, totalCreditos, titulos }) {
       saldo,
       rotulo: "Conta corrente",
       ajuda:
-        "Compara todas as vendas com todos os pagamentos registrados. Negativo = cliente deve; positivo = crédito a favor.",
+        "Compara todas as vendas com todos os pagamentos registrados. O resultado mostra apenas o que ainda está em aberto.",
     },
     titulosReceber: {
       emAberto: emAbertoTitulos,

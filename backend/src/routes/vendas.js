@@ -25,14 +25,28 @@ function addDays(date, days) {
 // GET /api/vendas
 router.get("/", async (req, res) => {
   try {
-    const { clienteId, vendedorId, dataInicio, dataFim, busca } = req.query;
+    const {
+      clienteId,
+      vendedorId,
+      motoristaId,
+      dataInicio,
+      dataFim,
+      busca,
+      valorMin,
+      valorMax,
+      saldoEmAberto,
+    } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 100,
       maxTake: 500,
     });
     const where = {};
-    if (clienteId) where.clienteId = parseInt(clienteId);
-    if (vendedorId) where.vendedorId = parseInt(vendedorId);
+    if (clienteId) where.clienteId = parseInt(clienteId, 10);
+    if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
+    if (motoristaId !== undefined && motoristaId !== "") {
+      const mid = parseInt(motoristaId, 10);
+      if (!Number.isNaN(mid)) where.motoristaId = mid;
+    }
     if (dataInicio || dataFim) {
       where.dataVenda = {};
       if (dataInicio) where.dataVenda.gte = new Date(dataInicio);
@@ -41,6 +55,24 @@ router.get("/", async (req, res) => {
         fim.setHours(23, 59, 59, 999);
         where.dataVenda.lte = fim;
       }
+    }
+    const range = {};
+    if (valorMin !== undefined && valorMin !== "") {
+      const v = parseFloat(valorMin);
+      if (!Number.isNaN(v)) range.gte = v;
+    }
+    if (valorMax !== undefined && valorMax !== "") {
+      const v = parseFloat(valorMax);
+      if (!Number.isNaN(v)) range.lte = v;
+    }
+    if (Object.keys(range).length) where.valorTotal = range;
+    /** Só vendas com parcela ainda em aberto (título aberto/parcial). Útil p.ex. vincular cheque à ordem certa. */
+    if (saldoEmAberto === "true" || saldoEmAberto === "1") {
+      where.titulos = {
+        some: {
+          status: { in: ["aberto", "parcial"] },
+        },
+      };
     }
     if (busca) {
       where.cliente = {
@@ -53,7 +85,7 @@ router.get("/", async (req, res) => {
         ],
       };
     }
-    const [vendas, total] = await Promise.all([
+    const [vendas, total, somaAgg] = await Promise.all([
       prisma.venda.findMany({
         where,
         include: {
@@ -69,9 +101,27 @@ router.get("/", async (req, res) => {
         skip,
       }),
       prisma.venda.count({ where }),
+      prisma.venda.aggregate({
+        where,
+        _sum: { valorTotal: true },
+      }),
     ]);
     setPaginationHeaders(res, { total, take, skip });
-    res.json(vendas);
+    const soma = somaAgg._sum.valorTotal;
+    const somaNum = soma != null ? parseFloat(String(soma)) : 0;
+    res.set("x-sum-valor-total", Number.isFinite(somaNum) ? somaNum.toFixed(2) : "0");
+    const comSaldo = vendas.map((v) => {
+      let saldoEmAbertoTitulos = 0;
+      for (const t of v.titulos || []) {
+        const vo = parseFloat(String(t.valorOriginal ?? 0));
+        const vp = parseFloat(String(t.valorPago ?? 0));
+        if (!Number.isNaN(vo) && !Number.isNaN(vp)) {
+          saldoEmAbertoTitulos += Math.max(0, vo - vp);
+        }
+      }
+      return { ...v, saldoEmAbertoTitulos };
+    });
+    res.json(comSaldo);
   } catch (error) {
     handleRouteError(res, error);
   }
