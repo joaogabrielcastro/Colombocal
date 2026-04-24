@@ -22,6 +22,7 @@ interface ItemForm {
   produtoId: string;
   quantidade: string;
   precoUnitario: string;
+  unidade: string;
 }
 
 interface ProdutoPreco extends Produto {
@@ -50,12 +51,14 @@ function NovaVendaForm() {
   const clienteIdRef = useRef(clienteId);
   clienteIdRef.current = clienteId;
   const [frete, setFrete] = useState("");
+  const [fretePorSaco, setFretePorSaco] = useState("");
+  const [fretePorTonelada, setFretePorTonelada] = useState("");
   const [dataVenda, setDataVenda] = useState(
     new Date().toISOString().split("T")[0],
   );
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<ItemForm[]>([
-    { produtoId: "", quantidade: "", precoUnitario: "" },
+    { produtoId: "", quantidade: "", precoUnitario: "", unidade: "" },
   ]);
 
   const [freteRecibo, setFreteRecibo] = useState(false);
@@ -81,6 +84,8 @@ function NovaVendaForm() {
   useEffect(() => {
     if (!clienteId) {
       setSelectedCliente(null);
+      setFretePorSaco("");
+      setFretePorTonelada("");
       return;
     }
     let cancelled = false;
@@ -89,14 +94,17 @@ function NovaVendaForm() {
       .then((cli) => {
         if (cancelled) return;
         setSelectedCliente(cli);
-        setFrete((prev) => (!prev ? String(cli.fretePadrao ?? 0) : prev));
+        setFretePorSaco(
+          String(cli.fretePadraoSaco ?? cli.fretePadrao ?? 0),
+        );
+        setFretePorTonelada(String(cli.fretePadraoTonelada ?? 0));
         if (cli.vendedorId) setVendedorId(String(cli.vendedorId));
       })
       .catch(() => {
         if (!cancelled) setSelectedCliente(null);
       });
     setItens((prev) =>
-      prev.map((i) => ({ ...i, produtoId: "", precoUnitario: "" })),
+      prev.map((i) => ({ ...i, produtoId: "", precoUnitario: "", unidade: "" })),
     );
     return () => {
       cancelled = true;
@@ -195,13 +203,14 @@ function NovaVendaForm() {
     if (!produtoId) {
       setItens((prev) =>
         prev.map((item, i) =>
-          i === idx ? { ...item, produtoId: "", precoUnitario: "" } : item,
+          i === idx ? { ...item, produtoId: "", precoUnitario: "", unidade: "" } : item,
         ),
       );
       return;
     }
 
     let preco = "";
+    let unidade = "";
     if (cidSnapshot) {
       try {
         const rows = await api.get<ProdutoPreco[]>(
@@ -209,7 +218,10 @@ function NovaVendaForm() {
         );
         if (clienteIdRef.current !== cidSnapshot) return;
         const pc = rows[0];
-        if (pc) preco = parsePrecoApi(pc.precoAplicado);
+        if (pc) {
+          preco = parsePrecoApi(pc.precoAplicado);
+          unidade = String(pc.unidade || "");
+        }
       } catch {
         if (clienteIdRef.current !== cidSnapshot) return;
       }
@@ -218,6 +230,7 @@ function NovaVendaForm() {
         const p = await api.get<Produto>(`/produtos/${produtoId}`);
         if (clienteIdRef.current !== "") return;
         preco = parsePrecoApi(p.precoPadrao);
+        unidade = String(p.unidade || "");
       } catch {
         if (clienteIdRef.current !== "") return;
       }
@@ -227,7 +240,7 @@ function NovaVendaForm() {
 
     setItens((prev) =>
       prev.map((item, i) =>
-        i === idx ? { ...item, produtoId, precoUnitario: preco } : item,
+        i === idx ? { ...item, produtoId, precoUnitario: preco, unidade } : item,
       ),
     );
   };
@@ -235,7 +248,7 @@ function NovaVendaForm() {
   const addItem = () =>
     setItens((prev) => [
       ...prev,
-      { produtoId: "", quantidade: "", precoUnitario: "" },
+      { produtoId: "", quantidade: "", precoUnitario: "", unidade: "" },
     ]);
   const removeItem = (idx: number) =>
     setItens((prev) => prev.filter((_, i) => i !== idx));
@@ -246,6 +259,24 @@ function NovaVendaForm() {
     return acc + q * p;
   }, 0);
   const freteVal = parseFloat(frete || "0");
+  const fretePorSacoVal = parseFloat(fretePorSaco || "0");
+  const fretePorTonVal = parseFloat(fretePorTonelada || "0");
+
+  useEffect(() => {
+    const tarifaSaco = Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0;
+    const tarifaTon = Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0;
+    const tarifaKg = tarifaTon / 1000;
+    const totalFrete = itens.reduce((acc, item) => {
+      const unidade = String(item.unidade || "").trim().toLowerCase();
+      const qtd = parseFloat(item.quantidade || "0");
+      if (!Number.isFinite(qtd) || qtd <= 0) return acc;
+      if (unidade === "saco") return acc + qtd * tarifaSaco;
+      if (unidade === "ton") return acc + qtd * tarifaTon;
+      if (unidade === "kg") return acc + qtd * tarifaKg;
+      return acc;
+    }, 0);
+    setFrete(totalFrete.toFixed(2));
+  }, [itens, fretePorSacoVal, fretePorTonVal]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,6 +303,8 @@ function NovaVendaForm() {
         freteRecibo,
         freteReciboNum: null,
         freteReciboData: freteRecibo ? freteReciboData : null,
+        fretePorSaco: Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0,
+        fretePorTonelada: Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0,
         dataVenda,
         observacoes,
         itens: itensValidos,
@@ -365,9 +398,40 @@ function NovaVendaForm() {
                 step="0.01"
                 min="0"
                 value={frete}
-                onChange={(e) => setFrete(e.target.value)}
                 className="input-field"
                 placeholder="0,00"
+                readOnly
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Calculado automaticamente por unidade e quantidade.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tarifa frete por saco (R$)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={fretePorSaco}
+                onChange={(e) => setFretePorSaco(e.target.value)}
+                className="input-field"
+                placeholder="Ex.: 5,00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tarifa frete por tonelada (R$)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={fretePorTonelada}
+                onChange={(e) => setFretePorTonelada(e.target.value)}
+                className="input-field"
+                placeholder="Ex.: 120,00"
               />
             </div>
             <div>

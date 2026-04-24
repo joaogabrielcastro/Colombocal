@@ -723,17 +723,36 @@ export default function ClienteDetailPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Frete Padrão (R$)
+                Frete padrão por saco (R$)
               </label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={form.fretePadrao ?? ""}
+                value={form.fretePadraoSaco ?? form.fretePadrao ?? ""}
                 onChange={(e) =>
                   setForm((p) => ({
                     ...p,
-                    fretePadrao: parseFloat(e.target.value),
+                    fretePadraoSaco: e.target.value === "" ? undefined : parseFloat(e.target.value),
+                  }))
+                }
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Frete padrão por tonelada (R$)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.fretePadraoTonelada ?? ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    fretePadraoTonelada:
+                      e.target.value === "" ? undefined : parseFloat(e.target.value),
                   }))
                 }
                 className="input-field"

@@ -237,7 +237,9 @@ router.post("/", async (req, res) => {
         estado: b.estado,
         endereco: b.endereco,
         observacoes: b.observacoes,
-        fretePadrao: b.fretePadrao ?? 0,
+        fretePadrao: b.fretePadraoSaco ?? 0, // legado
+        fretePadraoSaco: b.fretePadraoSaco ?? 0,
+        fretePadraoTonelada: b.fretePadraoTonelada ?? 0,
         vendedorId: b.vendedorId ?? null,
         comissaoFixaPercentual:
           b.comissaoFixaPercentual === undefined ||
@@ -269,7 +271,9 @@ router.put("/:id", async (req, res) => {
         estado: b.estado,
         endereco: b.endereco,
         observacoes: b.observacoes,
-        fretePadrao: b.fretePadrao,
+        fretePadrao: b.fretePadraoSaco, // legado
+        fretePadraoSaco: b.fretePadraoSaco,
+        fretePadraoTonelada: b.fretePadraoTonelada,
         ativo: b.ativo,
         vendedorId:
           b.vendedorId === undefined

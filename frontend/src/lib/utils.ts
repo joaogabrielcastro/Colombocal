@@ -73,7 +73,9 @@ export interface Cliente {
   estado?: string;
   endereco?: string;
   observacoes?: string;
-  fretePadrao: number;
+  fretePadrao: number; // legado
+  fretePadraoSaco: number;
+  fretePadraoTonelada: number;
   vendedorId?: number | null;
   comissaoFixaPercentual?: number | null;
   vendedor?: Vendedor | null;

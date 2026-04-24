@@ -22,6 +22,23 @@ function addDays(date, days) {
   return d;
 }
 
+function calcularFreteAutomatico(itens, produtosPorId, fretePorSaco, fretePorTonelada) {
+  const tarifaSaco = parseFloat(String(fretePorSaco ?? 0));
+  const tarifaTon = parseFloat(String(fretePorTonelada ?? 0));
+  const tarifaKg = Number.isFinite(tarifaTon) ? tarifaTon / 1000 : 0;
+
+  return itens.reduce((acc, item) => {
+    const produto = produtosPorId.get(item.produtoId);
+    const unidade = String(produto?.unidade || "")
+      .trim()
+      .toLowerCase();
+    if (unidade === "saco") return acc + item.quantidade * (Number.isFinite(tarifaSaco) ? tarifaSaco : 0);
+    if (unidade === "ton") return acc + item.quantidade * (Number.isFinite(tarifaTon) ? tarifaTon : 0);
+    if (unidade === "kg") return acc + item.quantidade * tarifaKg;
+    return acc; // m3/un/outros não entram no cálculo automático por peso
+  }, 0);
+}
+
 // GET /api/vendas
 router.get("/", async (req, res) => {
   try {
@@ -262,7 +279,8 @@ router.post("/", async (req, res) => {
       clienteId,
       vendedorId,
       motoristaId,
-      frete,
+      fretePorSaco,
+      fretePorTonelada,
       freteRecibo,
       freteReciboNum,
       freteReciboData,
@@ -277,7 +295,10 @@ router.post("/", async (req, res) => {
       required: false,
       min: 1,
     });
-    const freteNum = parseNumberField(frete, "frete", { required: false, min: 0 }) || 0;
+    const fretePorSacoNum =
+      parseNumberField(fretePorSaco, "fretePorSaco", { required: false, min: 0 }) ?? null;
+    const fretePorTonNum =
+      parseNumberField(fretePorTonelada, "fretePorTonelada", { required: false, min: 0 }) ?? null;
     const dataVendaDate = parseDateField(dataVenda, "dataVenda", { required: false });
     const itensValidos = ensureArray(itens, "itens", { minLength: 1 }).map((item) => ({
       produtoId: parseIntField(item?.produtoId, "item.produtoId", { min: 1 }),
@@ -291,15 +312,23 @@ router.post("/", async (req, res) => {
       (acc, item) => acc + item.quantidade * item.precoUnitario,
       0,
     );
-
-    for (const item of itensValidos) {
-      const produto = await prisma.produto.findUnique({
-        where: { id: item.produtoId },
-      });
+    const produtos = await Promise.all(
+      itensValidos.map((item) =>
+        prisma.produto.findUnique({
+          where: { id: item.produtoId },
+          select: { id: true, unidade: true },
+        }),
+      ),
+    );
+    const produtosPorId = new Map();
+    for (let i = 0; i < itensValidos.length; i += 1) {
+      const item = itensValidos[i];
+      const produto = produtos[i];
       if (!produto)
         return res
           .status(400)
           .json({ error: `Produto ID ${item.produtoId} não encontrado` });
+      produtosPorId.set(produto.id, produto);
     }
 
     const venda = await prisma.$transaction(async (tx) => {
@@ -319,13 +348,27 @@ router.post("/", async (req, res) => {
           : parseFloat(vendedor.comissaoPercentual || 0);
       const comissaoValor = (valorTotal * comissaoPercentualAplicado) / 100;
       const dataEfetivaVenda = dataVendaDate || new Date();
+      const fretePorSacoAplicado =
+        fretePorSacoNum != null
+          ? fretePorSacoNum
+          : parseFloat(String(cliente.fretePadraoSaco ?? cliente.fretePadrao ?? 0));
+      const fretePorTonAplicado =
+        fretePorTonNum != null
+          ? fretePorTonNum
+          : parseFloat(String(cliente.fretePadraoTonelada ?? 0));
+      const freteFinal = calcularFreteAutomatico(
+        itensValidos,
+        produtosPorId,
+        fretePorSacoAplicado,
+        fretePorTonAplicado,
+      );
 
       const novaVenda = await tx.venda.create({
         data: {
           clienteId: clienteIdNum,
           vendedorId: vendedorIdNum,
           motoristaId: motoristaIdNum,
-          frete: freteNum,
+          frete: freteFinal,
           freteRecibo: !!freteRecibo,
           freteReciboNum: freteReciboNum || null,
           comissaoPercentualAplicado,
@@ -357,7 +400,7 @@ router.post("/", async (req, res) => {
         },
       });
 
-      if (freteNum > 0) {
+      if (freteFinal > 0) {
         const rd =
           freteReciboData != null && String(freteReciboData).trim() !== ""
             ? parseDateField(freteReciboData, "freteReciboData")
@@ -366,7 +409,7 @@ router.post("/", async (req, res) => {
           data: {
             vendaId: novaVenda.id,
             clienteId: clienteIdNum,
-            valor: freteNum,
+            valor: freteFinal,
             reciboEmitido: !!freteRecibo,
             reciboNumero: freteReciboNum || null,
             reciboData: rd,
@@ -386,7 +429,9 @@ router.post("/", async (req, res) => {
         payload: {
           vendedorId: vendedorIdNum,
           comissaoPercentualAplicado,
-          frete: freteNum,
+          frete: freteFinal,
+          fretePorSaco: fretePorSacoAplicado,
+          fretePorTonelada: fretePorTonAplicado,
           itens: itensValidos.length,
         },
       });

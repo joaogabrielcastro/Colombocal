@@ -9,7 +9,8 @@ const clienteCreateSchema = z.object({
   estado: z.string().nullable().optional(),
   endereco: z.string().nullable().optional(),
   observacoes: z.string().nullable().optional(),
-  fretePadrao: z.coerce.number().nonnegative().optional(),
+  fretePadraoSaco: z.coerce.number().nonnegative().optional(),
+  fretePadraoTonelada: z.coerce.number().nonnegative().optional(),
   vendedorId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
   comissaoFixaPercentual: z.union([
     z.coerce.number().nonnegative(),
@@ -25,7 +26,8 @@ const clienteUpdateSchema = z.object({
   estado: z.string().nullable().optional(),
   endereco: z.string().nullable().optional(),
   observacoes: z.string().nullable().optional(),
-  fretePadrao: z.coerce.number().nonnegative().optional(),
+  fretePadraoSaco: z.coerce.number().nonnegative().optional(),
+  fretePadraoTonelada: z.coerce.number().nonnegative().optional(),
   ativo: z.boolean().optional(),
   vendedorId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
   comissaoFixaPercentual: z.union([

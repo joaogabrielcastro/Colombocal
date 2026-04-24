@@ -153,7 +153,7 @@ export default function ClientesPage() {
                 <th className="table-header">Razão Social / Fantasia</th>
                 <th className="table-header">CNPJ</th>
                 <th className="table-header">Cidade / UF</th>
-                <th className="table-header">Frete Padrão</th>
+                <th className="table-header">Frete padrão (saco / ton)</th>
                 <th className="table-header"></th>
               </tr>
             </thead>
@@ -174,7 +174,9 @@ export default function ClientesPage() {
                       ? `${c.cidade}${c.estado ? " - " + c.estado : ""}`
                       : "-"}
                   </td>
-                  <td className="table-cell">{formatMoney(c.fretePadrao)}</td>
+                  <td className="table-cell">
+                    {formatMoney(c.fretePadraoSaco ?? c.fretePadrao)} / {formatMoney(c.fretePadraoTonelada ?? 0)}
+                  </td>
                   <td className="table-cell">
                     <div className="flex items-center gap-3">
                       <Link

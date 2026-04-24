@@ -20,7 +20,9 @@ model Cliente {
   estado                 String?
   endereco               String?
   observacoes            String?
-  fretePadrao            Decimal  @default(0) @db.Decimal(10, 2)
+  fretePadrao            Decimal  @default(0) @db.Decimal(10, 2) // legado (mantido por compatibilidade)
+  fretePadraoSaco        Decimal  @default(0) @db.Decimal(10, 2)
+  fretePadraoTonelada    Decimal  @default(0) @db.Decimal(10, 2)
   vendedorId             Int?
   comissaoFixaPercentual Decimal? @db.Decimal(5, 2)
   ativo                  Boolean  @default(true)

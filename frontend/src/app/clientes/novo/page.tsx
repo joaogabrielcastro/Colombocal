@@ -26,7 +26,8 @@ const initialForm = {
   estado: '',
   endereco: '',
   observacoes: '',
-  fretePadrao: '',
+  fretePadraoSaco: '',
+  fretePadraoTonelada: '',
   vendedorId: '',
   comissaoFixaPercentual: '',
 };
@@ -88,7 +89,8 @@ export default function NovoClientePage() {
     try {
       const cliente = await api.post<{ id: number }>('/clientes', {
         ...form,
-        fretePadrao: parseFloat(form.fretePadrao || '0'),
+        fretePadraoSaco: parseFloat(form.fretePadraoSaco || '0'),
+        fretePadraoTonelada: parseFloat(form.fretePadraoTonelada || '0'),
         vendedorId: form.vendedorId ? parseInt(form.vendedorId, 10) : undefined,
         comissaoFixaPercentual:
           form.comissaoFixaPercentual !== ''
@@ -180,13 +182,25 @@ export default function NovoClientePage() {
             <input value={form.endereco} onChange={set('endereco')} className="input-field" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Frete Padrão (R$)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Frete padrão por saco (R$)</label>
             <input
               type="number"
               step="0.01"
               min="0"
-              value={form.fretePadrao}
-              onChange={set('fretePadrao')}
+              value={form.fretePadraoSaco}
+              onChange={set('fretePadraoSaco')}
+              className="input-field"
+              placeholder="0,00"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Frete padrão por tonelada (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.fretePadraoTonelada}
+              onChange={set('fretePadraoTonelada')}
               className="input-field"
               placeholder="0,00"
             />
