@@ -32,6 +32,7 @@ export const MAIN_NAV: MainNavItem[] = [
   { href: '/produtos', label: 'Produtos', icon: CubeIcon },
   { href: '/vendas', label: 'Vendas', icon: ShoppingCartIcon },
   { href: '/cheques', label: 'Cheques', icon: BanknotesIcon },
+  { href: '/fretes', label: 'Fretes', icon: TruckIcon, advancedOnly: true },
   { href: '/motoristas', label: 'Motoristas', icon: TruckIcon, advancedOnly: true },
   { href: '/vendedores', label: 'Vendedores', icon: UserIcon, advancedOnly: true },
 ];
