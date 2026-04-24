@@ -11,6 +11,23 @@ delete process.env.PRISMA_GENERATE_DATAPROXY;
 
 const app = express();
 
+const trustProxy = process.env.TRUST_PROXY;
+if (typeof trustProxy !== "undefined") {
+  if (trustProxy === "true") {
+    app.set("trust proxy", true);
+  } else if (trustProxy === "false") {
+    app.set("trust proxy", false);
+  } else {
+    const hops = Number(trustProxy);
+    if (!Number.isNaN(hops)) {
+      app.set("trust proxy", hops);
+    }
+  }
+} else if (process.env.NODE_ENV === "production") {
+  // In production, requests usually come from a reverse proxy/load balancer.
+  app.set("trust proxy", 1);
+}
+
 const corsOrigin = process.env.CORS_ORIGIN;
 app.use(
   cors({
