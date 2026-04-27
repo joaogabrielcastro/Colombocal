@@ -9,21 +9,11 @@ import {
   STATUS_CHEQUE_LABEL,
   STATUS_CHEQUE_COLOR,
   type Cheque,
-  type StatusCheque,
 } from "@/lib/utils";
 import api from "@/lib/api";
 import * as XLSX from "xlsx";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
-
-// Fluxo operacional: a_receber -> recebido -> repassado, com desvios para devolvido
-const STATUS_NEXT: Record<StatusCheque, StatusCheque[]> = {
-  a_receber: ["recebido", "devolvido"],
-  recebido: ["repassado", "a_receber", "devolvido"],
-  repassado: ["devolvido"],
-  depositado: ["devolvido"], // legado
-  devolvido: ["recebido", "a_receber"],
-};
 
 type ResumoStatus = { status: string; count: number; total: number };
 
@@ -35,13 +25,9 @@ function ChequesPageContent() {
     null,
   );
   const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState("");
   const pageSize = 20;
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
-  const [statusFiltro, setStatusFiltro] = useState(
-    searchParams.get("status") || "todos",
-  );
   const [dataInicio, setDataInicio] = useState(searchParams.get("dataInicio") || "");
   const [dataFim, setDataFim] = useState(searchParams.get("dataFim") || "");
   const [clienteInput, setClienteInput] = useState(searchParams.get("cliente") || "");
@@ -57,7 +43,6 @@ function ChequesPageContent() {
   const ordemInicial = searchParams.get("ordem") || "";
   const [ordemInput, setOrdemInput] = useState(ordemInicial);
   const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
-  const [atualizando, setAtualizando] = useState<number | null>(null);
   const aplicarFiltros = () => {
     setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
     setClienteFiltro(clienteInput.trim());
@@ -69,7 +54,6 @@ function ChequesPageContent() {
   };
 
   useEffect(() => {
-    const status = searchParams.get("status") || "todos";
     const di = searchParams.get("dataInicio") || "";
     const df = searchParams.get("dataFim") || "";
     const cliente = searchParams.get("cliente") || "";
@@ -83,7 +67,6 @@ function ChequesPageContent() {
     }
     const ordem = searchParams.get("ordem") || "";
     const parsedPage = parseInt(searchParams.get("page") || "1", 10) || 1;
-    setStatusFiltro(status);
     setDataInicio(di);
     setDataFim(df);
     setClienteInput(cliente);
@@ -103,7 +86,6 @@ function ChequesPageContent() {
 
   const carregar = async () => {
     const params = new URLSearchParams();
-    params.set("status", statusFiltro || "todos");
     if (dataInicio) params.set("dataInicio", dataInicio);
     if (dataFim) params.set("dataFim", dataFim);
     if (clienteFiltro) params.set("cliente", clienteFiltro);
@@ -149,7 +131,6 @@ function ChequesPageContent() {
 
   useEffect(() => {
     const params = new URLSearchParams();
-    params.set("status", statusFiltro || "todos");
     if (dataInicio) params.set("dataInicio", dataInicio);
     if (dataFim) params.set("dataFim", dataFim);
     if (clienteFiltro) params.set("cliente", clienteFiltro);
@@ -167,7 +148,6 @@ function ChequesPageContent() {
     router.replace(`/cheques${params.toString() ? `?${params.toString()}` : ""}`);
     carregar();
   }, [
-    statusFiltro,
     dataInicio,
     dataFim,
     clienteFiltro,
@@ -179,20 +159,6 @@ function ChequesPageContent() {
     page,
   ]);
 
-  const handleMudarStatus = async (id: number, novoStatus: string) => {
-    setAtualizando(id);
-    setFeedback("");
-    try {
-      await api.patch(`/cheques/${id}/status`, { status: novoStatus });
-      setFeedback("Status atualizado com sucesso.");
-      await carregar();
-    } catch (e) {
-      reportApiError(e, { title: "Não foi possível atualizar o status" });
-    } finally {
-      setAtualizando(null);
-    }
-  };
-
   const getExportRows = () =>
     cheques.map((c) => ({
       ordem: c.numeroOrdem,
@@ -201,9 +167,10 @@ function ChequesPageContent() {
       numeroCheque: c.numero || "",
       venda: c.venda ? `Venda #${c.venda.id}` : "-",
       valor: parseFloat(String(c.valor)),
+      emitente: c.emitenteNome || "",
       preDatado: formatDate(c.dataRecebimento),
       dataCompensacao: formatDate(c.dataCompensacao),
-      status: STATUS_CHEQUE_LABEL[c.status],
+      status: STATUS_CHEQUE_LABEL[c.status as keyof typeof STATUS_CHEQUE_LABEL] || "Ativo",
     }));
 
   const handleExportExcel = () => {
@@ -229,7 +196,7 @@ function ChequesPageContent() {
         <td>${formatMoney(c.valor)}</td>
         <td>${formatDate(c.dataRecebimento)}</td>
         <td>${formatDate(c.dataCompensacao)}</td>
-        <td>${STATUS_CHEQUE_LABEL[c.status]}</td>
+        <td>${STATUS_CHEQUE_LABEL[c.status as keyof typeof STATUS_CHEQUE_LABEL] || "Ativo"}</td>
       </tr>
     `,
       )
@@ -277,14 +244,7 @@ function ChequesPageContent() {
   const resumoMap = new Map(
     (resumoPorStatus ?? []).map((r) => [r.status, r]),
   );
-  const totalPendente =
-    (resumoMap.get("a_receber")?.total ?? 0) +
-    (resumoMap.get("recebido")?.total ?? 0);
-  const totalPendenteFallback = cheques
-    .filter((c) => c.status === "a_receber" || c.status === "recebido")
-    .reduce((acc, c) => acc + parseFloat(String(c.valor)), 0);
-  const pendenteExibido =
-    resumoPorStatus != null ? totalPendente : totalPendenteFallback;
+  const totalExibido = resumoMap.get("ativo")?.total ?? cheques.reduce((acc, c) => acc + parseFloat(String(c.valor)), 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -294,39 +254,16 @@ function ChequesPageContent() {
           <h1 className="text-2xl font-bold text-gray-900">Cheques</h1>
           <p className="text-gray-500 text-sm mt-1">
             {total} cheque{total === 1 ? "" : "s"} com os filtros atuais
-            {statusFiltro === "todos"
-              ? " (todos os status)"
-              : ""}
-            {pendenteExibido > 0 &&
-              ` • Pendente (a receber + recebido): ${formatMoney(pendenteExibido)}`}
+            {totalExibido > 0 && ` • Total: ${formatMoney(totalExibido)}`}
           </p>
         </div>
         <Link href="/cheques/novo" className="btn-primary">
           <PlusIcon className="w-4 h-4" /> Novo Cheque
         </Link>
       </div>
-      {feedback && <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">{feedback}</div>}
-
       {/* Filtros: aplicar somente ao clicar em Filtrar; exportações separadas */}
       <div className="card p-4 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Status</label>
-            <select
-              value={statusFiltro}
-              onChange={(e) => {
-                setStatusFiltro(e.target.value);
-                setPage(1);
-              }}
-              className="input-field"
-            >
-              <option value="todos">Todos (incluindo repassados)</option>
-              <option value="a_receber">A Receber</option>
-              <option value="recebido">Recebido</option>
-              <option value="repassado">Repassado</option>
-              <option value="devolvido">Devolvido</option>
-            </select>
-          </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Cliente</label>
             <input
@@ -441,7 +378,6 @@ function ChequesPageContent() {
           <button
             type="button"
             onClick={() => {
-              setStatusFiltro("todos");
               setDataInicio("");
               setDataFim("");
               setOrdemInput("");
@@ -473,43 +409,20 @@ function ChequesPageContent() {
         </div>
       </div>
 
-      {/* Resumo por status */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {(["a_receber", "recebido", "repassado", "devolvido"] as StatusCheque[]).map(
-          (s) => {
-            const fromResumo = resumoMap.get(s);
-            const grupo = cheques.filter((c) => c.status === s);
-            const count =
-              fromResumo?.count ??
-              (resumoPorStatus == null ? grupo.length : 0);
-            const valorTotal =
-              fromResumo?.total ??
-              (resumoPorStatus == null
-                ? grupo.reduce(
-                    (acc, c) => acc + parseFloat(String(c.valor)),
-                    0,
-                  )
-                : 0);
-            return (
-              <div
-                key={s}
-                className={`card p-3 text-center cursor-pointer border-2 ${statusFiltro === s ? "border-blue-500" : "border-transparent"}`}
-                onClick={() => {
-                  setStatusFiltro(statusFiltro === s ? "todos" : s);
-                  setPage(1);
-                }}
-              >
-                <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CHEQUE_COLOR[s]}`}
-                >
-                  {STATUS_CHEQUE_LABEL[s]}
-                </span>
-                <p className="font-bold text-gray-900 mt-1">{count}</p>
-                <p className="text-xs text-gray-500">{formatMoney(valorTotal)}</p>
-              </div>
-            );
-          },
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <div className="card p-3 text-center border-2 border-transparent">
+          <span
+            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CHEQUE_COLOR.ativo}`}
+          >
+            {STATUS_CHEQUE_LABEL.ativo}
+          </span>
+          <p className="font-bold text-gray-900 mt-1">
+            {resumoMap.get("ativo")?.count ?? cheques.length}
+          </p>
+          <p className="text-xs text-gray-500">
+            {formatMoney(totalExibido)}
+          </p>
+        </div>
       </div>
 
       {/* Tabela */}
@@ -529,12 +442,12 @@ function ChequesPageContent() {
                 <th className="table-header w-16">Ordem</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Banco / Nº</th>
+                <th className="table-header">Emitente</th>
                 <th className="table-header">Venda</th>
                 <th className="table-header">Valor</th>
                 <th className="table-header">Pré-datado</th>
                 <th className="table-header">Compensado em</th>
                 <th className="table-header">Status</th>
-                <th className="table-header">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -556,6 +469,9 @@ function ChequesPageContent() {
                     {c.numero && (
                       <p className="text-xs text-gray-400">Nº {c.numero}</p>
                     )}
+                  </td>
+                  <td className="table-cell">
+                    {c.emitenteNome || "-"}
                   </td>
                   <td className="table-cell">
                     {c.venda ? (
@@ -580,28 +496,8 @@ function ChequesPageContent() {
                     <span
                       className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_CHEQUE_COLOR[c.status]}`}
                     >
-                      {STATUS_CHEQUE_LABEL[c.status]}
+                      {STATUS_CHEQUE_LABEL[c.status as keyof typeof STATUS_CHEQUE_LABEL] || "Ativo"}
                     </span>
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex gap-1 flex-wrap">
-                      {STATUS_NEXT[c.status].map((next) => (
-                        <button
-                          key={next}
-                          disabled={atualizando === c.id}
-                          onClick={() => handleMudarStatus(c.id, next)}
-                          className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
-                            next === "a_receber"
-                              ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
-                              : next === "devolvido"
-                                ? "bg-red-100 text-red-700 hover:bg-red-200"
-                              : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                          }`}
-                        >
-                          → {STATUS_CHEQUE_LABEL[next]}
-                        </button>
-                      ))}
-                    </div>
                   </td>
                 </tr>
               ))}

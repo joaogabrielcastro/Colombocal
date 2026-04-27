@@ -60,17 +60,57 @@ router.post("/", async (req, res) => {
           : new Date();
 
     const pagamento = await prisma.$transaction(async (tx) => {
+      let valorPrincipal = b.valor;
+      let trocoValor = 0;
+      if (b.vendaId) {
+        const venda = await tx.venda.findUnique({
+          where: { id: b.vendaId },
+          include: { titulos: true, pagamentos: true },
+        });
+        if (venda) {
+          const totalTitulos = venda.titulos.reduce(
+            (acc, t) => acc + parseFloat(String(t.valorOriginal || 0)),
+            0,
+          );
+          const totalPago = venda.pagamentos.reduce(
+            (acc, p) => acc + parseFloat(String(p.valor || 0)),
+            0,
+          );
+          const saldoAberto = Math.max(0, totalTitulos - totalPago);
+          if (b.valor > saldoAberto) {
+            trocoValor = b.valor - saldoAberto;
+            valorPrincipal = saldoAberto;
+          }
+        }
+      }
+
       const novoPagamento = await tx.pagamento.create({
         data: {
           clienteId: b.clienteId,
           vendaId: b.vendaId ?? null,
           tipo: b.tipo,
-          valor: b.valor,
+          valor: valorPrincipal,
           data: dataPagamento,
           observacoes: b.observacoes,
         },
         include: { cliente: true, venda: true },
       });
+
+      if (trocoValor > 0) {
+        const trocoTipo = b.trocoTipo || b.tipo;
+        await tx.pagamento.create({
+          data: {
+            clienteId: b.clienteId,
+            vendaId: b.vendaId ?? null,
+            tipo: `troco_${trocoTipo}`,
+            valor: -trocoValor,
+            data: dataPagamento,
+            observacoes:
+              (b.observacoes ? `${b.observacoes} · ` : "") +
+              `Troco devolvido (${trocoTipo})`,
+          },
+        });
+      }
 
       await recalcularTodosTitulosCliente(tx, b.clienteId);
       await registrarEventoFinanceiro(tx, {
@@ -81,7 +121,7 @@ router.post("/", async (req, res) => {
         clienteId: b.clienteId,
         vendaId: b.vendaId ?? null,
         valor: b.valor,
-        payload: { tipo: b.tipo },
+        payload: { tipo: b.tipo, trocoValor, trocoTipo: b.trocoTipo || null },
       });
 
       return novoPagamento;

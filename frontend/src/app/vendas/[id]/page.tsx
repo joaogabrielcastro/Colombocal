@@ -34,6 +34,9 @@ export default function VendaDetailPage() {
     new Date().toISOString().split("T")[0],
   );
   const [obsBaixa, setObsBaixa] = useState("");
+  const [trocoTipo, setTrocoTipo] = useState<"dinheiro" | "transferencia">(
+    "dinheiro",
+  );
   const [salvandoBaixa, setSalvandoBaixa] = useState(false);
   const [freteForm, setFreteForm] = useState({
     valor: "",
@@ -136,6 +139,7 @@ export default function VendaDetailPage() {
         vendaId: venda.id,
         tipo: tipoBaixa,
         valor: v,
+        trocoTipo,
         data: dataBaixa,
         observacoes: obsBaixa || `Baixa venda #${venda.id}`,
       });
@@ -180,6 +184,21 @@ export default function VendaDetailPage() {
         </tr>`,
       )
       .join("");
+    const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0));
+    const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0));
+    const tarifaKg = tarifaTon / 1000;
+    const qtdSaco = venda.itens
+      .filter((i) => String(i.produto.unidade).toLowerCase() === "saco")
+      .reduce((a, i) => a + parseFloat(String(i.quantidade)), 0);
+    const qtdTon = venda.itens
+      .filter((i) => String(i.produto.unidade).toLowerCase() === "ton")
+      .reduce((a, i) => a + parseFloat(String(i.quantidade)), 0);
+    const qtdKg = venda.itens
+      .filter((i) => String(i.produto.unidade).toLowerCase() === "kg")
+      .reduce((a, i) => a + parseFloat(String(i.quantidade)), 0);
+    const freteSaco = qtdSaco * tarifaSaco;
+    const freteTon = qtdTon * tarifaTon;
+    const freteKg = qtdKg * tarifaKg;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -249,6 +268,22 @@ export default function VendaDetailPage() {
     <div style="margin-top:6px;">${escapeHtml(venda.observacoes || "Sem observações.")}</div>
   </div>
 
+  <div class="box" style="margin-top:10px;">
+    <div class="label">Resumo de frete para cobrança</div>
+    <div class="value">
+      Tarifa por saco: ${escapeHtml(formatMoney(tarifaSaco))} · Quantidade: ${escapeHtml(formatQuantidade(qtdSaco, "saco"))} · Subtotal: ${escapeHtml(formatMoney(freteSaco))}
+    </div>
+    <div class="value">
+      Tarifa por tonelada: ${escapeHtml(formatMoney(tarifaTon))} · Quantidade: ${escapeHtml(formatQuantidade(qtdTon, "ton"))} · Subtotal: ${escapeHtml(formatMoney(freteTon))}
+    </div>
+    <div class="value">
+      Tarifa equivalente por kg: ${escapeHtml(formatMoney(tarifaKg))} · Quantidade: ${escapeHtml(formatQuantidade(qtdKg, "kg"))} · Subtotal: ${escapeHtml(formatMoney(freteKg))}
+    </div>
+    <div class="value" style="font-weight:700; margin-top:6px;">
+      Frete total cobrado: ${escapeHtml(formatMoney(venda.frete))}
+    </div>
+  </div>
+
   <div class="assinatura">
     <div class="linha">Assinatura do Motorista</div>
     <div class="linha">Assinatura do Recebedor</div>
@@ -275,6 +310,13 @@ export default function VendaDetailPage() {
       (acc, p) => acc + parseFloat(String(p.valor)),
       0,
     ) ?? 0;
+  const totalTrocoVenda =
+    venda.pagamentos?.reduce((acc, p) => {
+      const tipo = String(p.tipo || "").toLowerCase();
+      if (!tipo.startsWith("troco_")) return acc;
+      return acc + Math.abs(parseFloat(String(p.valor || 0)));
+    }, 0) ?? 0;
+  const totalRecebidoLiquido = totalPagoVenda + totalTrocoVenda;
   const totalTituloVenda =
     venda.titulos?.reduce(
       (acc, t) => acc + parseFloat(String(t.valorOriginal)),
@@ -515,7 +557,9 @@ export default function VendaDetailPage() {
           Baixas nesta ordem (pagamentos vinculados)
         </h3>
         <p className="text-sm text-gray-500 mb-3">
-          Pago na venda: {formatMoney(totalPagoVenda)} • Saldo desta ordem:{" "}
+          Recebido líquido: {formatMoney(totalRecebidoLiquido)}
+          {totalTrocoVenda > 0 ? ` • Troco devolvido: ${formatMoney(totalTrocoVenda)}` : ""}
+          {" • "}Saldo desta ordem:{" "}
           <span
             className={
               saldoVenda >= 0 ? "text-green-700 font-semibold" : "text-red-600 font-semibold"
@@ -529,11 +573,19 @@ export default function VendaDetailPage() {
           <ul className="divide-y divide-gray-100 text-sm">
             {venda.pagamentos.map((p) => (
               <li key={p.id} className="py-2 flex justify-between">
-                <span className="capitalize text-gray-700">
+                <span className="capitalize text-gray-700 flex items-center gap-2">
                   {p.tipo} • {formatDate(p.data)}
+                  {String(p.tipo || "").toLowerCase().startsWith("troco_") && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
+                      Troco
+                    </span>
+                  )}
                 </span>
-                <span className="font-medium text-green-700">
-                  +{formatMoney(p.valor)}
+                <span
+                  className={`font-medium ${parseFloat(String(p.valor)) >= 0 ? "text-green-700" : "text-amber-700"}`}
+                >
+                  {parseFloat(String(p.valor)) >= 0 ? "+" : ""}
+                  {formatMoney(p.valor)}
                 </span>
               </li>
             ))}
@@ -576,6 +628,21 @@ export default function VendaDetailPage() {
               onChange={(e) => setDataBaixa(e.target.value)}
               className="input-field"
             />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Troco (se passar do saldo)
+            </label>
+            <select
+              value={trocoTipo}
+              onChange={(e) =>
+                setTrocoTipo(e.target.value as "dinheiro" | "transferencia")
+              }
+              className="input-field"
+            >
+              <option value="dinheiro">Devolver em dinheiro</option>
+              <option value="transferencia">Devolver em transferência</option>
+            </select>
           </div>
           <div className="md:col-span-2">
             <label className="block text-xs text-gray-500 mb-1">Observações</label>

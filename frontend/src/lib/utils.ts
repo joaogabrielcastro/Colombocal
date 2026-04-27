@@ -25,27 +25,14 @@ export function formatQuantidade(
   return `${num.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })} ${unidade}`;
 }
 
-export type StatusCheque =
-  | "a_receber"
-  | "recebido"
-  | "repassado"
-  | "depositado"
-  | "devolvido";
+export type StatusCheque = "ativo";
 
 export const STATUS_CHEQUE_LABEL: Record<StatusCheque, string> = {
-  a_receber: "A Receber",
-  recebido: "Recebido",
-  repassado: "Repassado",
-  depositado: "Depositado",
-  devolvido: "Devolvido",
+  ativo: "Ativo",
 };
 
 export const STATUS_CHEQUE_COLOR: Record<StatusCheque, string> = {
-  a_receber: "bg-orange-100 text-orange-800",
-  recebido: "bg-yellow-100 text-yellow-800",
-  repassado: "bg-emerald-100 text-emerald-800",
-  depositado: "bg-green-100 text-green-800",
-  devolvido: "bg-red-100 text-red-800",
+  ativo: "bg-blue-100 text-blue-800",
 };
 
 export function toInputDate(date: string | Date | null | undefined): string {
@@ -116,6 +103,8 @@ export interface Venda {
   vendedorId: number;
   motoristaId?: number;
   frete: number;
+  freteTarifaSaco?: number;
+  freteTarifaTonelada?: number;
   freteRecibo: boolean;
   freteReciboNum?: string;
   comissaoPercentualAplicado?: number;
@@ -164,6 +153,7 @@ export interface Cheque {
   clienteId: number;
   vendaId?: number;
   valor: number;
+  emitenteNome?: string;
   banco?: string;
   numero?: string;
   agencia?: string;

@@ -88,11 +88,7 @@ function normalizeChequesPorStatus(raw: unknown): ChequeStatus[] {
     merged.set(status, cur);
   }
   const order = [
-    "a_receber",
-    "recebido",
-    "repassado",
-    "depositado",
-    "devolvido",
+    "ativo",
   ];
   return [...merged.values()].sort((a, b) => {
     const ia = order.indexOf(a.status);
@@ -109,12 +105,12 @@ function normalizeFinanceiroPayload(data: FinanceiroData): FinanceiroData {
   let chequesPendentesValorTotal = data.chequesPendentesValorTotal;
   if (chequesPendentesCount == null) {
     chequesPendentesCount = chequesPorStatus
-      .filter((s) => s.status === "a_receber" || s.status === "recebido")
+      .filter((s) => s.status === "ativo")
       .reduce((acc, s) => acc + s.count, 0);
   }
   if (chequesPendentesValorTotal == null) {
     chequesPendentesValorTotal = chequesPorStatus
-      .filter((s) => s.status === "a_receber" || s.status === "recebido")
+      .filter((s) => s.status === "ativo")
       .reduce((acc, s) => acc + s.total, 0);
   }
   return {
@@ -126,25 +122,17 @@ function normalizeFinanceiroPayload(data: FinanceiroData): FinanceiroData {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  a_receber: "A Receber",
-  recebido: "Recebido",
-  repassado: "Repassado",
-  depositado: "Depositado",
-  devolvido: "Devolvido",
+  ativo: "Ativo",
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  a_receber: "bg-orange-100 text-orange-800",
-  recebido: "bg-blue-100 text-blue-800",
-  repassado: "bg-emerald-100 text-emerald-800",
-  depositado: "bg-green-100 text-green-800",
-  devolvido: "bg-red-100 text-red-800",
+  ativo: "bg-blue-100 text-blue-800",
 };
 
 export default function FinanceiroPage() {
   const [dados, setDados] = useState<FinanceiroData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<"devedores" | "pendentes" | "devolvidos">(
+  const [aba, setAba] = useState<"devedores" | "pendentes">(
     "devedores",
   );
 
@@ -223,8 +211,7 @@ export default function FinanceiroPage() {
             Os valores de <strong>clientes devedores</strong> vêm da{" "}
             <strong>carteira de títulos</strong> (valor original − pago em cada
             título), não da mesma conta corrente “vendas − pagamentos” da ficha
-            do cliente. Cheques incluem <strong>repassado</strong> (circulação) e{" "}
-            <strong>depositado</strong> apenas como legado.
+            do cliente.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -286,15 +273,6 @@ export default function FinanceiroPage() {
               <p className="text-2xl font-bold text-yellow-600 mt-1">
                 {dados.chequesPendentesCount ?? dados.chequesPendentes.length}
               </p>
-              <p className="text-[10px] text-gray-400 mt-1">
-                A receber + recebido (ainda não finalizado)
-              </p>
-            </div>
-            <div className="card p-4 text-center">
-              <p className="text-xs text-gray-500">Cheques Devolvidos</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">
-                {dados.chequesDevolvidos.length}
-              </p>
             </div>
           </div>
 
@@ -336,10 +314,6 @@ export default function FinanceiroPage() {
                 {
                   key: "pendentes",
                   label: `Cheques Pendentes (${dados.chequesPendentesCount ?? dados.chequesPendentes.length})`,
-                },
-                {
-                  key: "devolvidos",
-                  label: `Cheques Devolvidos (${dados.chequesDevolvidos.length})`,
                 },
               ] as const
             ).map((t) => (
@@ -434,10 +408,7 @@ export default function FinanceiroPage() {
                         {dados.chequesPendentesListaMax} registros. Total no
                         sistema:{" "}
                         <strong>{dados.chequesPendentesCount}</strong> cheques —{" "}
-                        <Link
-                          href="/cheques?status=a_receber"
-                          className="text-blue-700 underline font-medium"
-                        >
+                        <Link href="/cheques" className="text-blue-700 underline font-medium">
                           ver todos em Cheques
                         </Link>
                         .
@@ -509,68 +480,6 @@ export default function FinanceiroPage() {
             </div>
           )}
 
-          {aba === "devolvidos" && (
-            <div className="card overflow-hidden">
-              {dados.chequesDevolvidos.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">
-                  Nenhum cheque devolvido.
-                </div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr>
-                      <th className="table-header">Cliente</th>
-                      <th className="table-header">Banco</th>
-                      <th className="table-header">Número</th>
-                      <th className="table-header">Pré-datado</th>
-                      <th className="table-header">Compensação</th>
-                      <th className="table-header text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dados.chequesDevolvidos.map((c) => (
-                      <tr key={c.id} className="table-row">
-                        <td className="table-cell">
-                          <a
-                            href={`/clientes/${c.cliente.id}`}
-                            className="text-blue-600 hover:underline"
-                          >
-                            {c.cliente.nomeFantasia || c.cliente.razaoSocial}
-                          </a>
-                        </td>
-                        <td className="table-cell">{c.banco}</td>
-                        <td className="table-cell">{c.numero}</td>
-                        <td className="table-cell">
-                          {formatDate(c.dataRecebimento)}
-                        </td>
-                        <td className="table-cell">
-                          {c.dataCompensacao
-                            ? formatDate(c.dataCompensacao)
-                            : "—"}
-                        </td>
-                        <td className="table-cell text-right font-semibold text-red-600">
-                          {formatMoney(c.valor)}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="bg-gray-50 font-bold">
-                      <td className="table-cell" colSpan={5}>
-                        Total Devolvido
-                      </td>
-                      <td className="table-cell text-right text-red-600">
-                        {formatMoney(
-                          dados.chequesDevolvidos.reduce(
-                            (s, c) => s + parseFloat(String(c.valor)),
-                            0,
-                          ),
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
         </>
       )}
     </div>

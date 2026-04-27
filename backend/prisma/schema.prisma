@@ -98,6 +98,8 @@ model Venda {
   motoristaId     Int?
   // Frete: fonte da verdade operacional é Venda (valor + recibo). FreteMovimento espelha o 1º movimento por venda para histórico/listagem; criado/atualizado pela API de venda (PATCH/POST).
   frete           Decimal  @default(0) @db.Decimal(10, 2)
+  freteTarifaSaco Decimal  @default(0) @db.Decimal(10, 2)
+  freteTarifaTonelada Decimal @default(0) @db.Decimal(10, 2)
   freteRecibo     Boolean  @default(false)  // recibo de frete emitido?
   freteReciboNum  String?                   // número do recibo de frete
   comissaoPercentualAplicado Decimal @default(0) @db.Decimal(5, 2)
@@ -117,6 +119,7 @@ model Venda {
   pagamentos    Pagamento[]
   titulos       TituloReceber[]
   fretes        FreteMovimento[]
+  comissaoAjuste ComissaoAjusteVenda?
 
   @@index([clienteId, dataVenda])
   @@index([vendedorId, dataVenda])
@@ -156,13 +159,14 @@ model Cheque {
   clienteId       Int
   vendaId         Int?      // venda a que este cheque se refere
   valor           Decimal   @db.Decimal(10, 2)
+  emitenteNome    String?
   banco           String?
   numero          String?
   agencia         String?
   conta           String?
   dataRecebimento DateTime  @default(now())
   dataCompensacao DateTime?
-  status          String    @default("a_receber") // a_receber, recebido, depositado
+  status          String    @default("ativo")
   observacoes     String?
   createdAt       DateTime  @default(now())
 
@@ -239,6 +243,17 @@ model ConfigSistema {
   chave     String   @unique
   valor     String
   updatedAt DateTime @updatedAt
+}
+
+model ComissaoAjusteVenda {
+  id          Int      @id @default(autoincrement())
+  vendaId     Int      @unique
+  ajusteValor Decimal  @default(0) @db.Decimal(10, 2)
+  motivo      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  venda Venda @relation(fields: [vendaId], references: [id], onDelete: Cascade)
 }
 
 /// Eventos de auditoria financeira (append-only). Ver política de retenção em `services/financeiroEventos.js`.

@@ -8,11 +8,15 @@ import {
 import { formatMoney, formatDate } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
+import * as XLSX from "xlsx";
 
 interface VendaComissaoLinha {
   id: number;
   valorTotal: unknown;
   comissaoCalculada?: number;
+  comissaoFinal?: number;
+  ajusteComissaoValor?: number;
+  ajusteComissaoMotivo?: string | null;
   [key: string]: unknown;
 }
 
@@ -34,6 +38,7 @@ export default function ComissoesPage() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
+  const [importando, setImportando] = useState(false);
 
   useEffect(() => {
     const hoje = new Date();
@@ -100,6 +105,62 @@ export default function ComissoesPage() {
     a.download = `comissoes-${dataInicio}-${dataFim}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportarTemplateAjustes = () => {
+    const rows = dados.flatMap((d) =>
+      d.vendas.map((v: any) => ({
+        vendedor: d.vendedor.nome,
+        vendaId: v.id,
+        dataVenda: formatDate(v.dataVenda),
+        cliente: v.cliente?.nomeFantasia || v.cliente?.razaoSocial || "",
+        baseComissao: parseFloat(String(v.valorTotal || 0)),
+        comissaoCalculada: parseFloat(String(v.comissaoCalculada || 0)),
+        ajusteComissaoValor: parseFloat(String(v.ajusteComissaoValor || 0)),
+        comissaoFinal: parseFloat(String(v.comissaoFinal || v.comissaoCalculada || 0)),
+        motivoAjuste: v.ajusteComissaoMotivo || "",
+      })),
+    );
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Ajustes Comissao");
+    XLSX.writeFile(wb, `comissoes-ajustes-${dataInicio}-${dataFim}.xlsx`);
+  };
+
+  const importarAjustes = async (file: File) => {
+    setImportando(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+        defval: "",
+      });
+      const ajustes = rows
+        .map((r) => ({
+          vendaId: parseInt(String(r.vendaId || r.VendaId || r.VENDAID || 0), 10),
+          ajusteValor: parseFloat(
+            String(
+              r.ajusteComissaoValor ||
+                r.ajustevalor ||
+                r.ajuste ||
+                r.AjusteComissaoValor ||
+                0,
+            ).replace(",", "."),
+          ),
+          motivo: String(r.motivoAjuste || r.motivo || r.MotivoAjuste || "").trim(),
+        }))
+        .filter((a) => Number.isFinite(a.vendaId) && a.vendaId > 0 && Number.isFinite(a.ajusteValor));
+
+      if (!ajustes.length) {
+        alert("Nenhum ajuste válido encontrado no arquivo.");
+        return;
+      }
+      await api.post("/relatorios/comissoes/ajustes-lote", { ajustes });
+      buscar();
+    } finally {
+      setImportando(false);
+    }
   };
 
   const buscar = (ini?: string, fim?: string, m?: ComissaoModo) => {
@@ -306,6 +367,30 @@ export default function ComissoesPage() {
                 <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
               </button>
             )}
+            {dados.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={exportarTemplateAjustes}
+                  className="btn-secondary flex items-center gap-1"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" /> Exportar Excel Ajustes
+                </button>
+                <label className="btn-secondary flex items-center gap-1 cursor-pointer">
+                  {importando ? "Importando..." : "Importar Excel Ajustado"}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void importarAjustes(file);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -388,7 +473,10 @@ export default function ComissoesPage() {
                         <th className="table-header">Data</th>
                         <th className="table-header">Cliente</th>
                         <th className="table-header text-right">Total</th>
-                        <th className="table-header text-right">Comissão</th>
+                        <th className="table-header text-right">Comissão base</th>
+                        <th className="table-header text-right">Ajuste (Excel)</th>
+                        <th className="table-header text-right">Comissão final</th>
+                        <th className="table-header">Motivo ajuste</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -407,10 +495,23 @@ export default function ComissoesPage() {
                           <td className="table-cell text-right text-orange-600">
                             {formatMoney(
                               v.comissaoCalculada ??
-                                (parseFloat(String(v.valorTotal)) *
-                                  d.percentual) /
-                                  100,
+                                (parseFloat(String(v.valorTotal)) * d.percentual) / 100,
                             )}
+                          </td>
+                          <td
+                            className={`table-cell text-right ${(parseFloat(String(v.ajusteComissaoValor || 0)) || 0) === 0 ? "text-gray-400" : "text-amber-700 font-semibold"}`}
+                          >
+                            {formatMoney(v.ajusteComissaoValor ?? 0)}
+                          </td>
+                          <td className="table-cell text-right text-orange-700 font-semibold">
+                            {formatMoney(
+                              v.comissaoFinal ??
+                                (v.comissaoCalculada ??
+                                  (parseFloat(String(v.valorTotal)) * d.percentual) / 100),
+                            )}
+                          </td>
+                          <td className="table-cell text-xs text-gray-600">
+                            {v.ajusteComissaoMotivo || "-"}
                           </td>
                         </tr>
                       ))}

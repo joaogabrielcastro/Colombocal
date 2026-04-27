@@ -60,7 +60,7 @@ router.get("/", async (req, res) => {
         select: { id: true, razaoSocial: true, nomeFantasia: true, telefone: true },
       }),
       prisma.cheque.aggregate({
-        where: { status: { in: ["a_receber", "recebido"] } },
+        where: { status: "ativo" },
         _sum: { valor: true },
         _count: { id: true },
       }),

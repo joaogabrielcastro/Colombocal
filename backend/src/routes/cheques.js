@@ -7,6 +7,7 @@ const { parseIntField } = require("../utils/validation");
 const { parseBody } = require("../utils/zodParse");
 const {
   chequeCreateSchema,
+  chequeLoteCreateSchema,
   chequeStatusPatchSchema,
 } = require("../schemas/cheque");
 const {
@@ -22,9 +23,7 @@ const {
 async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataCompensacaoDate) {
   const id = chequeAtual.id;
   const data = { status: statusValidado };
-  if (statusValidado === "depositado" || statusValidado === "repassado") {
-    data.dataCompensacao = dataCompensacaoDate || new Date();
-  }
+  if (statusValidado === "ativo" && dataCompensacaoDate) data.dataCompensacao = dataCompensacaoDate;
 
   await tx.cheque.update({ where: { id }, data });
   await registrarEventoFinanceiro(tx, {
@@ -39,10 +38,7 @@ async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataC
   });
 
   const temPagamento = !!chequeAtual.pagamento;
-  const precisaPagamento =
-    statusValidado === "recebido" ||
-    statusValidado === "depositado" ||
-    statusValidado === "repassado";
+  const precisaPagamento = statusValidado === "ativo";
 
   if (precisaPagamento && !temPagamento) {
     await tx.pagamento.create({
@@ -59,15 +55,9 @@ async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataC
     await recalcularTodosTitulosCliente(tx, chequeAtual.clienteId);
   }
 
-  if (
-    (statusValidado === "a_receber" || statusValidado === "devolvido") &&
-    temPagamento
-  ) {
+  if (!precisaPagamento && temPagamento) {
     await tx.pagamento.deleteMany({ where: { chequeId: chequeAtual.id } });
-    await recalcularTitulos(tx, {
-      clienteId: chequeAtual.clienteId,
-      vendaId: chequeAtual.vendaId,
-    });
+    await recalcularTitulos(tx, { clienteId: chequeAtual.clienteId, vendaId: chequeAtual.vendaId });
   }
 }
 
@@ -76,7 +66,7 @@ router.get("/", async (req, res) => {
   try {
     const {
       clienteId,
-      status,
+      status: _statusIgnored,
       dataInicio,
       dataFim,
       ordem,
@@ -95,19 +85,7 @@ router.get("/", async (req, res) => {
 
     const and = [];
     if (clienteId) and.push({ clienteId: parseInt(clienteId, 10) });
-    if (status && String(status).trim()) {
-      const statusNorm = String(status).trim();
-      if (statusNorm === "todos" || statusNorm === "all") {
-        // sem filtro de status (inclui repassado / depositado)
-      } else if (statusNorm === "fila") {
-        and.push({ status: { notIn: ["repassado", "depositado"] } });
-      } else if (statusNorm === "finalizado") {
-        and.push({ status: { in: ["repassado", "depositado"] } });
-      } else {
-        and.push({ status: statusNorm });
-      }
-    }
-    // sem ?status= na query: lista completa (igual a status=todos). Use status=fila para excluir repassado/legado.
+    // status unico: nao aplicamos filtro de status na listagem
     if (dataInicio || dataFim) {
       const dr = {};
       if (dataInicio) dr.gte = new Date(dataInicio);
@@ -193,7 +171,7 @@ router.get("/", async (req, res) => {
 
     if (includeResumo) {
       const raw = results[2];
-      const order = ["a_receber", "recebido", "repassado", "devolvido", "depositado"];
+      const order = ["ativo"];
       const resumoPorStatus = raw
         .map((row) => ({
           status: String(row.status || "").trim(),
@@ -234,7 +212,7 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const b = parseBody(chequeCreateSchema, req.body);
-    const statusInicial = b.status ?? "a_receber";
+    const statusInicial = "ativo";
     const dataRecebimentoDate =
       b.dataRecebimento instanceof Date
         ? b.dataRecebimento
@@ -254,6 +232,7 @@ router.post("/", async (req, res) => {
           clienteId: b.clienteId,
           vendaId: b.vendaId ?? null,
           valor: b.valor,
+          emitenteNome: b.emitenteNome ?? null,
           banco: b.banco ?? null,
           numero: b.numero ?? null,
           agencia: b.agencia ?? null,
@@ -265,25 +244,18 @@ router.post("/", async (req, res) => {
         },
       });
 
-      // Pagamento só é criado quando o cheque foi efetivamente recebido
-      if (
-        statusInicial === "recebido" ||
-        statusInicial === "depositado" ||
-        statusInicial === "repassado"
-      ) {
-        await tx.pagamento.create({
-          data: {
-            clienteId: b.clienteId,
-            vendaId: novoCheque.vendaId,
-            tipo: "cheque",
-            valor: b.valor,
-            data: dataRecebimentoDate || new Date(),
-            chequeId: novoCheque.id,
-            observacoes: `Cheque #${b.numero || novoCheque.id} - ${b.banco || ""}`,
-          },
-        });
-        await recalcularTodosTitulosCliente(tx, b.clienteId);
-      }
+      await tx.pagamento.create({
+        data: {
+          clienteId: b.clienteId,
+          vendaId: novoCheque.vendaId,
+          tipo: "cheque",
+          valor: b.valor,
+          data: dataRecebimentoDate || new Date(),
+          chequeId: novoCheque.id,
+          observacoes: `Cheque #${b.numero || novoCheque.id} - ${b.banco || ""}`,
+        },
+      });
+      await recalcularTodosTitulosCliente(tx, b.clienteId);
       await registrarEventoFinanceiro(tx, {
         tipo: "CHEQUE_CRIADO",
         entidade: "Cheque",
@@ -304,6 +276,108 @@ router.post("/", async (req, res) => {
     });
 
     res.status(201).json(chequeCompleto);
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// POST /api/cheques/lote - cadastro em lote de cheques vinculados a venda
+router.post("/lote", async (req, res) => {
+  try {
+    const b = parseBody(chequeLoteCreateSchema, req.body);
+    const clienteId = b.clienteId;
+    const vendaId = b.vendaId;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const venda = await tx.venda.findUnique({
+        where: { id: vendaId },
+        include: { titulos: true, pagamentos: true },
+      });
+      if (!venda) throw new Error("Venda não encontrada");
+      if (venda.clienteId !== clienteId) {
+        throw new Error("A venda informada não pertence ao cliente selecionado");
+      }
+
+      const totalLote = b.itens.reduce((acc, item) => acc + Number(item.valor), 0);
+      const totalTitulos = venda.titulos.reduce(
+        (acc, t) => acc + parseFloat(String(t.valorOriginal || 0)),
+        0,
+      );
+      const totalPago = venda.pagamentos.reduce(
+        (acc, p) => acc + parseFloat(String(p.valor || 0)),
+        0,
+      );
+      const saldoAberto = Math.max(0, totalTitulos - totalPago);
+
+      if (totalLote > saldoAberto + 0.0001) {
+        throw new Error(
+          `Total do lote (${totalLote.toFixed(2)}) maior que saldo em aberto da venda (${saldoAberto.toFixed(2)})`,
+        );
+      }
+
+      const criados = [];
+      for (const item of b.itens) {
+        const dataRecebimentoDate =
+          item.dataRecebimento instanceof Date
+            ? item.dataRecebimento
+            : item.dataRecebimento
+              ? new Date(item.dataRecebimento)
+              : new Date();
+        const dataCompensacaoDate =
+          item.dataCompensacao instanceof Date
+            ? item.dataCompensacao
+            : item.dataCompensacao
+              ? new Date(item.dataCompensacao)
+              : null;
+
+        const novoCheque = await tx.cheque.create({
+          data: {
+            clienteId,
+            vendaId,
+            valor: item.valor,
+            emitenteNome: item.emitenteNome,
+            banco: item.banco ?? null,
+            numero: item.numero ?? null,
+            agencia: item.agencia ?? null,
+            conta: item.conta ?? null,
+            dataRecebimento: dataRecebimentoDate,
+            dataCompensacao: dataCompensacaoDate,
+            status: "ativo",
+            observacoes: item.observacoes ?? null,
+          },
+        });
+
+        await tx.pagamento.create({
+          data: {
+            clienteId,
+            vendaId,
+            tipo: "cheque",
+            valor: item.valor,
+            data: dataRecebimentoDate,
+            chequeId: novoCheque.id,
+            observacoes: `Cheque #${item.numero || novoCheque.id} - ${item.banco || ""}`,
+          },
+        });
+
+        await registrarEventoFinanceiro(tx, {
+          tipo: "CHEQUE_CRIADO_LOTE",
+          entidade: "Cheque",
+          entidadeId: novoCheque.id,
+          chequeId: novoCheque.id,
+          clienteId,
+          vendaId,
+          valor: item.valor,
+          payload: { emitenteNome: item.emitenteNome, banco: item.banco || null },
+        });
+
+        criados.push(novoCheque);
+      }
+
+      await recalcularTitulos(tx, { clienteId, vendaId });
+      return { chequesCriados: criados.length, totalLote };
+    });
+
+    res.status(201).json(result);
   } catch (error) {
     handleRouteError(res, error);
   }

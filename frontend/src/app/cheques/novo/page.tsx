@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { formatMoney, type Cliente, type Venda } from "@/lib/utils";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
@@ -27,8 +27,8 @@ function NovoChequeForm() {
   const [form, setForm] = useState({
     clienteId: preClienteId || "",
     vendaId: "",
-    status: "a_receber",
     valor: "",
+    emitenteNome: "",
     banco: "",
     numero: "",
     agencia: "",
@@ -38,6 +38,20 @@ function NovoChequeForm() {
   });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [modo, setModo] = useState<"unitario" | "lote">("unitario");
+  const [loteVendaId, setLoteVendaId] = useState("");
+  const [loteItens, setLoteItens] = useState([
+    {
+      emitenteNome: "",
+      valor: "",
+      banco: "",
+      numero: "",
+      agencia: "",
+      conta: "",
+      dataRecebimento: new Date().toISOString().split("T")[0],
+      observacoes: "",
+    },
+  ]);
 
   const loadClienteOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({ ativo: "true", busca: q, take: "40" });
@@ -101,10 +115,38 @@ function NovoChequeForm() {
     ) =>
       setForm((p) => ({ ...p, [field]: e.target.value }));
 
+  const addLoteItem = () => {
+    setLoteItens((prev) => [
+      ...prev,
+      {
+        emitenteNome: "",
+        valor: "",
+        banco: "",
+        numero: "",
+        agencia: "",
+        conta: "",
+        dataRecebimento: new Date().toISOString().split("T")[0],
+        observacoes: "",
+      },
+    ]);
+  };
+
+  const removeLoteItem = (index: number) => {
+    setLoteItens((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const setLoteItem =
+    (index: number, field: keyof (typeof loteItens)[number]) =>
+    (value: string) => {
+      setLoteItens((prev) =>
+        prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+      );
+    };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.clienteId || !form.valor) {
-      setErro("Selecione o cliente e informe o valor");
+    if (!form.clienteId || !form.valor || !form.emitenteNome.trim()) {
+      setErro("Selecione o cliente e informe emitente e valor");
       return;
     }
     setSalvando(true);
@@ -121,6 +163,40 @@ function NovoChequeForm() {
       setSalvando(false);
     }
   };
+
+  const handleSubmitLote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.clienteId || !loteVendaId) {
+      setErro("Selecione cliente e venda para o cadastro em lote");
+      return;
+    }
+    const itensValidos = loteItens
+      .map((i) => ({
+        ...i,
+        emitenteNome: i.emitenteNome.trim(),
+        valor: parseFloat(i.valor),
+      }))
+      .filter((i) => i.emitenteNome && Number.isFinite(i.valor) && i.valor > 0);
+    if (!itensValidos.length) {
+      setErro("Informe ao menos um cheque válido no lote");
+      return;
+    }
+    setSalvando(true);
+    setErro("");
+    try {
+      await api.post("/cheques/lote", {
+        clienteId: parseInt(form.clienteId, 10),
+        vendaId: parseInt(loteVendaId, 10),
+        itens: itensValidos,
+      });
+      router.push("/cheques");
+    } catch (e: any) {
+      setErro(e.message);
+      setSalvando(false);
+    }
+  };
+
+  const totalLote = loteItens.reduce((acc, i) => acc + (parseFloat(i.valor) || 0), 0);
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -143,7 +219,24 @@ function NovoChequeForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="card p-5">
+      <div className="mb-4 flex gap-2">
+        <button
+          type="button"
+          className={modo === "unitario" ? "btn-primary" : "btn-secondary"}
+          onClick={() => setModo("unitario")}
+        >
+          Cadastro unitário
+        </button>
+        <button
+          type="button"
+          className={modo === "lote" ? "btn-primary" : "btn-secondary"}
+          onClick={() => setModo("lote")}
+        >
+          Cadastro em lote
+        </button>
+      </div>
+
+      <form onSubmit={modo === "unitario" ? handleSubmit : handleSubmitLote} className="card p-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <SearchableSelect
@@ -164,7 +257,7 @@ function NovoChequeForm() {
               Valor do Cheque (R$) *
             </label>
             <input
-              required
+              required={modo === "unitario"}
               type="number"
               step="0.01"
               min="0.01"
@@ -177,7 +270,20 @@ function NovoChequeForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Data do pré-datado
+              Emitente do cheque *
+            </label>
+            <input
+              required={modo === "unitario"}
+              value={form.emitenteNome}
+              onChange={set("emitenteNome")}
+              className="input-field"
+              placeholder="Nome de quem emitiu o cheque"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Data do cheque
             </label>
             <input
               type="date"
@@ -251,24 +357,6 @@ function NovoChequeForm() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Status inicial
-            </label>
-            <select
-              value={form.status}
-              onChange={set("status")}
-              className="input-field"
-            >
-              <option value="a_receber">
-                A Receber (cheque prometido, ainda não entregue)
-              </option>
-              <option value="recebido">Recebido (cheque em mãos)</option>
-              <option value="repassado">Repassado (circulação)</option>
-              <option value="devolvido">Devolvido</option>
-            </select>
-          </div>
-
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Observações
@@ -280,11 +368,102 @@ function NovoChequeForm() {
               rows={2}
             />
           </div>
+
+          {modo === "lote" && (
+            <>
+              <div className="md:col-span-2">
+                <SearchableSelect
+                  label="Venda vinculada para abatimento *"
+                  value={loteVendaId}
+                  onChange={setLoteVendaId}
+                  loadOptions={loadVendaOptions}
+                  minChars={0}
+                  disabled={!form.clienteId}
+                  placeholder={
+                    form.clienteId
+                      ? "Busque por nº da venda ou valor…"
+                      : "Selecione o cliente primeiro"
+                  }
+                />
+              </div>
+              <div className="md:col-span-2 border rounded-lg border-gray-200 p-3">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-gray-800">
+                    Cheques do lote
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs py-1.5"
+                    onClick={addLoteItem}
+                  >
+                    <PlusIcon className="w-3.5 h-3.5" /> Adicionar linha
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {loteItens.map((item, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-2 border rounded-lg border-gray-100 p-2">
+                      <input
+                        className="input-field md:col-span-2"
+                        placeholder="Emitente *"
+                        value={item.emitenteNome}
+                        onChange={(e) => setLoteItem(index, "emitenteNome")(e.target.value)}
+                      />
+                      <input
+                        className="input-field"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="Valor *"
+                        value={item.valor}
+                        onChange={(e) => setLoteItem(index, "valor")(e.target.value)}
+                      />
+                      <input
+                        className="input-field"
+                        placeholder="Banco"
+                        value={item.banco}
+                        onChange={(e) => setLoteItem(index, "banco")(e.target.value)}
+                      />
+                      <input
+                        className="input-field"
+                        placeholder="Número"
+                        value={item.numero}
+                        onChange={(e) => setLoteItem(index, "numero")(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          className="input-field"
+                          type="date"
+                          value={item.dataRecebimento}
+                          onChange={(e) => setLoteItem(index, "dataRecebimento")(e.target.value)}
+                        />
+                        {loteItens.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeLoteItem(index)}
+                            className="btn-secondary px-2"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm text-gray-600 mt-3">
+                  Total do lote: <span className="font-semibold">{formatMoney(totalLote)}</span>
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex gap-3 mt-5">
           <button type="submit" disabled={salvando} className="btn-primary">
-            {salvando ? "Registrando..." : "Registrar Cheque"}
+            {salvando
+              ? "Registrando..."
+              : modo === "unitario"
+                ? "Registrar Cheque"
+                : "Registrar Lote de Cheques"}
           </button>
           <Link href="/cheques" className="btn-secondary">
             Cancelar

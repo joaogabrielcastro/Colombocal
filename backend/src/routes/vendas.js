@@ -369,6 +369,8 @@ router.post("/", async (req, res) => {
           vendedorId: vendedorIdNum,
           motoristaId: motoristaIdNum,
           frete: freteFinal,
+          freteTarifaSaco: fretePorSacoAplicado,
+          freteTarifaTonelada: fretePorTonAplicado,
           freteRecibo: !!freteRecibo,
           freteReciboNum: freteReciboNum || null,
           comissaoPercentualAplicado,
@@ -491,13 +493,11 @@ router.delete("/:id", async (req, res) => {
       });
     }
 
-    const chequeRecebido = vendaExistente.cheques.some(
-      (c) => c.status === "recebido" || c.status === "depositado",
-    );
-    if (chequeRecebido) {
+    const temChequeVinculado = vendaExistente.cheques.length > 0;
+    if (temChequeVinculado) {
       return res.status(400).json({
         error:
-          "Venda com cheque recebido/depositado não pode ser cancelada. Ajuste os cheques primeiro.",
+          "Venda com cheques vinculados não pode ser cancelada. Ajuste os cheques primeiro.",
       });
     }
 

@@ -225,6 +225,7 @@ router.get("/comissoes", async (req, res) => {
         dataVenda: true,
         cliente: true,
         itens: { include: { produto: true } },
+        comissaoAjuste: { select: { ajusteValor: true, motivo: true } },
       },
       orderBy: { dataVenda: "desc" },
     });
@@ -273,7 +274,13 @@ router.get("/comissoes", async (req, res) => {
           : comissaoPorEmissao(vCalc);
       lista.push({
         ...venda,
+        ajusteComissaoValor: parseFloat(
+          String(venda.comissaoAjuste?.ajusteValor ?? 0),
+        ),
+        ajusteComissaoMotivo: venda.comissaoAjuste?.motivo ?? null,
         comissaoCalculada: comissaoLinha,
+        comissaoFinal:
+          comissaoLinha + parseFloat(String(venda.comissaoAjuste?.ajusteValor ?? 0)),
         totalPagoNaVenda: pags.reduce(
           (a, x) => a + parseFloat(String(x.valor)),
           0,
@@ -288,7 +295,7 @@ router.get("/comissoes", async (req, res) => {
         0,
       );
       const comissao = vendasDoVendedor.reduce(
-        (acc, venda) => acc + parseFloat(String(venda.comissaoCalculada || 0)),
+        (acc, venda) => acc + parseFloat(String(venda.comissaoFinal ?? venda.comissaoCalculada || 0)),
         0,
       );
       const percentualMedio =
@@ -311,6 +318,41 @@ router.get("/comissoes", async (req, res) => {
   }
 });
 
+// POST /api/relatorios/comissoes/ajustes-lote
+router.post("/comissoes/ajustes-lote", async (req, res) => {
+  try {
+    const ajustes = Array.isArray(req.body?.ajustes) ? req.body.ajustes : [];
+    if (!ajustes.length) {
+      return res.status(400).json({ error: "Nenhum ajuste informado" });
+    }
+    const ids = ajustes
+      .map((a) => parseInt(String(a?.vendaId || 0), 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (!ids.length) {
+      return res.status(400).json({ error: "vendaId inválido no lote" });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of ajustes) {
+        const vendaId = parseInt(String(item?.vendaId || 0), 10);
+        if (!Number.isFinite(vendaId) || vendaId <= 0) continue;
+        const ajusteValor = parseFloat(String(item?.ajusteValor ?? 0));
+        const motivo =
+          item?.motivo == null ? null : String(item.motivo).trim().slice(0, 500);
+        await tx.comissaoAjusteVenda.upsert({
+          where: { vendaId },
+          update: { ajusteValor: Number.isFinite(ajusteValor) ? ajusteValor : 0, motivo },
+          create: { vendaId, ajusteValor: Number.isFinite(ajusteValor) ? ajusteValor : 0, motivo },
+        });
+      }
+    });
+
+    res.json({ success: true, total: ids.length });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
 function sumDecimal(v) {
   if (v == null || v === "") return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -328,7 +370,7 @@ function normalizeChequeStatusSlug(raw) {
 }
 
 function mapChequeGroupBy(rows) {
-  const order = ["a_receber", "recebido", "repassado", "depositado", "devolvido"];
+  const order = ["ativo"];
   const merged = new Map();
   for (const row of rows) {
     const status = normalizeChequeStatusSlug(row.status);
@@ -352,7 +394,7 @@ function mapChequeGroupBy(rows) {
 router.get("/financeiro", async (req, res) => {
   try {
     const chequePendenteWhere = {
-      status: { in: ["a_receber", "recebido"] },
+      status: "ativo",
     };
     // Todos clientes ativos com suas contas (baseado em títulos)
     const [
@@ -385,11 +427,7 @@ router.get("/financeiro", async (req, res) => {
         include: { cliente: true },
         orderBy: { dataRecebimento: "asc" },
       }),
-      prisma.cheque.findMany({
-        where: { status: "devolvido" },
-        include: { cliente: true },
-        orderBy: { dataRecebimento: "desc" },
-      }),
+      Promise.resolve([]),
     ]);
 
     const chequesPorStatus = mapChequeGroupBy(chequesPorStatusRaw);

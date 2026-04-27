@@ -13,7 +13,6 @@ import {
   formatDate,
   STATUS_CHEQUE_LABEL,
   STATUS_CHEQUE_COLOR,
-  type StatusCheque,
   type Cliente,
   type Produto,
   type Cheque,
@@ -79,7 +78,6 @@ export default function ClienteDetailPage() {
   const [form, setForm] = useState<Partial<Cliente>>({});
   const [salvandoForm, setSalvandoForm] = useState(false);
   const [erro, setErro] = useState("");
-  const [filtroChqStatus, setFiltroChqStatus] = useState("");
   const [filtroChqIni, setFiltroChqIni] = useState("");
   const [filtroChqFim, setFiltroChqFim] = useState("");
   const [buscaChq, setBuscaChq] = useState("");
@@ -95,7 +93,6 @@ export default function ClienteDetailPage() {
   const carregarCheques = () => {
     const params = new URLSearchParams();
     params.set("clienteId", String(id));
-    if (filtroChqStatus) params.set("status", filtroChqStatus);
     if (filtroChqIni) params.set("dataInicio", filtroChqIni);
     if (filtroChqFim) params.set("dataFim", filtroChqFim);
     api.get<Cheque[]>(`/cheques?${params}`).then(setCheques);
@@ -487,21 +484,6 @@ export default function ClienteDetailPage() {
           </div>
           <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap gap-3 items-end">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Status</label>
-              <select
-                value={filtroChqStatus}
-                onChange={(e) => setFiltroChqStatus(e.target.value)}
-                className="input-field w-36 text-sm"
-              >
-                <option value="">Todos</option>
-                <option value="a_receber">A Receber</option>
-                <option value="recebido">Recebido</option>
-                <option value="repassado">Repassado</option>
-                <option value="depositado">Depositado (legado)</option>
-                <option value="devolvido">Devolvido</option>
-              </select>
-            </div>
-            <div>
               <label className="block text-xs text-gray-500 mb-1">De</label>
               <input
                 type="date"
@@ -604,9 +586,9 @@ export default function ClienteDetailPage() {
                     </td>
                     <td className="table-cell">
                       <span
-                        className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_CHEQUE_COLOR[c.status as StatusCheque]}`}
+                        className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_CHEQUE_COLOR.ativo}`}
                       >
-                        {STATUS_CHEQUE_LABEL[c.status as StatusCheque]}
+                        {STATUS_CHEQUE_LABEL.ativo}
                       </span>
                     </td>
                   </tr>
