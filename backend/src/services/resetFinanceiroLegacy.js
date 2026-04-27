@@ -24,22 +24,36 @@ async function executarResetFinanceiroLegacy(prisma) {
     await tx.cheque.deleteMany({});
 
     const clientes = await tx.cliente.findMany({ select: { id: true } });
+    const [vendasPorCliente, pagamentosPorCliente] = await Promise.all([
+      tx.venda.groupBy({
+        by: ["clienteId"],
+        _sum: { valorTotal: true },
+      }),
+      tx.pagamento.groupBy({
+        by: ["clienteId"],
+        _sum: { valor: true },
+      }),
+    ]);
+
+    const totalVendasByCliente = new Map(
+      vendasPorCliente.map((row) => [
+        row.clienteId,
+        parseFloat(String(row._sum.valorTotal ?? 0)),
+      ]),
+    );
+    const totalPagamentosByCliente = new Map(
+      pagamentosPorCliente.map((row) => [
+        row.clienteId,
+        parseFloat(String(row._sum.valor ?? 0)),
+      ]),
+    );
+
     let ajustesCriados = 0;
     const ajustes = [];
 
     for (const { id: clienteId } of clientes) {
-      const [aggV, aggP] = await Promise.all([
-        tx.venda.aggregate({
-          where: { clienteId },
-          _sum: { valorTotal: true },
-        }),
-        tx.pagamento.aggregate({
-          where: { clienteId },
-          _sum: { valor: true },
-        }),
-      ]);
-      const debitos = parseFloat(String(aggV._sum.valorTotal ?? 0));
-      const creditos = parseFloat(String(aggP._sum.valor ?? 0));
+      const debitos = totalVendasByCliente.get(clienteId) ?? 0;
+      const creditos = totalPagamentosByCliente.get(clienteId) ?? 0;
       const falta = debitos - creditos;
       if (falta > EPS) {
         const rounded = Math.round(falta * 100) / 100;
@@ -66,7 +80,7 @@ async function executarResetFinanceiroLegacy(prisma) {
       ajustesCriados,
       ajustes,
     };
-  });
+  }, { maxWait: 15000, timeout: 120000 });
 }
 
 module.exports = { executarResetFinanceiroLegacy, EPS };
