@@ -23,6 +23,11 @@ async function ensureDatabaseCompat() {
     ADD COLUMN IF NOT EXISTS "freteTarifaSaco" DECIMAL(10,2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS "freteTarifaTonelada" DECIMAL(10,2) NOT NULL DEFAULT 0
   `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Cheque"
+    ADD COLUMN IF NOT EXISTS "emitenteNome" TEXT
+  `);
 }
 
 module.exports = { prisma, ensureDatabaseCompat };
