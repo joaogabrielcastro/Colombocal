@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
+const { ensureDatabaseCompat } = require("./lib/prisma");
 
 // Garante uso do engine local no ambiente de desenvolvimento
 process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
@@ -87,8 +88,18 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3011;
-app.listen(PORT, () => {
-  console.log(`✅ Servidor Colombocal rodando na porta ${PORT}`);
-});
+async function startServer() {
+  try {
+    await ensureDatabaseCompat();
+    app.listen(PORT, () => {
+      console.log(`✅ Servidor Colombocal rodando na porta ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Falha ao validar compatibilidade do banco:", error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 module.exports = app;
