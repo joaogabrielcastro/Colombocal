@@ -295,7 +295,8 @@ router.get("/comissoes", async (req, res) => {
         0,
       );
       const comissao = vendasDoVendedor.reduce(
-        (acc, venda) => acc + parseFloat(String(venda.comissaoFinal ?? venda.comissaoCalculada || 0)),
+        (acc, venda) =>
+          acc + parseFloat(String(venda.comissaoFinal ?? venda.comissaoCalculada ?? 0)),
         0,
       );
       const percentualMedio =
