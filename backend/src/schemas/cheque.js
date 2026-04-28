@@ -10,6 +10,7 @@ const optionalDateInput = z.preprocess(
 const chequeCreateSchema = z.object({
   clienteId: z.coerce.number().int().positive(),
   vendaId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
+  trocoTipo: z.enum(["dinheiro", "transferencia"]).optional(),
   valor: z.coerce.number().min(0.01, "valor deve ser >= 0,01"),
   emitenteNome: z.string().trim().min(2, "informe o nome do emitente").optional(),
   banco: z.union([z.string(), z.null()]).optional(),
@@ -37,6 +38,7 @@ const chequeLoteItemSchema = z.object({
 const chequeLoteCreateSchema = z.object({
   clienteId: z.coerce.number().int().positive(),
   vendaId: z.coerce.number().int().positive(),
+  trocoTipo: z.enum(["dinheiro", "transferencia"]).optional(),
   itens: z.array(chequeLoteItemSchema).min(1, "informe ao menos um cheque"),
 });
 

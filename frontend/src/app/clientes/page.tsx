@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   PlusIcon,
@@ -11,63 +11,40 @@ import { formatMoney, formatCNPJ, type Cliente } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { ListScaffold } from "@/components/ui/list-scaffold";
+import { useClientesListaQuery } from "@/features/clientes/hooks/useClientesListaQuery";
 import { reportApiError } from "@/lib/report-api-error";
 
 const PAGE_SIZE = 20;
 
 export default function ClientesPage() {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [total, setTotal] = useState(0);
   const [busca, setBusca] = useState("");
   const [buscaInput, setBuscaInput] = useState("");
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  const carregar = useCallback((b: string, p: number) => {
-    const params = new URLSearchParams({
-      ativo: "true",
-      take: String(PAGE_SIZE),
-      skip: String(p * PAGE_SIZE),
-    });
-    if (b) params.set("busca", b);
-    setLoading(true);
-    api
-      .get<{ clientes: Cliente[]; total: number }>(`/clientes?${params}`)
-      .then((data) => {
-        setClientes(data.clientes);
-        setTotal(data.total);
-      })
-      .catch((e) => {
-        reportApiError(e, {
-          title: "Não foi possível carregar os clientes",
-          onRetry: () => carregar(b, p),
-        });
-        setClientes([]);
-        setTotal(0);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    carregar(busca, page);
-  }, [busca, page]);
+  const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
+  const {
+    data,
+    isLoading: loading,
+    refetch,
+  } = useClientesListaQuery({ busca, page, pageSize: PAGE_SIZE });
+  const clientes = data?.clientes ?? [];
+  const total = data?.total ?? 0;
 
   const handleBuscar = () => {
     setPage(0);
     setBusca(buscaInput);
   };
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const handleExcluir = async (cliente: Cliente) => {
-    const nome = cliente.nomeFantasia || cliente.razaoSocial;
-    const ok = window.confirm(
-      `Deseja inativar o cliente "${nome}"? Esta ação remove o cliente das listagens ativas.`,
-    );
-    if (!ok) return;
-    setDeletingId(cliente.id);
+  const confirmarExclusao = async () => {
+    if (!clienteToDelete) return;
+    setDeletingId(clienteToDelete.id);
     try {
-      await api.delete(`/clientes/${cliente.id}`);
-      carregar(busca, page);
+      await api.delete(`/clientes/${clienteToDelete.id}`);
+      await refetch();
+      setClienteToDelete(null);
     } catch (e) {
       reportApiError(e, { title: "Não foi possível excluir o cliente" });
     } finally {
@@ -76,22 +53,18 @@ export default function ClientesPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {total} clientes cadastrados
-          </p>
-        </div>
+    <>
+    <ListScaffold
+      title="Clientes"
+      subtitle={`${total} clientes cadastrados`}
+      actions={(
         <Link href="/clientes/novo" className="btn-primary">
           <PlusIcon className="w-4 h-4" />
           Novo Cliente
         </Link>
-      </div>
-
-      {/* Busca */}
-      <div className="card mb-4">
+      )}
+      filters={(
+        <FilterBar>
         <div className="p-4 flex gap-2">
           <div className="relative flex-1">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -120,10 +93,10 @@ export default function ClientesPage() {
             </button>
           )}
         </div>
-      </div>
-
-      {/* Tabela */}
-      <div className="card overflow-hidden">
+        </FilterBar>
+      )}
+      content={(
+        <div className="card overflow-hidden">
         {loading ? (
           <div className="p-4">
             <TableListSkeleton rows={10} cols={5} />
@@ -186,7 +159,7 @@ export default function ClientesPage() {
                         Ver
                       </Link>
                       <button
-                        onClick={() => void handleExcluir(c)}
+                        onClick={() => setClienteToDelete(c)}
                         disabled={deletingId === c.id}
                         className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -200,9 +173,8 @@ export default function ClientesPage() {
           </table>
         )}
       </div>
-
-      {/* Paginação */}
-      {totalPages > 1 && (
+      )}
+      footer={totalPages > 1 ? (
         <div className="flex items-center justify-between mt-4">
           <p className="text-sm text-gray-500">
             {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} de{" "}
@@ -228,7 +200,22 @@ export default function ClientesPage() {
             </button>
           </div>
         </div>
-      )}
-    </div>
+      ) : undefined}
+    />
+    <ConfirmDialog
+        open={!!clienteToDelete}
+        title="Inativar cliente"
+        description={
+          clienteToDelete
+            ? `Deseja inativar "${clienteToDelete.nomeFantasia || clienteToDelete.razaoSocial}"?`
+            : undefined
+        }
+        tone="danger"
+        busy={deletingId != null}
+        confirmText="Inativar"
+        onCancel={() => setClienteToDelete(null)}
+        onConfirm={() => void confirmarExclusao()}
+      />
+    </>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
@@ -7,6 +7,8 @@ import { formatMoney, type Cliente, type Venda } from "@/lib/utils";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
+import { toast } from "sonner";
+import { useVendasEmAberto } from "@/features/cheques/hooks/useVendasEmAberto";
 
 function vendaOptionLabel(v: Venda) {
   const valor = formatMoney(v.valorTotal);
@@ -23,7 +25,6 @@ function NovoChequeForm() {
   const searchParams = useSearchParams();
   const preClienteId = searchParams.get("clienteId");
 
-  const [vendas, setVendas] = useState<Venda[]>([]);
   const [form, setForm] = useState({
     clienteId: preClienteId || "",
     vendaId: "",
@@ -36,10 +37,17 @@ function NovoChequeForm() {
     dataRecebimento: new Date().toISOString().split("T")[0],
     observacoes: "",
   });
+  const { vendas } = useVendasEmAberto(form.clienteId);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [modo, setModo] = useState<"unitario" | "lote">("unitario");
   const [loteVendaId, setLoteVendaId] = useState("");
+  const [unitarioTrocoTipo, setUnitarioTrocoTipo] = useState<
+    "dinheiro" | "transferencia"
+  >("dinheiro");
+  const [loteTrocoTipo, setLoteTrocoTipo] = useState<"dinheiro" | "transferencia">(
+    "dinheiro",
+  );
   const [loteItens, setLoteItens] = useState([
     {
       emitenteNome: "",
@@ -66,27 +74,6 @@ function NovoChequeForm() {
     const c = await api.get<Cliente>(`/clientes/${id}`);
     return (c.nomeFantasia?.trim() || c.razaoSocial) ?? null;
   }, []);
-
-  useEffect(() => {
-    if (!form.clienteId) {
-      setVendas([]);
-      return;
-    }
-    let cancelled = false;
-    api
-      .get<Venda[]>(
-        `/vendas?clienteId=${form.clienteId}&take=500&saldoEmAberto=true`,
-      )
-      .then((rows) => {
-        if (!cancelled) setVendas(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setVendas([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [form.clienteId]);
 
   const loadVendaOptions = useCallback(
     async (q: string) => {
@@ -152,11 +139,21 @@ function NovoChequeForm() {
     setSalvando(true);
     setErro("");
     try {
-      await api.post("/cheques", {
+      const resp = await api.post<{ trocoValor?: number; trocoTipo?: string }>("/cheques", {
         ...form,
         valor: parseFloat(form.valor),
         vendaId: form.vendaId ? parseInt(form.vendaId) : undefined,
+        ...(excedenteUnitario > 0 ? { trocoTipo: unitarioTrocoTipo } : {}),
       });
+      if ((resp.trocoValor ?? 0) > 0) {
+        toast.success(
+          `Venda quitada. Troco ${formatMoney(resp.trocoValor || 0)} via ${
+            resp.trocoTipo === "transferencia" ? "Pix/transferência" : "dinheiro"
+          }.`,
+        );
+      } else {
+        toast.success("Cheque registrado com sucesso.");
+      }
       router.push("/cheques");
     } catch (e: any) {
       setErro(e.message);
@@ -184,11 +181,24 @@ function NovoChequeForm() {
     setSalvando(true);
     setErro("");
     try {
-      await api.post("/cheques/lote", {
+      const resp = await api.post<{
+        excedente?: number;
+        trocoTipo?: string | null;
+      }>("/cheques/lote", {
         clienteId: parseInt(form.clienteId, 10),
         vendaId: parseInt(loteVendaId, 10),
+        ...(excedenteLote > 0 ? { trocoTipo: loteTrocoTipo } : {}),
         itens: itensValidos,
       });
+      if ((resp.excedente ?? 0) > 0) {
+        toast.success(
+          `Lote registrado e venda quitada. Troco ${formatMoney(resp.excedente || 0)} via ${
+            resp.trocoTipo === "transferencia" ? "Pix/transferência" : "dinheiro"
+          }.`,
+        );
+      } else {
+        toast.success("Lote de cheques registrado com sucesso.");
+      }
       router.push("/cheques");
     } catch (e: any) {
       setErro(e.message);
@@ -196,10 +206,28 @@ function NovoChequeForm() {
     }
   };
 
+  const vendaSelecionadaUnitario = vendas.find(
+    (v) => String(v.id) === String(form.vendaId),
+  );
+  const saldoVendaUnitario = Math.max(
+    0,
+    parseFloat(String(vendaSelecionadaUnitario?.saldoEmAbertoTitulos ?? 0)),
+  );
+  const valorUnitario = parseFloat(form.valor || "0") || 0;
+  const restanteUnitario = Math.max(0, saldoVendaUnitario - valorUnitario);
+  const excedenteUnitario = Math.max(0, valorUnitario - saldoVendaUnitario);
+
   const totalLote = loteItens.reduce((acc, i) => acc + (parseFloat(i.valor) || 0), 0);
+  const vendaSelecionadaLote = vendas.find((v) => String(v.id) === String(loteVendaId));
+  const saldoVendaLote = Math.max(
+    0,
+    parseFloat(String(vendaSelecionadaLote?.saldoEmAbertoTitulos ?? 0)),
+  );
+  const restanteAteQuitar = Math.max(0, saldoVendaLote - totalLote);
+  const excedenteLote = Math.max(0, totalLote - saldoVendaLote);
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/cheques" className="btn-secondary py-1.5 px-2.5">
           <ArrowLeftIcon className="w-4 h-4" />
@@ -237,8 +265,8 @@ function NovoChequeForm() {
       </div>
 
       <form onSubmit={modo === "unitario" ? handleSubmit : handleSubmitLote} className="card p-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="md:col-span-2 lg:col-span-3">
             <SearchableSelect
               label="Cliente *"
               value={form.clienteId}
@@ -252,126 +280,178 @@ function NovoChequeForm() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Valor do Cheque (R$) *
-            </label>
-            <input
-              required={modo === "unitario"}
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={form.valor}
-              onChange={set("valor")}
-              className="input-field"
-              placeholder="0,00"
-            />
-          </div>
+          {modo === "unitario" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor do Cheque (R$) *
+                </label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={form.valor}
+                  onChange={set("valor")}
+                  className="input-field"
+                  placeholder="0,00"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Emitente do cheque *
-            </label>
-            <input
-              required={modo === "unitario"}
-              value={form.emitenteNome}
-              onChange={set("emitenteNome")}
-              className="input-field"
-              placeholder="Nome de quem emitiu o cheque"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Emitente do cheque *
+                </label>
+                <input
+                  required
+                  value={form.emitenteNome}
+                  onChange={set("emitenteNome")}
+                  className="input-field"
+                  placeholder="Nome de quem emitiu o cheque"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Data do cheque
-            </label>
-            <input
-              type="date"
-              value={form.dataRecebimento}
-              onChange={set("dataRecebimento")}
-              className="input-field"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Data do cheque
+                </label>
+                <input
+                  type="date"
+                  value={form.dataRecebimento}
+                  onChange={set("dataRecebimento")}
+                  className="input-field"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Banco
-            </label>
-            <input
-              value={form.banco}
-              onChange={set("banco")}
-              className="input-field"
-              placeholder="ex: Bradesco, Itaú..."
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Banco
+                </label>
+                <input
+                  value={form.banco}
+                  onChange={set("banco")}
+                  className="input-field"
+                  placeholder="ex: Bradesco, Itaú..."
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Número do Cheque
-            </label>
-            <input
-              value={form.numero}
-              onChange={set("numero")}
-              className="input-field"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Número do Cheque
+                </label>
+                <input
+                  value={form.numero}
+                  onChange={set("numero")}
+                  className="input-field"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Agência
-            </label>
-            <input
-              value={form.agencia}
-              onChange={set("agencia")}
-              className="input-field"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Agência
+                </label>
+                <input
+                  value={form.agencia}
+                  onChange={set("agencia")}
+                  className="input-field"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Conta
-            </label>
-            <input
-              value={form.conta}
-              onChange={set("conta")}
-              className="input-field"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Conta
+                </label>
+                <input
+                  value={form.conta}
+                  onChange={set("conta")}
+                  className="input-field"
+                />
+              </div>
 
-          <div className="md:col-span-2">
-            <SearchableSelect
-              label="Venda vinculada (opcional)"
-              value={form.vendaId}
-              onChange={(id) =>
-                setForm((p) => ({ ...p, vendaId: id }))
-              }
-              loadOptions={loadVendaOptions}
-              minChars={0}
-              disabled={!form.clienteId}
-              placeholder={
-                form.clienteId
-                  ? "Busque por nº da venda ou valor…"
-                  : "Selecione o cliente primeiro"
-              }
-              emptyHint="Só aparecem vendas com parcela em aberto no título. Deixe em branco se não houver venda específica."
-            />
-          </div>
+              <div className="md:col-span-2 lg:col-span-3">
+                <SearchableSelect
+                  label="Venda vinculada (opcional)"
+                  value={form.vendaId}
+                  onChange={(id) => setForm((p) => ({ ...p, vendaId: id }))}
+                  loadOptions={loadVendaOptions}
+                  minChars={0}
+                  disabled={!form.clienteId}
+                  placeholder={
+                    form.clienteId
+                      ? "Busque por nº da venda ou valor…"
+                      : "Selecione o cliente primeiro"
+                  }
+                  emptyHint="Só aparecem vendas com parcela em aberto no título. Deixe em branco se não houver venda específica."
+                />
+              </div>
+              {!!form.vendaId && (
+                <>
+                  <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-sm">
+                    <p>
+                      Saldo atual da venda:{" "}
+                      <span className="font-semibold">
+                        {formatMoney(saldoVendaUnitario)}
+                      </span>
+                    </p>
+                    <p>
+                      Valor do cheque:{" "}
+                      <span className="font-semibold">{formatMoney(valorUnitario)}</span>
+                    </p>
+                    {excedenteUnitario > 0 ? (
+                      <p className="text-amber-700">
+                        Excedente (troco):{" "}
+                        <span className="font-semibold">
+                          {formatMoney(excedenteUnitario)}
+                        </span>
+                      </p>
+                    ) : (
+                      <p>
+                        Falta para quitar:{" "}
+                        <span className="font-semibold">
+                          {formatMoney(restanteUnitario)}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  {excedenteUnitario > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Troco do excedente *
+                      </label>
+                      <select
+                        value={unitarioTrocoTipo}
+                        onChange={(e) =>
+                          setUnitarioTrocoTipo(
+                            e.target.value as "dinheiro" | "transferencia",
+                          )
+                        }
+                        className="input-field"
+                      >
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="transferencia">Pix / transferência</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Observações
-            </label>
-            <textarea
-              value={form.observacoes}
-              onChange={set("observacoes")}
-              className="input-field"
-              rows={2}
-            />
-          </div>
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Observações
+                </label>
+                <textarea
+                  value={form.observacoes}
+                  onChange={set("observacoes")}
+                  className="input-field"
+                  rows={2}
+                />
+              </div>
+            </>
+          )}
 
           {modo === "lote" && (
             <>
-              <div className="md:col-span-2">
+              <div className="md:col-span-2 lg:col-span-3">
                 <SearchableSelect
                   label="Venda vinculada para abatimento *"
                   value={loteVendaId}
@@ -386,7 +466,45 @@ function NovoChequeForm() {
                   }
                 />
               </div>
-              <div className="md:col-span-2 border rounded-lg border-gray-200 p-3">
+              <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-sm">
+                <p>
+                  Saldo atual da venda:{" "}
+                  <span className="font-semibold">{formatMoney(saldoVendaLote)}</span>
+                </p>
+                <p>
+                  Total do lote:{" "}
+                  <span className="font-semibold">{formatMoney(totalLote)}</span>
+                </p>
+                {excedenteLote > 0 ? (
+                  <p className="text-amber-700">
+                    Excedente (troco):{" "}
+                    <span className="font-semibold">{formatMoney(excedenteLote)}</span>
+                  </p>
+                ) : (
+                  <p>
+                    Falta para quitar:{" "}
+                    <span className="font-semibold">{formatMoney(restanteAteQuitar)}</span>
+                  </p>
+                )}
+              </div>
+              {excedenteLote > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Troco do excedente *
+                  </label>
+                  <select
+                    value={loteTrocoTipo}
+                    onChange={(e) =>
+                      setLoteTrocoTipo(e.target.value as "dinheiro" | "transferencia")
+                    }
+                    className="input-field"
+                  >
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="transferencia">Pix / transferência</option>
+                  </select>
+                </div>
+              )}
+              <div className="md:col-span-2 lg:col-span-3 border rounded-lg border-gray-200 p-3">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-semibold text-gray-800">
                     Cheques do lote

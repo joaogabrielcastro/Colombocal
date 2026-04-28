@@ -88,9 +88,23 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3011;
+
+function shouldRunStartupDbCompat() {
+  if (process.env.ALLOW_STARTUP_DB_COMPAT === "true") {
+    return true;
+  }
+  return process.env.NODE_ENV !== "production";
+}
+
 async function startServer() {
   try {
-    await ensureDatabaseCompat();
+    if (shouldRunStartupDbCompat()) {
+      await ensureDatabaseCompat();
+    } else {
+      console.log(
+        "ℹ️ Compatibilidade automática de schema desativada em produção (ALLOW_STARTUP_DB_COMPAT != true).",
+      );
+    }
     app.listen(PORT, () => {
       console.log(`✅ Servidor Colombocal rodando na porta ${PORT}`);
     });

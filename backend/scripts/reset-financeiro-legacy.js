@@ -5,6 +5,7 @@
  * Uso (na pasta backend):
  *   npm run legacy:reset-financeiro -- --confirm
  *   ou: node scripts/reset-financeiro-legacy.js --confirm
+ *   para zerar tudo (sem criar ajustes, removendo também vendas/títulos): node scripts/reset-financeiro-legacy.js --confirm --zerar-total
  *
  * Carrega variáveis de backend/.env (DATABASE_URL).
  */
@@ -24,7 +25,12 @@ async function main() {
     process.exit(1);
   }
 
-  const result = await executarResetFinanceiroLegacy(prisma);
+  const zerarTotal = process.argv.includes("--zerar-total");
+  const result = await executarResetFinanceiroLegacy(prisma, {
+    criarAjustes: !zerarTotal,
+    zerarPagamentosGerais: zerarTotal,
+    zerarVendasETitulos: zerarTotal,
+  });
   console.log(JSON.stringify({ success: true, ...result }, null, 2));
 }
 

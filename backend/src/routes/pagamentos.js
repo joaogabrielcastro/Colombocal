@@ -1,11 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
-const {
-  recalcularTitulos,
-  recalcularTodosTitulosCliente,
-} = require("../services/recebiveis");
-const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
+const { registrarPagamento } = require("../application/use-cases/registrarPagamento");
+const { excluirPagamento } = require("../application/use-cases/excluirPagamento");
 const { parseIntField } = require("../utils/validation");
 const { parseBody } = require("../utils/zodParse");
 const { pagamentoCreateSchema } = require("../schemas/pagamento");
@@ -47,85 +44,7 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const b = parseBody(pagamentoCreateSchema, req.body);
-    if (b.tipo === "cheque") {
-      return res
-        .status(400)
-        .json({ error: "Para cheques, use a rota /api/cheques" });
-    }
-    const dataPagamento =
-      b.data instanceof Date
-        ? b.data
-        : b.data
-          ? new Date(b.data)
-          : new Date();
-
-    const pagamento = await prisma.$transaction(async (tx) => {
-      let valorPrincipal = b.valor;
-      let trocoValor = 0;
-      if (b.vendaId) {
-        const venda = await tx.venda.findUnique({
-          where: { id: b.vendaId },
-          include: { titulos: true, pagamentos: true },
-        });
-        if (venda) {
-          const totalTitulos = venda.titulos.reduce(
-            (acc, t) => acc + parseFloat(String(t.valorOriginal || 0)),
-            0,
-          );
-          const totalPago = venda.pagamentos.reduce(
-            (acc, p) => acc + parseFloat(String(p.valor || 0)),
-            0,
-          );
-          const saldoAberto = Math.max(0, totalTitulos - totalPago);
-          if (b.valor > saldoAberto) {
-            trocoValor = b.valor - saldoAberto;
-            valorPrincipal = saldoAberto;
-          }
-        }
-      }
-
-      const novoPagamento = await tx.pagamento.create({
-        data: {
-          clienteId: b.clienteId,
-          vendaId: b.vendaId ?? null,
-          tipo: b.tipo,
-          valor: valorPrincipal,
-          data: dataPagamento,
-          observacoes: b.observacoes,
-        },
-        include: { cliente: true, venda: true },
-      });
-
-      if (trocoValor > 0) {
-        const trocoTipo = b.trocoTipo || b.tipo;
-        await tx.pagamento.create({
-          data: {
-            clienteId: b.clienteId,
-            vendaId: b.vendaId ?? null,
-            tipo: `troco_${trocoTipo}`,
-            valor: -trocoValor,
-            data: dataPagamento,
-            observacoes:
-              (b.observacoes ? `${b.observacoes} · ` : "") +
-              `Troco devolvido (${trocoTipo})`,
-          },
-        });
-      }
-
-      await recalcularTodosTitulosCliente(tx, b.clienteId);
-      await registrarEventoFinanceiro(tx, {
-        tipo: "PAGAMENTO_CRIADO",
-        entidade: "Pagamento",
-        entidadeId: novoPagamento.id,
-        pagamentoId: novoPagamento.id,
-        clienteId: b.clienteId,
-        vendaId: b.vendaId ?? null,
-        valor: b.valor,
-        payload: { tipo: b.tipo, trocoValor, trocoTipo: b.trocoTipo || null },
-      });
-
-      return novoPagamento;
-    });
+    const pagamento = await registrarPagamento(prisma, b);
     res.status(201).json(pagamento);
   } catch (error) {
     handleRouteError(res, error);
@@ -136,25 +55,7 @@ router.post("/", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    await prisma.$transaction(async (tx) => {
-      const pagamento = await tx.pagamento.findUnique({ where: { id } });
-      if (!pagamento) throw new Error("Pagamento não encontrado");
-      await tx.pagamento.delete({ where: { id } });
-      await registrarEventoFinanceiro(tx, {
-        tipo: "PAGAMENTO_EXCLUIDO",
-        entidade: "Pagamento",
-        entidadeId: pagamento.id,
-        pagamentoId: pagamento.id,
-        clienteId: pagamento.clienteId,
-        vendaId: pagamento.vendaId,
-        valor: parseFloat(pagamento.valor),
-      });
-
-      await recalcularTitulos(tx, {
-        clienteId: pagamento.clienteId,
-        vendaId: pagamento.vendaId,
-      });
-    });
+    await excluirPagamento(prisma, id);
     res.json({ success: true });
   } catch (error) {
     handleRouteError(res, error);

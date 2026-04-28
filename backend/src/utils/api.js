@@ -28,8 +28,10 @@ function setPaginationHeaders(res, { total, take, skip }) {
 }
 
 function handleRouteError(res, error) {
-  const status = error?.statusCode || 500;
-  res.status(status).json({ error: error?.message || "Erro interno do servidor" });
+  const status = error?.httpStatus || error?.statusCode || 500;
+  const payload = { error: error?.message || "Erro interno do servidor" };
+  if (error?.code) payload.code = error.code;
+  res.status(status).json(payload);
 }
 
 module.exports = {

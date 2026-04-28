@@ -3,6 +3,9 @@ const router = express.Router();
 const { prisma } = require("../lib/prisma");
 const { recalcularTitulos, recalcularTodosTitulosCliente } = require("../services/recebiveis");
 const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
+const { registrarCheque } = require("../application/use-cases/registrarCheque");
+const { registrarChequeLote } = require("../application/use-cases/registrarChequeLote");
+const { excluirCheque } = require("../application/use-cases/excluirCheque");
 const { parseIntField } = require("../utils/validation");
 const { parseBody } = require("../utils/zodParse");
 const {
@@ -212,70 +215,8 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const b = parseBody(chequeCreateSchema, req.body);
-    const statusInicial = "ativo";
-    const dataRecebimentoDate =
-      b.dataRecebimento instanceof Date
-        ? b.dataRecebimento
-        : b.dataRecebimento
-          ? new Date(b.dataRecebimento)
-          : null;
-    const dataCompensacaoDate =
-      b.dataCompensacao instanceof Date
-        ? b.dataCompensacao
-        : b.dataCompensacao
-          ? new Date(b.dataCompensacao)
-          : null;
-
-    const cheque = await prisma.$transaction(async (tx) => {
-      const novoCheque = await tx.cheque.create({
-        data: {
-          clienteId: b.clienteId,
-          vendaId: b.vendaId ?? null,
-          valor: b.valor,
-          emitenteNome: b.emitenteNome ?? null,
-          banco: b.banco ?? null,
-          numero: b.numero ?? null,
-          agencia: b.agencia ?? null,
-          conta: b.conta ?? null,
-          dataRecebimento: dataRecebimentoDate || new Date(),
-          dataCompensacao: dataCompensacaoDate,
-          status: statusInicial,
-          observacoes: b.observacoes ?? null,
-        },
-      });
-
-      await tx.pagamento.create({
-        data: {
-          clienteId: b.clienteId,
-          vendaId: novoCheque.vendaId,
-          tipo: "cheque",
-          valor: b.valor,
-          data: dataRecebimentoDate || new Date(),
-          chequeId: novoCheque.id,
-          observacoes: `Cheque #${b.numero || novoCheque.id} - ${b.banco || ""}`,
-        },
-      });
-      await recalcularTodosTitulosCliente(tx, b.clienteId);
-      await registrarEventoFinanceiro(tx, {
-        tipo: "CHEQUE_CRIADO",
-        entidade: "Cheque",
-        entidadeId: novoCheque.id,
-        chequeId: novoCheque.id,
-        clienteId: b.clienteId,
-        vendaId: novoCheque.vendaId,
-        valor: b.valor,
-        payload: { status: statusInicial, banco: b.banco || null },
-      });
-
-      return novoCheque;
-    });
-
-    const chequeCompleto = await prisma.cheque.findUnique({
-      where: { id: cheque.id },
-      include: { cliente: true, venda: true, pagamento: true },
-    });
-
-    res.status(201).json(chequeCompleto);
+    const result = await registrarCheque(prisma, b);
+    res.status(201).json(result);
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -285,98 +226,7 @@ router.post("/", async (req, res) => {
 router.post("/lote", async (req, res) => {
   try {
     const b = parseBody(chequeLoteCreateSchema, req.body);
-    const clienteId = b.clienteId;
-    const vendaId = b.vendaId;
-
-    const result = await prisma.$transaction(async (tx) => {
-      const venda = await tx.venda.findUnique({
-        where: { id: vendaId },
-        include: { titulos: true, pagamentos: true },
-      });
-      if (!venda) throw new Error("Venda não encontrada");
-      if (venda.clienteId !== clienteId) {
-        throw new Error("A venda informada não pertence ao cliente selecionado");
-      }
-
-      const totalLote = b.itens.reduce((acc, item) => acc + Number(item.valor), 0);
-      const totalTitulos = venda.titulos.reduce(
-        (acc, t) => acc + parseFloat(String(t.valorOriginal || 0)),
-        0,
-      );
-      const totalPago = venda.pagamentos.reduce(
-        (acc, p) => acc + parseFloat(String(p.valor || 0)),
-        0,
-      );
-      const saldoAberto = Math.max(0, totalTitulos - totalPago);
-
-      if (totalLote > saldoAberto + 0.0001) {
-        throw new Error(
-          `Total do lote (${totalLote.toFixed(2)}) maior que saldo em aberto da venda (${saldoAberto.toFixed(2)})`,
-        );
-      }
-
-      const criados = [];
-      for (const item of b.itens) {
-        const dataRecebimentoDate =
-          item.dataRecebimento instanceof Date
-            ? item.dataRecebimento
-            : item.dataRecebimento
-              ? new Date(item.dataRecebimento)
-              : new Date();
-        const dataCompensacaoDate =
-          item.dataCompensacao instanceof Date
-            ? item.dataCompensacao
-            : item.dataCompensacao
-              ? new Date(item.dataCompensacao)
-              : null;
-
-        const novoCheque = await tx.cheque.create({
-          data: {
-            clienteId,
-            vendaId,
-            valor: item.valor,
-            emitenteNome: item.emitenteNome,
-            banco: item.banco ?? null,
-            numero: item.numero ?? null,
-            agencia: item.agencia ?? null,
-            conta: item.conta ?? null,
-            dataRecebimento: dataRecebimentoDate,
-            dataCompensacao: dataCompensacaoDate,
-            status: "ativo",
-            observacoes: item.observacoes ?? null,
-          },
-        });
-
-        await tx.pagamento.create({
-          data: {
-            clienteId,
-            vendaId,
-            tipo: "cheque",
-            valor: item.valor,
-            data: dataRecebimentoDate,
-            chequeId: novoCheque.id,
-            observacoes: `Cheque #${item.numero || novoCheque.id} - ${item.banco || ""}`,
-          },
-        });
-
-        await registrarEventoFinanceiro(tx, {
-          tipo: "CHEQUE_CRIADO_LOTE",
-          entidade: "Cheque",
-          entidadeId: novoCheque.id,
-          chequeId: novoCheque.id,
-          clienteId,
-          vendaId,
-          valor: item.valor,
-          payload: { emitenteNome: item.emitenteNome, banco: item.banco || null },
-        });
-
-        criados.push(novoCheque);
-      }
-
-      await recalcularTitulos(tx, { clienteId, vendaId });
-      return { chequesCriados: criados.length, totalLote };
-    });
-
+    const result = await registrarChequeLote(prisma, b);
     res.status(201).json(result);
   } catch (error) {
     handleRouteError(res, error);
@@ -426,30 +276,7 @@ router.patch("/:id/status", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    await prisma.$transaction(async (tx) => {
-      const cheque = await tx.cheque.findUnique({
-        where: { id },
-        include: { pagamento: true },
-      });
-      if (!cheque) throw new Error("Cheque não encontrado");
-
-      await tx.pagamento.deleteMany({ where: { chequeId: id } });
-      await tx.cheque.delete({ where: { id } });
-      await registrarEventoFinanceiro(tx, {
-        tipo: "CHEQUE_EXCLUIDO",
-        entidade: "Cheque",
-        entidadeId: cheque.id,
-        chequeId: cheque.id,
-        clienteId: cheque.clienteId,
-        vendaId: cheque.vendaId,
-        valor: parseFloat(cheque.valor),
-      });
-
-      await recalcularTitulos(tx, {
-        clienteId: cheque.clienteId,
-        vendaId: cheque.vendaId,
-      });
-    });
+    await excluirCheque(prisma, id);
     res.json({ success: true });
   } catch (error) {
     handleRouteError(res, error);

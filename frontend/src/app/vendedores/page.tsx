@@ -5,6 +5,9 @@ import { type Vendedor } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { ListScaffold } from "@/components/ui/list-scaffold";
 import { reportApiError } from "@/lib/report-api-error";
 
 export default function VendedoresPage() {
@@ -18,6 +21,7 @@ export default function VendedoresPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [vendedorToDelete, setVendedorToDelete] = useState<Vendedor | null>(null);
 
   const carregar = useCallback(async (termo: string) => {
     setLoading(true);
@@ -79,15 +83,13 @@ export default function VendedoresPage() {
     setMostrarForm(true);
     setErro("");
   };
-  const handleExcluir = async (vendedor: Vendedor) => {
-    const ok = window.confirm(
-      `Deseja inativar o vendedor "${vendedor.nome}"? Esta ação remove o vendedor das listagens ativas.`,
-    );
-    if (!ok) return;
-    setDeletingId(vendedor.id);
+  const confirmarExclusao = async () => {
+    if (!vendedorToDelete) return;
+    setDeletingId(vendedorToDelete.id);
     try {
-      await api.delete(`/vendedores/${vendedor.id}`);
+      await api.delete(`/vendedores/${vendedorToDelete.id}`);
       void carregar(busca);
+      setVendedorToDelete(null);
     } catch (e) {
       reportApiError(e, { title: "Não foi possível excluir o vendedor" });
     } finally {
@@ -96,15 +98,12 @@ export default function VendedoresPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vendedores</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Gestão de vendedores e comissão padrão
-          </p>
-        </div>
-        <button
+    <>
+      <ListScaffold
+        title="Vendedores"
+        subtitle="Gestão de vendedores e comissão padrão"
+        actions={(
+          <button
           onClick={() => {
             setMostrarForm(true);
             setEditando(null);
@@ -114,30 +113,93 @@ export default function VendedoresPage() {
           className="btn-primary"
         >
           <PlusIcon className="w-4 h-4" /> Novo Vendedor
-        </button>
-      </div>
-
-      <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <div className="min-w-[16rem] flex-1 max-w-md">
-          <label className="block text-xs text-gray-500 mb-1">Buscar vendedor</label>
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <input
-              type="search"
-              value={buscaInput}
-              onChange={(e) => setBuscaInput(e.target.value)}
-              placeholder="Nome…"
-              autoComplete="off"
-              className="input-field pl-9"
-            />
+          </button>
+        )}
+        filters={(
+          <FilterBar className="p-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="min-w-[16rem] flex-1 max-w-md">
+                <label className="block text-xs text-gray-500 mb-1">Buscar vendedor</label>
+                <div className="relative">
+                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <input
+                    type="search"
+                    value={buscaInput}
+                    onChange={(e) => setBuscaInput(e.target.value)}
+                    placeholder="Nome…"
+                    autoComplete="off"
+                    className="input-field pl-9"
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 pb-2">
+                {busca.trim()
+                  ? `${vendedores.length} resultado${vendedores.length === 1 ? "" : "s"}`
+                  : `${vendedores.length} vendedores ativos`}
+              </p>
+            </div>
+          </FilterBar>
+        )}
+        content={(
+          <div className="card overflow-hidden">
+            {loading ? (
+              <div className="p-4">
+                <TableListSkeleton rows={6} cols={4} />
+              </div>
+            ) : vendedores.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title={busca.trim() ? "Nenhum vendedor encontrado" : "Nenhum vendedor cadastrado"}
+                  description={
+                    busca.trim()
+                      ? "Tente outro termo ou limpe a busca."
+                      : "Cadastre vendedores para registrar vendas e comissões."
+                  }
+                />
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="table-header">Nome</th>
+                    <th className="table-header">Telefone</th>
+                    <th className="table-header">Comissão</th>
+                    <th className="table-header"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendedores.map((v) => (
+                    <tr key={v.id} className="table-row">
+                      <td className="table-cell font-medium">{v.nome}</td>
+                      <td className="table-cell">{v.telefone || "-"}</td>
+                      <td className="table-cell">
+                        {parseFloat(String(v.comissaoPercentual)).toFixed(2)}%
+                      </td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleEditar(v)}
+                            className="text-blue-600 hover:underline text-sm font-medium"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => setVendedorToDelete(v)}
+                            disabled={deletingId === v.id}
+                            className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {deletingId === v.id ? "Excluindo..." : "Excluir"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
-        </div>
-        <p className="text-sm text-gray-500 pb-2">
-          {busca.trim()
-            ? `${vendedores.length} resultado${vendedores.length === 1 ? "" : "s"}`
-            : `${vendedores.length} vendedores ativos`}
-        </p>
-      </div>
+        )}
+      />
 
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -225,63 +287,20 @@ export default function VendedoresPage() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        {loading ? (
-          <div className="p-4">
-            <TableListSkeleton rows={6} cols={4} />
-          </div>
-        ) : vendedores.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              title={busca.trim() ? "Nenhum vendedor encontrado" : "Nenhum vendedor cadastrado"}
-              description={
-                busca.trim()
-                  ? "Tente outro termo ou limpe a busca."
-                  : "Cadastre vendedores para registrar vendas e comissões."
-              }
-            />
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="table-header">Nome</th>
-                <th className="table-header">Telefone</th>
-                <th className="table-header">Comissão</th>
-                <th className="table-header"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {vendedores.map((v) => (
-                <tr key={v.id} className="table-row">
-                  <td className="table-cell font-medium">{v.nome}</td>
-                  <td className="table-cell">{v.telefone || "-"}</td>
-                  <td className="table-cell">
-                    {parseFloat(String(v.comissaoPercentual)).toFixed(2)}%
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleEditar(v)}
-                        className="text-blue-600 hover:underline text-sm font-medium"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => void handleExcluir(v)}
-                        disabled={deletingId === v.id}
-                        className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deletingId === v.id ? "Excluindo..." : "Excluir"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
+      <ConfirmDialog
+        open={!!vendedorToDelete}
+        title="Inativar vendedor"
+        description={
+          vendedorToDelete
+            ? `Deseja inativar "${vendedorToDelete.nome}"?`
+            : undefined
+        }
+        tone="danger"
+        busy={deletingId != null}
+        confirmText="Inativar"
+        onCancel={() => setVendedorToDelete(null)}
+        onConfirm={() => void confirmarExclusao()}
+      />
+    </>
   );
 }

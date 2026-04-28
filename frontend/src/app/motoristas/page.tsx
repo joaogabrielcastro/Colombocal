@@ -5,6 +5,8 @@ import { type Motorista } from '@/lib/utils';
 import api from '@/lib/api';
 import { TableListSkeleton } from '@/components/ui/skeletons';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ListScaffold } from '@/components/ui/list-scaffold';
 import { reportApiError } from '@/lib/report-api-error';
 
 export default function MotoristasPage() {
@@ -16,6 +18,7 @@ export default function MotoristasPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [motoristaToDelete, setMotoristaToDelete] = useState<Motorista | null>(null);
 
   const carregar = () => {
     setLoading(true);
@@ -54,15 +57,13 @@ export default function MotoristasPage() {
 
   const handleEditar = (m: Motorista) => { setEditando(m); setForm(m); setMostrarForm(true); setErro(''); };
   const set = (f: keyof Motorista) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [f]: e.target.value }));
-  const handleExcluir = async (motorista: Motorista) => {
-    const ok = window.confirm(
-      `Deseja inativar o motorista "${motorista.nome}"? Esta ação remove o motorista das listagens ativas.`,
-    );
-    if (!ok) return;
-    setDeletingId(motorista.id);
+  const confirmarExclusao = async () => {
+    if (!motoristaToDelete) return;
+    setDeletingId(motoristaToDelete.id);
     try {
-      await api.delete(`/motoristas/${motorista.id}`);
+      await api.delete(`/motoristas/${motoristaToDelete.id}`);
       carregar();
+      setMotoristaToDelete(null);
     } catch (e) {
       reportApiError(e, { title: 'Não foi possível excluir o motorista' });
     } finally {
@@ -71,16 +72,63 @@ export default function MotoristasPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Motoristas</h1>
-          <p className="text-gray-500 text-sm mt-1">{motoristas.length} motoristas cadastrados</p>
-        </div>
-        <button onClick={() => { setMostrarForm(true); setEditando(null); setForm({}); setErro(''); }} className="btn-primary">
-          <PlusIcon className="w-4 h-4" /> Novo Motorista
-        </button>
-      </div>
+    <>
+      <ListScaffold
+        title="Motoristas"
+        subtitle={`${motoristas.length} motoristas cadastrados`}
+        actions={
+          <button onClick={() => { setMostrarForm(true); setEditando(null); setForm({}); setErro(''); }} className="btn-primary">
+            <PlusIcon className="w-4 h-4" /> Novo Motorista
+          </button>
+        }
+        content={
+          <div className="card overflow-hidden">
+            {loading ? (
+              <div className="p-4">
+                <TableListSkeleton rows={6} cols={4} />
+              </div>
+            ) : motoristas.length === 0 ? (
+              <div className="p-6">
+                <EmptyState title="Nenhum motorista cadastrado" description="Cadastre motoristas para vincular às vendas." />
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="table-header">Nome</th>
+                    <th className="table-header">Telefone</th>
+                    <th className="table-header">Veículo</th>
+                    <th className="table-header">Placa</th>
+                    <th className="table-header"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {motoristas.map(m => (
+                    <tr key={m.id} className="table-row">
+                      <td className="table-cell font-medium">{m.nome}</td>
+                      <td className="table-cell">{m.telefone || '-'}</td>
+                      <td className="table-cell">{m.veiculo || '-'}</td>
+                      <td className="table-cell font-mono">{m.placa || '-'}</td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => handleEditar(m)} className="text-blue-600 hover:underline text-sm font-medium">Editar</button>
+                          <button
+                            onClick={() => setMotoristaToDelete(m)}
+                            disabled={deletingId === m.id}
+                            className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {deletingId === m.id ? 'Excluindo...' : 'Excluir'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        }
+      />
 
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -117,51 +165,20 @@ export default function MotoristasPage() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        {loading ? (
-          <div className="p-4">
-            <TableListSkeleton rows={6} cols={4} />
-          </div>
-        ) : motoristas.length === 0 ? (
-          <div className="p-6">
-            <EmptyState title="Nenhum motorista cadastrado" description="Cadastre motoristas para vincular às vendas." />
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="table-header">Nome</th>
-                <th className="table-header">Telefone</th>
-                <th className="table-header">Veículo</th>
-                <th className="table-header">Placa</th>
-                <th className="table-header"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {motoristas.map(m => (
-                <tr key={m.id} className="table-row">
-                  <td className="table-cell font-medium">{m.nome}</td>
-                  <td className="table-cell">{m.telefone || '-'}</td>
-                  <td className="table-cell">{m.veiculo || '-'}</td>
-                  <td className="table-cell font-mono">{m.placa || '-'}</td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => handleEditar(m)} className="text-blue-600 hover:underline text-sm font-medium">Editar</button>
-                      <button
-                        onClick={() => void handleExcluir(m)}
-                        disabled={deletingId === m.id}
-                        className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deletingId === m.id ? 'Excluindo...' : 'Excluir'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
+      <ConfirmDialog
+        open={!!motoristaToDelete}
+        title="Inativar motorista"
+        description={
+          motoristaToDelete
+            ? `Deseja inativar "${motoristaToDelete.nome}"?`
+            : undefined
+        }
+        tone="danger"
+        busy={deletingId != null}
+        confirmText="Inativar"
+        onCancel={() => setMotoristaToDelete(null)}
+        onConfirm={() => void confirmarExclusao()}
+      />
+    </>
   );
 }

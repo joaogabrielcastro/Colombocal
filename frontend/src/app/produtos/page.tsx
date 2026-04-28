@@ -5,6 +5,8 @@ import { formatMoney, type Produto } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ListScaffold } from "@/components/ui/list-scaffold";
 import { reportApiError } from "@/lib/report-api-error";
 
 export default function ProdutosPage() {
@@ -16,6 +18,7 @@ export default function ProdutosPage() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [erro, setErro] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [produtoToDelete, setProdutoToDelete] = useState<Produto | null>(null);
 
   const carregar = () => {
     setLoading(true);
@@ -64,15 +67,13 @@ export default function ProdutosPage() {
     setErro("");
   };
 
-  const handleExcluir = async (p: Produto) => {
-    const ok = window.confirm(
-      `Inativar o produto "${p.nome}"? Ele deixa de aparecer na lista e nas vendas como ativo.`,
-    );
-    if (!ok) return;
-    setDeletingId(p.id);
+  const confirmarExclusao = async () => {
+    if (!produtoToDelete) return;
+    setDeletingId(produtoToDelete.id);
     try {
-      await api.delete(`/produtos/${p.id}`);
+      await api.delete(`/produtos/${produtoToDelete.id}`);
       carregar();
+      setProdutoToDelete(null);
     } catch (e) {
       reportApiError(e, { title: "Não foi possível excluir o produto" });
     } finally {
@@ -86,16 +87,12 @@ export default function ProdutosPage() {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {produtos.length} produtos • sem controle de estoque no cadastro
-            (call)
-          </p>
-        </div>
-        <button
+    <>
+      <ListScaffold
+        title="Produtos"
+        subtitle={`${produtos.length} produtos • sem controle de estoque no cadastro`}
+        actions={(
+          <button
           onClick={() => {
             setMostrarForm(true);
             setEditando(null);
@@ -106,8 +103,75 @@ export default function ProdutosPage() {
         >
           <PlusIcon className="w-4 h-4" />
           Novo Produto
-        </button>
-      </div>
+          </button>
+        )}
+        content={(
+          <div className="card overflow-hidden">
+            {loading ? (
+              <div className="p-4">
+                <TableListSkeleton rows={8} cols={4} />
+              </div>
+            ) : produtos.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="Nenhum produto ativo"
+                  description="Cadastre produtos para usar nas vendas."
+                  action={
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        setMostrarForm(true);
+                        setEditando(null);
+                        setForm({ unidade: "ton" });
+                      }}
+                    >
+                      Novo produto
+                    </button>
+                  }
+                />
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="table-header">Produto</th>
+                    <th className="table-header">Unidade</th>
+                    <th className="table-header">Preço Padrão</th>
+                    <th className="table-header"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {produtos.map((p) => (
+                    <tr key={p.id} className="table-row">
+                      <td className="table-cell font-medium">{p.nome}</td>
+                      <td className="table-cell">{p.unidade}</td>
+                      <td className="table-cell">{formatMoney(p.precoPadrao)}</td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleEditar(p)}
+                            className="text-blue-600 hover:underline text-sm font-medium"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => setProdutoToDelete(p)}
+                            disabled={deletingId === p.id}
+                            className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {deletingId === p.id ? "Excluindo..." : "Excluir"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      />
 
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -183,70 +247,20 @@ export default function ProdutosPage() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        {loading ? (
-          <div className="p-4">
-            <TableListSkeleton rows={8} cols={4} />
-          </div>
-        ) : produtos.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              title="Nenhum produto ativo"
-              description="Cadastre produtos para usar nas vendas."
-              action={
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => {
-                    setMostrarForm(true);
-                    setEditando(null);
-                    setForm({ unidade: "ton" });
-                  }}
-                >
-                  Novo produto
-                </button>
-              }
-            />
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="table-header">Produto</th>
-                <th className="table-header">Unidade</th>
-                <th className="table-header">Preço Padrão</th>
-                <th className="table-header"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {produtos.map((p) => (
-                <tr key={p.id} className="table-row">
-                  <td className="table-cell font-medium">{p.nome}</td>
-                  <td className="table-cell">{p.unidade}</td>
-                  <td className="table-cell">{formatMoney(p.precoPadrao)}</td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleEditar(p)}
-                        className="text-blue-600 hover:underline text-sm font-medium"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => void handleExcluir(p)}
-                        disabled={deletingId === p.id}
-                        className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deletingId === p.id ? "Excluindo..." : "Excluir"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
+      <ConfirmDialog
+        open={!!produtoToDelete}
+        title="Inativar produto"
+        description={
+          produtoToDelete
+            ? `Inativar "${produtoToDelete.nome}"? Ele deixará de aparecer nas vendas.`
+            : undefined
+        }
+        tone="danger"
+        busy={deletingId != null}
+        confirmText="Inativar"
+        onCancel={() => setProdutoToDelete(null)}
+        onConfirm={() => void confirmarExclusao()}
+      />
+    </>
   );
 }

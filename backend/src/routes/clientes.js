@@ -227,26 +227,46 @@ router.post("/", async (req, res) => {
   try {
     const b = parseBody(clienteCreateSchema, req.body);
     const cnpjLimpo = b.cnpj.replace(/\D/g, "");
+    const data = {
+      cnpj: cnpjLimpo,
+      razaoSocial: b.razaoSocial,
+      nomeFantasia: b.nomeFantasia,
+      telefone: b.telefone,
+      cidade: b.cidade,
+      estado: b.estado,
+      endereco: b.endereco,
+      observacoes: b.observacoes,
+      fretePadrao: b.fretePadraoSaco ?? 0, // legado
+      fretePadraoSaco: b.fretePadraoSaco ?? 0,
+      fretePadraoTonelada: b.fretePadraoTonelada ?? 0,
+      vendedorId: b.vendedorId ?? null,
+      comissaoFixaPercentual:
+        b.comissaoFixaPercentual === undefined ||
+        b.comissaoFixaPercentual === null
+          ? null
+          : parseFloat(String(b.comissaoFixaPercentual)),
+    };
+
+    const existente = await prisma.cliente.findUnique({
+      where: { cnpj: cnpjLimpo },
+      select: { id: true, ativo: true },
+    });
+
+    if (existente?.ativo) {
+      return res.status(400).json({ error: "CNPJ já cadastrado" });
+    }
+
+    if (existente && !existente.ativo) {
+      const reativado = await prisma.cliente.update({
+        where: { id: existente.id },
+        data: { ...data, ativo: true },
+        include: { vendedor: true },
+      });
+      return res.status(200).json(reativado);
+    }
+
     const cliente = await prisma.cliente.create({
-      data: {
-        cnpj: cnpjLimpo,
-        razaoSocial: b.razaoSocial,
-        nomeFantasia: b.nomeFantasia,
-        telefone: b.telefone,
-        cidade: b.cidade,
-        estado: b.estado,
-        endereco: b.endereco,
-        observacoes: b.observacoes,
-        fretePadrao: b.fretePadraoSaco ?? 0, // legado
-        fretePadraoSaco: b.fretePadraoSaco ?? 0,
-        fretePadraoTonelada: b.fretePadraoTonelada ?? 0,
-        vendedorId: b.vendedorId ?? null,
-        comissaoFixaPercentual:
-          b.comissaoFixaPercentual === undefined ||
-          b.comissaoFixaPercentual === null
-            ? null
-            : parseFloat(String(b.comissaoFixaPercentual)),
-      },
+      data,
       include: { vendedor: true },
     });
     res.status(201).json(cliente);

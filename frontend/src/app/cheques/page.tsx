@@ -8,25 +8,18 @@ import {
   formatDate,
   STATUS_CHEQUE_LABEL,
   STATUS_CHEQUE_COLOR,
-  type Cheque,
 } from "@/lib/utils";
-import api from "@/lib/api";
 import * as XLSX from "xlsx";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
-import { reportApiError } from "@/lib/report-api-error";
-
-type ResumoStatus = { status: string; count: number; total: number };
+import { ExportActions } from "@/components/ui/export-actions";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { ListScaffold } from "@/components/ui/list-scaffold";
+import { useChequesQuery } from "@/features/cheques/hooks/useChequesQuery";
 
 function ChequesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [resumoPorStatus, setResumoPorStatus] = useState<ResumoStatus[] | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(true);
   const pageSize = 20;
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
   const [dataInicio, setDataInicio] = useState(searchParams.get("dataInicio") || "");
   const [dataFim, setDataFim] = useState(searchParams.get("dataFim") || "");
@@ -43,6 +36,21 @@ function ChequesPageContent() {
   const ordemInicial = searchParams.get("ordem") || "";
   const [ordemInput, setOrdemInput] = useState(ordemInicial);
   const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
+  const { data, isLoading: loading } = useChequesQuery({
+    dataInicio,
+    dataFim,
+    cliente: clienteFiltro,
+    banco: bancoFiltro,
+    numero: numeroFiltro,
+    valorMin: valorMinFiltro,
+    valorMax: valorMaxFiltro,
+    ordem: ordemFiltro,
+    page,
+    pageSize,
+  });
+  const cheques = data?.cheques ?? [];
+  const resumoPorStatus = data?.resumoPorStatus ?? null;
+  const total = data?.total ?? 0;
   const aplicarFiltros = () => {
     setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
     setClienteFiltro(clienteInput.trim());
@@ -84,51 +92,6 @@ function ChequesPageContent() {
     setPage(parsedPage);
   }, [searchParams]);
 
-  const carregar = async () => {
-    const params = new URLSearchParams();
-    if (dataInicio) params.set("dataInicio", dataInicio);
-    if (dataFim) params.set("dataFim", dataFim);
-    if (clienteFiltro) params.set("cliente", clienteFiltro);
-    if (bancoFiltro) params.set("banco", bancoFiltro);
-    if (numeroFiltro) params.set("numero", numeroFiltro);
-    if (valorMinFiltro) params.set("valorMin", valorMinFiltro);
-    const vmaxTrim = valorMaxFiltro.trim();
-    if (vmaxTrim !== "") {
-      const n = Number(vmaxTrim.replace(",", "."));
-      if (!Number.isNaN(n) && n > 0) params.set("valorMax", vmaxTrim);
-    }
-    const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
-    if (ordemTrim) params.set("ordem", ordemTrim);
-    params.set("resumo", "1");
-    params.set("take", String(pageSize));
-    params.set("skip", String((page - 1) * pageSize));
-    setLoading(true);
-    try {
-      const resp = await api.getWithMeta<
-        Cheque[] | { items: Cheque[]; resumoPorStatus: ResumoStatus[] }
-      >(`/cheques?${params.toString()}`);
-      const raw = resp.data;
-      if (Array.isArray(raw)) {
-        setCheques(raw);
-        setResumoPorStatus(null);
-      } else {
-        setCheques(raw.items);
-        setResumoPorStatus(raw.resumoPorStatus);
-      }
-      setTotal(resp.meta.totalCount ?? (Array.isArray(raw) ? raw.length : raw.items.length));
-    } catch (e) {
-      reportApiError(e, {
-        title: "Não foi possível carregar os cheques",
-        onRetry: () => void carregar(),
-      });
-      setCheques([]);
-      setResumoPorStatus(null);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     const params = new URLSearchParams();
     if (dataInicio) params.set("dataInicio", dataInicio);
@@ -146,7 +109,6 @@ function ChequesPageContent() {
     if (ordemTrim) params.set("ordem", ordemTrim);
     if (page > 1) params.set("page", String(page));
     router.replace(`/cheques${params.toString() ? `?${params.toString()}` : ""}`);
-    carregar();
   }, [
     dataInicio,
     dataFim,
@@ -248,21 +210,21 @@ function ChequesPageContent() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cheques</h1>
-          <p className="text-gray-500 text-sm mt-1">
+    <ListScaffold
+      title="Cheques"
+      subtitle={(
+        <>
             {total} cheque{total === 1 ? "" : "s"} com os filtros atuais
             {totalExibido > 0 && ` • Total: ${formatMoney(totalExibido)}`}
-          </p>
-        </div>
+        </>
+      )}
+      actions={(
         <Link href="/cheques/novo" className="btn-primary">
           <PlusIcon className="w-4 h-4" /> Novo Cheque
         </Link>
-      </div>
-      {/* Filtros: aplicar somente ao clicar em Filtrar; exportações separadas */}
-      <div className="card p-4 mb-4">
+      )}
+      filters={(
+        <FilterBar className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Cliente</label>
@@ -316,7 +278,7 @@ function ChequesPageContent() {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end mt-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end mt-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">
               Data Início
@@ -365,50 +327,49 @@ function ChequesPageContent() {
               placeholder="0,00"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              aplicarFiltros();
-            }}
-            className="btn-primary h-10 shrink-0"
-          >
-            <MagnifyingGlassIcon className="w-4 h-4 inline -mt-0.5 mr-1" />
-            Filtrar
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDataInicio("");
-              setDataFim("");
-              setOrdemInput("");
-              setOrdemFiltro("");
-              setClienteInput("");
-              setClienteFiltro("");
-              setBancoInput("");
-              setBancoFiltro("");
-              setNumeroInput("");
-              setNumeroFiltro("");
-              setValorMinInput("");
-              setValorMinFiltro("");
-              setValorMaxInput("");
-              setValorMaxFiltro("");
-              setPage(1);
-            }}
-            className="btn-secondary h-10 shrink-0"
-          >
-            Limpar
-          </button>
         </div>
-        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={handleExportPdf} className="btn-secondary">
-            Exportar PDF
-          </button>
-          <button type="button" onClick={handleExportExcel} className="btn-secondary">
-            Exportar Excel
-          </button>
+        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                aplicarFiltros();
+              }}
+              className="btn-primary h-10 shrink-0"
+            >
+              <MagnifyingGlassIcon className="w-4 h-4 inline -mt-0.5 mr-1" />
+              Filtrar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDataInicio("");
+                setDataFim("");
+                setOrdemInput("");
+                setOrdemFiltro("");
+                setClienteInput("");
+                setClienteFiltro("");
+                setBancoInput("");
+                setBancoFiltro("");
+                setNumeroInput("");
+                setNumeroFiltro("");
+                setValorMinInput("");
+                setValorMinFiltro("");
+                setValorMaxInput("");
+                setValorMaxFiltro("");
+                setPage(1);
+              }}
+              className="btn-secondary h-10 shrink-0"
+            >
+              Limpar
+            </button>
+          </div>
+          <ExportActions onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} />
         </div>
-      </div>
-
+        </FilterBar>
+      )}
+      content={(
+        <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <div className="card p-3 text-center border-2 border-transparent">
           <span
@@ -505,6 +466,9 @@ function ChequesPageContent() {
           </table>
         )}
       </div>
+      </>
+      )}
+      footer={(
       <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
         <p>Total de registros: {total}</p>
         <div className="flex items-center gap-2">
@@ -525,7 +489,8 @@ function ChequesPageContent() {
           </button>
         </div>
       </div>
-    </div>
+      )}
+    />
   );
 }
 

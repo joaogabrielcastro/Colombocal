@@ -7,13 +7,24 @@ const { handleRouteError } = require("../utils/api");
 
 /**
  * POST /api/config/reset-financeiro-legacy
- * Uso único: quita todos os títulos, remove cheques e pagamentos vinculados a cheques,
- * e cria pagamentos de ajuste para zerar saldo devedor na conta corrente (vendas − pagamentos).
+ * Uso único: quita todos os títulos, remove cheques e pagamentos vinculados a cheques.
+ * Por padrão também cria pagamentos de ajuste para zerar saldo devedor na conta corrente.
+ * Se enviar zerarTotal: true, remove pagamentos/cheques e também vendas+títulos.
  * Protegido por ADMIN_RESET_SECRET ou RESET_FINANCE_SECRET no .env.
  * Alternativa sem API: npm run legacy:reset-financeiro (na pasta backend). Ver docs/migracao-legado.md.
  */
 router.post("/reset-financeiro-legacy", async (req, res) => {
   try {
+    if (
+      process.env.NODE_ENV === "production" &&
+      process.env.ENABLE_LEGACY_RESET_API !== "true"
+    ) {
+      return res.status(403).json({
+        error:
+          "Operação desativada em produção. Defina ENABLE_LEGACY_RESET_API=true para habilitar explicitamente.",
+      });
+    }
+
     const secret =
       process.env.ADMIN_RESET_SECRET || process.env.RESET_FINANCE_SECRET;
     if (!secret) {
@@ -31,7 +42,12 @@ router.post("/reset-financeiro-legacy", async (req, res) => {
         .json({ error: "Envie JSON com confirm: true e o secret correto." });
     }
 
-    const result = await executarResetFinanceiroLegacy(prisma);
+    const zerarTotal = req.body?.zerarTotal === true;
+    const result = await executarResetFinanceiroLegacy(prisma, {
+      criarAjustes: !zerarTotal,
+      zerarPagamentosGerais: zerarTotal,
+      zerarVendasETitulos: zerarTotal,
+    });
     res.json({ success: true, ...result });
   } catch (e) {
     handleRouteError(res, e);

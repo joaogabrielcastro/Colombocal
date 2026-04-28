@@ -323,7 +323,7 @@ function NovaVendaForm() {
       : cli?.vendedor?.comissaoPercentual;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/vendas" className="btn-secondary py-1.5 px-2.5">
           <ArrowLeftIcon className="w-4 h-4" />
@@ -351,7 +351,7 @@ function NovaVendaForm() {
                 " (padrão do vendedor)"}
             </p>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <SearchableSelect
               label="Cliente"
               value={clienteId}
@@ -458,7 +458,7 @@ function NovaVendaForm() {
                 />
               )}
             </div>
-            <div>
+            <div className="xl:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Observações
               </label>

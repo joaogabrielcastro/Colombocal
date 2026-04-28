@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { DetailPageSkeleton } from "@/components/ui/skeletons";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reportApiError } from "@/lib/report-api-error";
 
 export default function VendaDetailPage() {
@@ -38,6 +39,7 @@ export default function VendaDetailPage() {
     "dinheiro",
   );
   const [salvandoBaixa, setSalvandoBaixa] = useState(false);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [freteForm, setFreteForm] = useState({
     valor: "",
     recibo: false,
@@ -108,12 +110,7 @@ export default function VendaDetailPage() {
   };
 
   const handleCancelar = async () => {
-    if (
-      !confirm(
-        "Tem certeza que deseja cancelar esta venda? As movimentações vinculadas serão removidas.",
-      )
-    )
-      return;
+    setConfirmCancelOpen(false);
     setCancelando(true);
     try {
       await api.delete(`/vendas/${id}`);
@@ -175,30 +172,32 @@ export default function VendaDetailPage() {
     ]
       .filter(Boolean)
       .join(" - ");
-    const itensRows = venda.itens
-      .map(
-        (item) => `
-        <tr>
-          <td>${escapeHtml(item.produto.nome)}</td>
-          <td style="text-align:right">${escapeHtml(formatQuantidade(item.quantidade, item.produto.unidade))}</td>
-        </tr>`,
-      )
-      .join("");
     const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0));
     const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0));
     const tarifaKg = tarifaTon / 1000;
-    const qtdSaco = venda.itens
-      .filter((i) => String(i.produto.unidade).toLowerCase() === "saco")
-      .reduce((a, i) => a + parseFloat(String(i.quantidade)), 0);
-    const qtdTon = venda.itens
-      .filter((i) => String(i.produto.unidade).toLowerCase() === "ton")
-      .reduce((a, i) => a + parseFloat(String(i.quantidade)), 0);
-    const qtdKg = venda.itens
-      .filter((i) => String(i.produto.unidade).toLowerCase() === "kg")
-      .reduce((a, i) => a + parseFloat(String(i.quantidade)), 0);
-    const freteSaco = qtdSaco * tarifaSaco;
-    const freteTon = qtdTon * tarifaTon;
-    const freteKg = qtdKg * tarifaKg;
+    const itensRows = venda.itens
+      .map((item) => {
+        const unidade = String(item.produto.unidade || "").toLowerCase();
+        const quantidade = parseFloat(String(item.quantidade || 0));
+        const tarifaItem =
+          unidade === "saco"
+            ? tarifaSaco
+            : unidade === "ton"
+              ? tarifaTon
+              : unidade === "kg"
+                ? tarifaKg
+                : 0;
+        const freteItem = quantidade * tarifaItem;
+
+        return `
+        <tr>
+          <td>${escapeHtml(item.produto.nome)}</td>
+          <td style="text-align:right">${escapeHtml(formatQuantidade(item.quantidade, item.produto.unidade))}</td>
+          <td style="text-align:right">${escapeHtml(formatMoney(tarifaItem))}</td>
+          <td style="text-align:right">${escapeHtml(formatMoney(freteItem))}</td>
+        </tr>`;
+      })
+      .join("");
 
     const html = `<!DOCTYPE html>
 <html>
@@ -256,6 +255,8 @@ export default function VendaDetailPage() {
       <tr>
         <th>Produto</th>
         <th style="text-align:right">Quantidade</th>
+        <th style="text-align:right">Tarifa da unidade</th>
+        <th style="text-align:right">Frete do item</th>
       </tr>
     </thead>
     <tbody>
@@ -269,18 +270,9 @@ export default function VendaDetailPage() {
   </div>
 
   <div class="box" style="margin-top:10px;">
-    <div class="label">Resumo de frete para cobrança</div>
-    <div class="value">
-      Tarifa por saco: ${escapeHtml(formatMoney(tarifaSaco))} · Quantidade: ${escapeHtml(formatQuantidade(qtdSaco, "saco"))} · Subtotal: ${escapeHtml(formatMoney(freteSaco))}
-    </div>
-    <div class="value">
-      Tarifa por tonelada: ${escapeHtml(formatMoney(tarifaTon))} · Quantidade: ${escapeHtml(formatQuantidade(qtdTon, "ton"))} · Subtotal: ${escapeHtml(formatMoney(freteTon))}
-    </div>
-    <div class="value">
-      Tarifa equivalente por kg: ${escapeHtml(formatMoney(tarifaKg))} · Quantidade: ${escapeHtml(formatQuantidade(qtdKg, "kg"))} · Subtotal: ${escapeHtml(formatMoney(freteKg))}
-    </div>
+    <div class="label">Frete total cobrado</div>
     <div class="value" style="font-weight:700; margin-top:6px;">
-      Frete total cobrado: ${escapeHtml(formatMoney(venda.frete))}
+      ${escapeHtml(formatMoney(venda.frete))}
     </div>
   </div>
 
@@ -341,7 +333,7 @@ export default function VendaDetailPage() {
           Imprimir O.S.
         </button>
         <button
-          onClick={handleCancelar}
+          onClick={() => setConfirmCancelOpen(true)}
           disabled={cancelando}
           className="btn-danger"
         >
@@ -349,6 +341,16 @@ export default function VendaDetailPage() {
           {cancelando ? "Cancelando..." : "Cancelar Venda"}
         </button>
       </div>
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        title="Cancelar venda"
+        description="Tem certeza que deseja cancelar esta venda? As movimentações vinculadas serão removidas."
+        tone="danger"
+        busy={cancelando}
+        confirmText="Cancelar venda"
+        onCancel={() => setConfirmCancelOpen(false)}
+        onConfirm={() => void handleCancelar()}
+      />
 
       <div className="card p-5 mb-4">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
