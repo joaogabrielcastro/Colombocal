@@ -3,12 +3,15 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ExclamationTriangleIcon,
-  ArrowDownTrayIcon,
   ArrowPathIcon,
   PrinterIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
 import api from "@/lib/api";
+import { apiFetchWithMeta } from "@/lib/api";
+import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 
 interface ContaCliente {
@@ -38,6 +41,7 @@ interface ChequeItem {
 
 interface FinanceiroData {
   clientesDevedores: ContaCliente[];
+  clientesDevedoresCount?: number;
   totalEmAberto: number;
   chequesPorStatus: ChequeStatus[];
   chequesPendentes: ChequeItem[];
@@ -135,18 +139,52 @@ export default function FinanceiroPage() {
   const [aba, setAba] = useState<"devedores" | "pendentes">(
     "devedores",
   );
+  const [pageDevedores, setPageDevedores] = useState(1);
+  const [pagePendentes, setPagePendentes] = useState(1);
+  const [totalAba, setTotalAba] = useState(0);
+  const {
+    isExporting: exportandoCsv,
+    error: erroExportacao,
+    exportCsv,
+  } = useExportCsvAsync({
+    startPath: "/relatorios/financeiro/export-async",
+    maxAttempts: 60,
+    pollIntervalMs: 1000,
+    fallback: () => {
+      if (dados) exportarCSV();
+    },
+  });
+  const pageSize = 100;
 
   const carregar = useCallback(() => {
+    const page = aba === "devedores" ? pageDevedores : pagePendentes;
+    const params = new URLSearchParams({
+      aba,
+      take: String(pageSize),
+      skip: String((page - 1) * pageSize),
+    });
     setLoading(true);
-    api
-      .get<FinanceiroData>("/relatorios/financeiro", { cache: "no-store" })
-      .then((raw) => setDados(normalizeFinanceiroPayload(raw)))
+    apiFetchWithMeta<FinanceiroData>(`/relatorios/financeiro?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    })
+      .then(({ data, meta }) => {
+        const normalized = normalizeFinanceiroPayload(data);
+        setDados(normalized);
+        if (aba === "devedores") {
+          setTotalAba(meta.totalCount ?? normalized.clientesDevedoresCount ?? normalized.clientesDevedores.length);
+        } else {
+          setTotalAba(meta.totalCount ?? normalized.chequesPendentesCount ?? normalized.chequesPendentes.length);
+        }
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [aba, pageDevedores, pagePendentes]);
 
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  const totalPages = Math.max(1, Math.ceil(totalAba / pageSize));
 
   const exportarCSV = () => {
     if (!dados) return;
@@ -193,6 +231,10 @@ export default function FinanceiroPage() {
     URL.revokeObjectURL(url);
   };
 
+  const exportarCsvAsync = async () => {
+    await exportCsv({ aba });
+  };
+
   const imprimirRelatorio = () => {
     const tituloAnterior = document.title;
     document.title = `Relatório Financeiro - ${aba}`;
@@ -236,15 +278,22 @@ export default function FinanceiroPage() {
                 <PrinterIcon className="w-4 h-4" /> Imprimir
               </button>
               <button
-                onClick={exportarCSV}
+                onClick={exportarCsvAsync}
+                disabled={exportandoCsv}
                 className="btn-secondary flex items-center gap-1"
               >
-                <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+                {exportandoCsv ? "Gerando CSV..." : "Exportar CSV (assíncrono)"}
               </button>
             </>
           )}
         </div>
       </div>
+
+      {erroExportacao ? (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {erroExportacao}
+        </div>
+      ) : null}
 
       {loading && (
         <div className="card p-4">
@@ -277,7 +326,7 @@ export default function FinanceiroPage() {
           </div>
 
           {/* Status cheques — totais reais (API mapeia _sum/_count do Prisma) */}
-          <div className="card p-4 mb-6">
+          <FilterBar className="p-4 mb-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">
               Cheques por Status
             </h3>
@@ -301,7 +350,7 @@ export default function FinanceiroPage() {
                 ))}
               </div>
             )}
-          </div>
+          </FilterBar>
 
           {/* Abas */}
           <div className="flex gap-1 mb-4 border-b border-gray-200">
@@ -309,7 +358,7 @@ export default function FinanceiroPage() {
               [
                 {
                   key: "devedores",
-                  label: `Clientes Devedores (${dados.clientesDevedores.length})`,
+                  label: `Clientes Devedores (${dados.clientesDevedoresCount ?? dados.clientesDevedores.length})`,
                 },
                 {
                   key: "pendentes",
@@ -319,7 +368,14 @@ export default function FinanceiroPage() {
             ).map((t) => (
               <button
                 key={t.key}
-                onClick={() => setAba(t.key)}
+                onClick={() => {
+                  setAba(t.key);
+                  if (t.key === "devedores") {
+                    setPageDevedores(1);
+                  } else {
+                    setPagePendentes(1);
+                  }
+                }}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${aba === t.key ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
               >
                 {t.label}
@@ -330,8 +386,11 @@ export default function FinanceiroPage() {
           {aba === "devedores" && (
             <div className="card overflow-hidden">
               {dados.clientesDevedores.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">
-                  Nenhum cliente com saldo devedor.
+                <div className="p-4">
+                  <EmptyState
+                    title="Nenhum cliente com saldo devedor"
+                    description="Quando houver títulos em aberto, eles aparecerão aqui."
+                  />
                 </div>
               ) : (
                 <table className="w-full">
@@ -395,8 +454,11 @@ export default function FinanceiroPage() {
             <div className="card overflow-hidden">
               {(dados.chequesPendentesCount ?? dados.chequesPendentes.length) ===
               0 ? (
-                <div className="p-8 text-center text-gray-400">
-                  Nenhum cheque pendente.
+                <div className="p-4">
+                  <EmptyState
+                    title="Nenhum cheque pendente"
+                    description="Todos os cheques estão compensados ou sem pendência."
+                  />
                 </div>
               ) : (
                 <>
@@ -480,6 +542,40 @@ export default function FinanceiroPage() {
             </div>
           )}
 
+          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+            <p>Total de registros (aba): {totalAba}</p>
+            <div className="flex items-center gap-2">
+              <button
+                className="btn-secondary"
+                disabled={(aba === "devedores" ? pageDevedores : pagePendentes) <= 1}
+                onClick={() => {
+                  if (aba === "devedores") {
+                    setPageDevedores((p) => Math.max(1, p - 1));
+                  } else {
+                    setPagePendentes((p) => Math.max(1, p - 1));
+                  }
+                }}
+              >
+                Anterior
+              </button>
+              <span>
+                Página {aba === "devedores" ? pageDevedores : pagePendentes} de {totalPages}
+              </span>
+              <button
+                className="btn-secondary"
+                disabled={(aba === "devedores" ? pageDevedores : pagePendentes) >= totalPages}
+                onClick={() => {
+                  if (aba === "devedores") {
+                    setPageDevedores((p) => Math.min(totalPages, p + 1));
+                  } else {
+                    setPagePendentes((p) => Math.min(totalPages, p + 1));
+                  }
+                }}
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
         </>
       )}
     </div>

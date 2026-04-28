@@ -20,9 +20,9 @@ test("totalTitulosEmAberto agrega vários títulos", () => {
   assert.equal(totalTitulosEmAberto(t), 260);
 });
 
-test("saldoContaCorrente: créditos − débitos", () => {
-  assert.equal(saldoContaCorrente(1000, 800), -200);
-  assert.equal(saldoContaCorrente(500, 600), 100);
+test("saldoContaCorrente: debitos - creditos, nunca negativo", () => {
+  assert.equal(saldoContaCorrente(1000, 800), 200);
+  assert.equal(saldoContaCorrente(500, 600), 0);
 });
 
 test("resumoFinanceiroCliente une conta corrente e títulos", () => {
@@ -31,7 +31,7 @@ test("resumoFinanceiroCliente une conta corrente e títulos", () => {
     totalCreditos: 400,
     titulos: [{ valorOriginal: 600, valorPago: 0 }],
   });
-  assert.equal(r.contaCorrente.saldo, -600);
+  assert.equal(r.contaCorrente.saldo, 600);
   assert.equal(r.titulosReceber.emAberto, 600);
   assert.ok(r.contaCorrente.ajuda.length > 10);
   assert.ok(r.titulosReceber.ajuda.length > 10);

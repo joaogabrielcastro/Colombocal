@@ -7,6 +7,7 @@ import { formatMoney, formatDate } from "@/lib/utils";
 import api, { apiFetchWithMeta } from "@/lib/api";
 import type { FreteMovimento } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 
@@ -88,7 +89,7 @@ function FretesContent() {
         </div>
       </div>
 
-      <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <FilterBar className="p-4 flex flex-wrap gap-3 items-end">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Nº venda</label>
           <input
@@ -125,7 +126,7 @@ function FretesContent() {
         >
           Filtrar
         </button>
-      </div>
+      </FilterBar>
 
       {loading ? (
         <div className="card p-4">

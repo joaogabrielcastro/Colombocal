@@ -3,7 +3,11 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
-const { ensureDatabaseCompat } = require("./lib/prisma");
+const { prisma, ensureDatabaseCompat } = require("./lib/prisma");
+const {
+  requestIdMiddleware,
+  sendErrorAlert,
+} = require("./shared/http/observability");
 
 // Garante uso do engine local no ambiente de desenvolvimento
 process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
@@ -11,6 +15,7 @@ delete process.env.PRISMA_GENERATE_NO_ENGINE;
 delete process.env.PRISMA_GENERATE_DATAPROXY;
 
 const app = express();
+app.use(requestIdMiddleware);
 
 const trustProxy = process.env.TRUST_PROXY;
 if (typeof trustProxy !== "undefined") {
@@ -65,6 +70,38 @@ app.get("/", (req, res) => {
   res.json({ message: "API Colombocal funcionando 🚀" });
 });
 
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "colombocal-backend",
+    requestId: req.requestId,
+    uptimeSec: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/ready", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: "ready",
+      service: "colombocal-backend",
+      requestId: req.requestId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    await sendErrorAlert(error, {
+      requestId: req.requestId,
+      source: "readiness_check",
+    });
+    res.status(503).json({
+      status: "not_ready",
+      error: "database_unreachable",
+      requestId: req.requestId,
+    });
+  }
+});
+
 // Routes
 app.use("/api/clientes", require("./routes/clientes"));
 app.use("/api/produtos", require("./routes/produtos"));
@@ -81,10 +118,31 @@ app.use("/api/cnpj", require("./routes/cnpj"));
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  const requestId = req.requestId || "unknown";
+  console.error(
+    JSON.stringify({
+      level: "error",
+      type: "http_unhandled_error",
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      message: err?.message,
+      stack: err?.stack,
+    }),
+  );
+  void sendErrorAlert(err, {
+    requestId,
+    method: req.method,
+    path: req.originalUrl,
+    source: "express_error_handler",
+  });
   res
     .status(500)
-    .json({ error: "Erro interno do servidor", details: err.message });
+    .json({
+      error: "Erro interno do servidor",
+      details: err.message,
+      requestId,
+    });
 });
 
 const PORT = process.env.PORT || 3011;
@@ -115,5 +173,30 @@ async function startServer() {
 }
 
 startServer();
+
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  console.error(
+    JSON.stringify({
+      level: "error",
+      type: "unhandled_rejection",
+      message: err.message,
+      stack: err.stack,
+    }),
+  );
+  void sendErrorAlert(err, { source: "process_unhandled_rejection" });
+});
+
+process.on("uncaughtException", (error) => {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      type: "uncaught_exception",
+      message: error.message,
+      stack: error.stack,
+    }),
+  );
+  void sendErrorAlert(error, { source: "process_uncaught_exception" });
+});
 
 module.exports = app;

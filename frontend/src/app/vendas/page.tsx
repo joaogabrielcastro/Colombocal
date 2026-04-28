@@ -18,6 +18,8 @@ import {
 import api from '@/lib/api';
 import { ListPageSkeleton, TableListSkeleton } from '@/components/ui/skeletons';
 import { reportApiError } from '@/lib/report-api-error';
+import { FilterBar } from '@/components/ui/filter-bar';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const pageSize = 20;
 
@@ -185,7 +187,7 @@ function VendasPageContent() {
         </Link>
       </div>
 
-      <div className="card p-4 mb-4 space-y-3">
+      <FilterBar className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
           <div className="md:col-span-2">
             <label className="block text-xs text-gray-500 mb-1">
@@ -308,15 +310,23 @@ function VendasPageContent() {
             Limpar filtros
           </button>
         </div>
-      </div>
+      </FilterBar>
       <div className="card overflow-hidden">
         {loading ? (
           <div className="p-4">
             <TableListSkeleton rows={12} cols={8} />
           </div>
         ) : vendas.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
-            Nenhuma venda encontrada
+          <div className="p-4">
+            <EmptyState
+              title="Nenhuma venda encontrada"
+              description="Ajuste os filtros ou registre uma nova venda."
+              action={
+                <Link href="/vendas/nova" className="btn-primary text-sm">
+                  <PlusIcon className="w-4 h-4" /> Nova Venda
+                </Link>
+              }
+            />
           </div>
         ) : (
           <table className="w-full">

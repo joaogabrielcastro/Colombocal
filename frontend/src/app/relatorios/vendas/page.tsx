@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TableListSkeleton } from "@/components/ui/skeletons";
+import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
 import { useRelatorioVendasLookups } from "@/features/relatorios-vendas/hooks/useRelatorioVendasLookups";
 import { useRelatorioVendasQuery } from "@/features/relatorios-vendas/hooks/useRelatorioVendasQuery";
 import {
@@ -39,6 +40,20 @@ export default function RelatorioVendasPage() {
     refetch,
   } = useRelatorioVendasQuery(filtrosAplicados, !!filtrosAplicados.dataInicio && !!filtrosAplicados.dataFim);
   const data = dataRaw ?? null;
+  const {
+    isExporting: exportandoCsv,
+    error: erroExportacao,
+    exportCsv,
+  } = useExportCsvAsync({
+    startPath: "/relatorios/vendas/export-async",
+    maxAttempts: 90,
+    pollIntervalMs: 1000,
+    fallback: () => {
+      if (data) {
+        exportarRelatorioVendasCSV(data, dataInicio, dataFim);
+      }
+    },
+  });
   // Default: mês corrente
   useEffect(() => {
     const hoje = new Date();
@@ -51,9 +66,8 @@ export default function RelatorioVendasPage() {
     setFiltrosAplicados((prev) => ({ ...prev, dataInicio: ini, dataFim: fim }));
   }, []);
 
-  const exportarCSV = () => {
-    if (!data) return;
-    exportarRelatorioVendasCSV(data, dataInicio, dataFim);
+  const exportarCSV = async () => {
+    await exportCsv(filtrosAplicados);
   };
 
   const exportarExcel = () => {
@@ -139,7 +153,15 @@ export default function RelatorioVendasPage() {
         onExportCSV={exportarCSV}
         onExportExcel={exportarExcel}
         onExportPDF={exportarPdf}
+        exportCsvLabel={exportandoCsv ? "Gerando CSV..." : "CSV"}
+        exportCsvDisabled={exportandoCsv}
       />
+
+      {erroExportacao ? (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {erroExportacao}
+        </div>
+      ) : null}
 
       {loading && (
         <div className="card p-4">

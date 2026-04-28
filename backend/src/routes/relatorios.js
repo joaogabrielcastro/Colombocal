@@ -4,6 +4,13 @@ const { prisma } = require("../lib/prisma");
 const { handleRouteError, parsePagination, setPaginationHeaders } = require("../utils/api");
 const { getConfig } = require("../services/configSistema");
 const {
+  createExportJob,
+  getExportJob,
+  markRunning,
+  markCompleted,
+  markFailed,
+} = require("../services/exportJobs");
+const {
   comissaoPorEmissao,
   comissaoPorCaixa,
 } = require("../services/comissao");
@@ -20,31 +27,59 @@ function getDateRange(dataInicio, dataFim) {
   return where;
 }
 
+function buildTitulosWhere(query) {
+  const {
+    clienteId,
+    status,
+    dataVencInicio,
+    dataVencFim,
+    somenteEmAberto,
+    vendaId,
+  } = query;
+
+  const where = {};
+  if (clienteId) where.clienteId = parseInt(clienteId, 10);
+  if (vendaId != null && String(vendaId).trim() !== "") {
+    const vid = parseInt(String(vendaId).replace(/^#/, "").trim(), 10);
+    if (!Number.isNaN(vid) && vid > 0) where.vendaId = vid;
+  }
+  if (status) where.status = status;
+  if (somenteEmAberto === "true") where.status = { in: ["aberto", "parcial"] };
+  if (dataVencInicio || dataVencFim) {
+    where.vencimento = getDateRange(dataVencInicio, dataVencFim);
+  }
+  return where;
+}
+
+function buildVendasWhere(query) {
+  const { dataInicio, dataFim, clienteId, vendedorId, produtoId, busca } = query;
+  const where = {};
+  if (clienteId) where.clienteId = parseInt(clienteId, 10);
+  if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
+  if (dataInicio || dataFim) where.dataVenda = getDateRange(dataInicio, dataFim);
+  if (produtoId) {
+    where.itens = { some: { produtoId: parseInt(produtoId, 10) } };
+  }
+  if (busca && String(busca).trim()) {
+    const term = String(busca).trim();
+    where.OR = [
+      { cliente: { nomeFantasia: { contains: term, mode: "insensitive" } } },
+      { cliente: { razaoSocial: { contains: term, mode: "insensitive" } } },
+      { vendedor: { nome: { contains: term, mode: "insensitive" } } },
+      { observacoes: { contains: term, mode: "insensitive" } },
+    ];
+  }
+  return where;
+}
+
 // GET /api/relatorios/vendas
 router.get("/vendas", async (req, res) => {
   try {
-    const { dataInicio, dataFim, clienteId, vendedorId, produtoId, busca } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 200,
       maxTake: 1000,
     });
-    const where = {};
-    if (clienteId) where.clienteId = parseInt(clienteId);
-    if (vendedorId) where.vendedorId = parseInt(vendedorId);
-    if (dataInicio || dataFim)
-      where.dataVenda = getDateRange(dataInicio, dataFim);
-    if (produtoId) {
-      where.itens = { some: { produtoId: parseInt(produtoId, 10) } };
-    }
-    if (busca && String(busca).trim()) {
-      const term = String(busca).trim();
-      where.OR = [
-        { cliente: { nomeFantasia: { contains: term, mode: "insensitive" } } },
-        { cliente: { razaoSocial: { contains: term, mode: "insensitive" } } },
-        { vendedor: { nome: { contains: term, mode: "insensitive" } } },
-        { observacoes: { contains: term, mode: "insensitive" } },
-      ];
-    }
+    const where = buildVendasWhere(req.query);
 
     const aggWhere = { ...where };
     const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg] = await Promise.all([
@@ -184,6 +219,66 @@ router.get("/vendas", async (req, res) => {
       resumoRepresentantes,
       resumoClientes,
       resumoProdutos,
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// POST /api/relatorios/vendas/export-async
+router.post("/vendas/export-async", async (req, res) => {
+  try {
+    const payload = {
+      dataInicio: req.body?.dataInicio ? String(req.body.dataInicio) : "",
+      dataFim: req.body?.dataFim ? String(req.body.dataFim) : "",
+      busca: req.body?.busca ? String(req.body.busca) : "",
+      vendedorId: req.body?.vendedorId ? String(req.body.vendedorId) : "",
+      clienteId: req.body?.clienteId ? String(req.body.clienteId) : "",
+      produtoId: req.body?.produtoId ? String(req.body.produtoId) : "",
+    };
+    const jobId = createExportJob("vendas_csv", payload);
+    res.status(202).json({ jobId, status: "pending" });
+
+    setImmediate(async () => {
+      try {
+        markRunning(jobId);
+        const where = buildVendasWhere(payload);
+        const vendas = await prisma.venda.findMany({
+          where,
+          include: {
+            cliente: { select: { nomeFantasia: true, razaoSocial: true } },
+            vendedor: { select: { nome: true } },
+          },
+          orderBy: { dataVenda: "desc" },
+          take: 50000,
+        });
+
+        const header = "Data,Cliente,Vendedor,Valor Total,Frete\n";
+        const rows = vendas
+          .map((v) =>
+            [
+              new Date(v.dataVenda).toLocaleDateString("pt-BR"),
+              String(v.cliente.nomeFantasia || v.cliente.razaoSocial || "").replaceAll('"', '""'),
+              String(v.vendedor.nome || "").replaceAll('"', '""'),
+              parseFloat(String(v.valorTotal || 0)).toFixed(2),
+              parseFloat(String(v.frete || 0)).toFixed(2),
+            ]
+              .map((x) => `"${x}"`)
+              .join(","),
+          )
+          .join("\n");
+
+        const periodoIni = payload.dataInicio || "inicio";
+        const periodoFim = payload.dataFim || "fim";
+        markCompleted(jobId, {
+          mimeType: "text/csv;charset=utf-8;",
+          filename: `relatorio-vendas-${periodoIni}-${periodoFim}.csv`,
+          content: "\uFEFF" + header + rows,
+          totalLinhas: vendas.length,
+        });
+      } catch (error) {
+        markFailed(jobId, error);
+      }
     });
   } catch (error) {
     handleRouteError(res, error);
@@ -394,6 +489,11 @@ function mapChequeGroupBy(rows) {
 // GET /api/relatorios/financeiro
 router.get("/financeiro", async (req, res) => {
   try {
+    const aba = req.query.aba === "pendentes" ? "pendentes" : "devedores";
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 100,
+      maxTake: 500,
+    });
     const chequePendenteWhere = {
       status: "ativo",
     };
@@ -404,7 +504,7 @@ router.get("/financeiro", async (req, res) => {
       chequesPorStatusRaw,
       chequesPendentesCount,
       chequesPendentesValorAgg,
-      chequesPendentes,
+      chequesPendentesRows,
       chequesDevolvidos,
     ] = await Promise.all([
       prisma.cliente.findMany({ where: { ativo: true } }),
@@ -424,7 +524,8 @@ router.get("/financeiro", async (req, res) => {
       }),
       prisma.cheque.findMany({
         where: chequePendenteWhere,
-        take: 500,
+        take: aba === "pendentes" ? take : 500,
+        skip: aba === "pendentes" ? skip : 0,
         include: { cliente: true },
         orderBy: { dataRecebimento: "asc" },
       }),
@@ -456,10 +557,24 @@ router.get("/financeiro", async (req, res) => {
       .filter((c) => c.saldo > 0)
       .sort((a, b) => b.saldo - a.saldo);
     const totalEmAberto = clientesDevedores.reduce((acc, c) => acc + c.saldo, 0);
+    const clientesDevedoresCount = clientesDevedores.length;
+    const clientesDevedoresPage =
+      aba === "devedores"
+        ? clientesDevedores.slice(skip, skip + take)
+        : clientesDevedores.slice(0, Math.min(100, clientesDevedores.length));
+
+    const chequesPendentes =
+      aba === "pendentes"
+        ? chequesPendentesRows
+        : chequesPendentesRows.slice(0, Math.min(100, chequesPendentesRows.length));
+
+    const totalAba = aba === "pendentes" ? chequesPendentesCount : clientesDevedoresCount;
+    setPaginationHeaders(res, { total: totalAba, take, skip });
 
     res.json({
       contasClientes,
-      clientesDevedores,
+      clientesDevedores: clientesDevedoresPage,
+      clientesDevedoresCount,
       totalEmAberto,
       chequesPorStatus,
       chequesPendentes,
@@ -473,38 +588,127 @@ router.get("/financeiro", async (req, res) => {
   }
 });
 
+// POST /api/relatorios/financeiro/export-async
+router.post("/financeiro/export-async", async (req, res) => {
+  try {
+    const aba = req.body?.aba === "pendentes" ? "pendentes" : "devedores";
+    const jobId = createExportJob("financeiro_csv", { aba });
+    res.status(202).json({ jobId, status: "pending" });
+
+    setImmediate(async () => {
+      try {
+        markRunning(jobId);
+        const chequePendenteWhere = { status: "ativo" };
+        const [clientes, titulosAgg] = await Promise.all([
+          prisma.cliente.findMany({ where: { ativo: true } }),
+          prisma.tituloReceber.groupBy({
+            by: ["clienteId"],
+            _sum: { valorOriginal: true, valorPago: true },
+          }),
+        ]);
+
+        const aggMap = new Map(
+          titulosAgg.map((a) => [
+            a.clienteId,
+            {
+              debito: parseFloat(String(a._sum.valorOriginal || 0)),
+              credito: parseFloat(String(a._sum.valorPago || 0)),
+            },
+          ]),
+        );
+
+        const clientesDevedores = clientes
+          .map((c) => {
+            const agg = aggMap.get(c.id) || { debito: 0, credito: 0 };
+            const saldo = Math.max(0, agg.debito - agg.credito);
+            return { cliente: c, debito: agg.debito, credito: agg.credito, saldo };
+          })
+          .filter((c) => c.saldo > 0)
+          .sort((a, b) => b.saldo - a.saldo);
+
+        let csv = "";
+        let totalLinhas = 0;
+        if (aba === "devedores") {
+          totalLinhas = clientesDevedores.length;
+          csv =
+            "Cliente,Debitos,Pagamentos,Em aberto\n" +
+            clientesDevedores
+              .map(
+                (c) =>
+                  `"${String(c.cliente.nomeFantasia || c.cliente.razaoSocial).replaceAll('"', '""')}",${c.debito.toFixed(2)},${c.credito.toFixed(2)},${c.saldo.toFixed(2)}`,
+              )
+              .join("\n");
+        } else {
+          const chequesPendentes = await prisma.cheque.findMany({
+            where: chequePendenteWhere,
+            include: { cliente: true },
+            orderBy: { dataRecebimento: "asc" },
+          });
+          totalLinhas = chequesPendentes.length;
+          csv =
+            "Cliente,Banco,Numero,Pre-datado,Compensacao,Valor,Status\n" +
+            chequesPendentes
+              .map((c) =>
+                [
+                  c.cliente.nomeFantasia || c.cliente.razaoSocial,
+                  c.banco || "",
+                  c.numero || "",
+                  c.dataRecebimento
+                    ? new Date(c.dataRecebimento).toLocaleDateString("pt-BR")
+                    : "",
+                  c.dataCompensacao
+                    ? new Date(c.dataCompensacao).toLocaleDateString("pt-BR")
+                    : "",
+                  parseFloat(String(c.valor || 0)).toFixed(2),
+                  c.status,
+                ]
+                  .map((v) => `"${String(v).replaceAll('"', '""')}"`)
+                  .join(","),
+              )
+              .join("\n");
+        }
+
+        markCompleted(jobId, {
+          mimeType: "text/csv;charset=utf-8;",
+          filename: `financeiro-${aba}_${new Date().toISOString().slice(0, 10)}.csv`,
+          content: "\uFEFF" + csv,
+          totalLinhas,
+        });
+      } catch (error) {
+        markFailed(jobId, error);
+      }
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
 // GET /api/relatorios/titulos
 router.get("/titulos", async (req, res) => {
   try {
-    const {
-      clienteId,
-      status,
-      dataVencInicio,
-      dataVencFim,
-      somenteEmAberto,
-      vendaId,
-    } = req.query;
-
-    const where = {};
-    if (clienteId) where.clienteId = parseInt(clienteId, 10);
-    if (vendaId != null && String(vendaId).trim() !== "") {
-      const vid = parseInt(String(vendaId).replace(/^#/, "").trim(), 10);
-      if (!Number.isNaN(vid) && vid > 0) where.vendaId = vid;
-    }
-    if (status) where.status = status;
-    if (somenteEmAberto === "true") where.status = { in: ["aberto", "parcial"] };
-    if (dataVencInicio || dataVencFim) {
-      where.vencimento = getDateRange(dataVencInicio, dataVencFim);
-    }
-
-    const titulos = await prisma.tituloReceber.findMany({
-      where,
-      include: {
-        cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
-        venda: { select: { id: true, dataVenda: true, valorTotal: true } },
-      },
-      orderBy: [{ vencimento: "asc" }, { id: "desc" }],
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 100,
+      maxTake: 500,
     });
+    const where = buildTitulosWhere(req.query);
+
+    const [titulos, totalTitulosCount, aggTotais] = await Promise.all([
+      prisma.tituloReceber.findMany({
+        where,
+        include: {
+          cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
+          venda: { select: { id: true, dataVenda: true, valorTotal: true } },
+        },
+        orderBy: [{ vencimento: "asc" }, { id: "desc" }],
+        take,
+        skip,
+      }),
+      prisma.tituloReceber.count({ where }),
+      prisma.tituloReceber.aggregate({
+        where,
+        _sum: { valorOriginal: true, valorPago: true },
+      }),
+    ]);
 
     const hoje = new Date();
     hoje.setHours(23, 59, 59, 999);
@@ -514,44 +718,153 @@ router.get("/titulos", async (req, res) => {
       return d;
     };
 
+    const sumAberto = async (extraWhere = {}) => {
+      const agg = await prisma.tituloReceber.aggregate({
+        where: {
+          ...where,
+          ...extraWhere,
+          status: { in: ["aberto", "parcial"] },
+        },
+        _sum: { valorOriginal: true, valorPago: true },
+      });
+      const original = parseFloat(String(agg._sum.valorOriginal || 0));
+      const pago = parseFloat(String(agg._sum.valorPago || 0));
+      return Math.max(0, original - pago);
+    };
+
+    const [vencidos, ate30, de31a60, de61a90, acima90] = await Promise.all([
+      sumAberto({ vencimento: { lt: hoje } }),
+      sumAberto({ vencimento: { gte: hoje, lte: addDays(hoje, 30) } }),
+      sumAberto({ vencimento: { gt: addDays(hoje, 30), lte: addDays(hoje, 60) } }),
+      sumAberto({ vencimento: { gt: addDays(hoje, 60), lte: addDays(hoje, 90) } }),
+      sumAberto({ vencimento: { gt: addDays(hoje, 90) } }),
+    ]);
+
     const resumo = {
-      totalTitulos: titulos.length,
-      valorOriginal: 0,
-      valorPago: 0,
-      valorEmAberto: 0,
+      totalTitulos: totalTitulosCount,
+      valorOriginal: parseFloat(String(aggTotais._sum.valorOriginal || 0)),
+      valorPago: parseFloat(String(aggTotais._sum.valorPago || 0)),
+      valorEmAberto: Math.max(
+        0,
+        parseFloat(String(aggTotais._sum.valorOriginal || 0)) -
+          parseFloat(String(aggTotais._sum.valorPago || 0)),
+      ),
       faixas: {
-        vencidos: 0,
-        ate30: 0,
-        de31a60: 0,
-        de61a90: 0,
-        acima90: 0,
+        vencidos,
+        ate30,
+        de31a60,
+        de61a90,
+        acima90,
       },
     };
 
-    for (const t of titulos) {
-      const original = parseFloat(t.valorOriginal);
-      const pago = parseFloat(t.valorPago);
-      const aberto = Math.max(0, original - pago);
-      resumo.valorOriginal += original;
-      resumo.valorPago += pago;
-      resumo.valorEmAberto += aberto;
-      if (aberto <= 0.009) continue;
-
-      const venc = new Date(t.vencimento);
-      if (venc < hoje) {
-        resumo.faixas.vencidos += aberto;
-      } else if (venc <= addDays(hoje, 30)) {
-        resumo.faixas.ate30 += aberto;
-      } else if (venc <= addDays(hoje, 60)) {
-        resumo.faixas.de31a60 += aberto;
-      } else if (venc <= addDays(hoje, 90)) {
-        resumo.faixas.de61a90 += aberto;
-      } else {
-        resumo.faixas.acima90 += aberto;
-      }
-    }
-
+    setPaginationHeaders(res, { total: totalTitulosCount, take, skip });
     res.json({ titulos, resumo });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// POST /api/relatorios/titulos/export-async
+router.post("/titulos/export-async", async (req, res) => {
+  try {
+    const raw = req.body || {};
+    const payload = {
+      clienteId: raw.clienteId ? String(raw.clienteId) : "",
+      vendaId: raw.vendaId ? String(raw.vendaId) : "",
+      status: raw.status ? String(raw.status) : "",
+      dataVencInicio: raw.dataVencInicio ? String(raw.dataVencInicio) : "",
+      dataVencFim: raw.dataVencFim ? String(raw.dataVencFim) : "",
+      somenteEmAberto: raw.somenteEmAberto ? "true" : "false",
+    };
+
+    const jobId = createExportJob("titulos_csv", payload);
+    res.status(202).json({ jobId, status: "pending" });
+
+    setImmediate(async () => {
+      try {
+        markRunning(jobId);
+        const where = buildTitulosWhere(payload);
+        const titulos = await prisma.tituloReceber.findMany({
+          where,
+          include: {
+            cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
+            venda: { select: { id: true, dataVenda: true, valorTotal: true } },
+          },
+          orderBy: [{ vencimento: "asc" }, { id: "desc" }],
+        });
+
+        const header =
+          "Título,Cliente,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Status";
+        const body = titulos
+          .map((t) => {
+            const original = parseFloat(String(t.valorOriginal || 0));
+            const pago = parseFloat(String(t.valorPago || 0));
+            const aberto = Math.max(0, original - pago);
+            const cols = [
+              t.numero || `#${t.id}`,
+              t.cliente.nomeFantasia || t.cliente.razaoSocial,
+              t.venda ? `Venda #${t.venda.id}` : "-",
+              new Date(t.vencimento).toLocaleDateString("pt-BR"),
+              original.toFixed(2),
+              pago.toFixed(2),
+              aberto.toFixed(2),
+              t.status,
+            ];
+            return cols.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",");
+          })
+          .join("\n");
+
+        markCompleted(jobId, {
+          mimeType: "text/csv;charset=utf-8;",
+          filename: `titulos_${new Date().toISOString().slice(0, 10)}.csv`,
+          content: "\uFEFF" + header + "\n" + body,
+          totalLinhas: titulos.length,
+        });
+      } catch (error) {
+        markFailed(jobId, error);
+      }
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/relatorios/exports/:jobId
+router.get("/exports/:jobId", async (req, res) => {
+  try {
+    const job = getExportJob(req.params.jobId);
+    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    res.json({
+      jobId: job.id,
+      type: job.type,
+      status: job.status,
+      error: job.error,
+      totalLinhas: job.result?.totalLinhas ?? null,
+      downloadUrl:
+        job.status === "completed"
+          ? `/api/relatorios/exports/${job.id}/download`
+          : null,
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/relatorios/exports/:jobId/download
+router.get("/exports/:jobId/download", async (req, res) => {
+  try {
+    const job = getExportJob(req.params.jobId);
+    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    if (job.status !== "completed" || !job.result?.content) {
+      return res.status(409).json({ error: "Exportação ainda não concluída" });
+    }
+    res.setHeader("content-type", job.result.mimeType);
+    res.setHeader(
+      "content-disposition",
+      `attachment; filename="${job.result.filename || "export.csv"}"`,
+    );
+    res.send(job.result.content);
   } catch (error) {
     handleRouteError(res, error);
   }

@@ -26,6 +26,8 @@ type Props = {
   onExportCSV: () => void;
   onExportExcel: () => void;
   onExportPDF: () => void;
+  exportCsvLabel?: string;
+  exportCsvDisabled?: boolean;
 };
 
 export function RelatorioVendasFiltros(props: Props) {
@@ -51,6 +53,8 @@ export function RelatorioVendasFiltros(props: Props) {
     onExportCSV,
     onExportExcel,
     onExportPDF,
+    exportCsvLabel,
+    exportCsvDisabled,
   } = props;
 
   return (
@@ -118,8 +122,12 @@ export function RelatorioVendasFiltros(props: Props) {
           </button>
           {data && (
             <>
-              <button onClick={onExportCSV} className="btn-secondary flex items-center gap-1">
-                <ArrowDownTrayIcon className="w-4 h-4" /> CSV
+              <button
+                onClick={onExportCSV}
+                disabled={exportCsvDisabled}
+                className="btn-secondary flex items-center gap-1"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" /> {exportCsvLabel || "CSV"}
               </button>
               <button onClick={onExportExcel} className="btn-secondary flex items-center gap-1">
                 <ArrowDownTrayIcon className="w-4 h-4" /> Excel

@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatDate, formatMoney, type Cliente } from "@/lib/utils";
 import api from "@/lib/api";
+import { apiFetchWithMeta } from "@/lib/api";
+import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
 import { TableListSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
 import SearchableSelect from "@/components/SearchableSelect";
 import * as XLSX from "xlsx";
 
@@ -40,6 +44,9 @@ function RelatorioTitulosContent() {
   const searchParams = useSearchParams();
   const [dados, setDados] = useState<TitulosResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 100;
 
   const [clienteId, setClienteId] = useState(
     () => searchParams.get("clienteId") ?? "",
@@ -50,8 +57,17 @@ function RelatorioTitulosContent() {
   const [dataVencFim, setDataVencFim] = useState("");
   const [somenteEmAberto, setSomenteEmAberto] = useState(true);
   const [ordenarMaiorAtraso, setOrdenarMaiorAtraso] = useState(true);
+  const {
+    isExporting: exportandoCsv,
+    error: erroExportacao,
+    exportCsv,
+  } = useExportCsvAsync({
+    startPath: "/relatorios/titulos/export-async",
+    maxAttempts: 60,
+    pollIntervalMs: 1000,
+  });
 
-  const carregar = () => {
+  const carregar = useCallback(async (targetPage = page) => {
     const params = new URLSearchParams();
     if (clienteId) params.set("clienteId", clienteId);
     const vid = vendaIdFiltro.replace(/^#/, "").trim();
@@ -60,16 +76,24 @@ function RelatorioTitulosContent() {
     if (dataVencInicio) params.set("dataVencInicio", dataVencInicio);
     if (dataVencFim) params.set("dataVencFim", dataVencFim);
     if (somenteEmAberto) params.set("somenteEmAberto", "true");
+    params.set("take", String(pageSize));
+    params.set("skip", String((targetPage - 1) * pageSize));
     setLoading(true);
-    api
-      .get<TitulosResponse>(`/relatorios/titulos?${params.toString()}`)
-      .then(setDados)
-      .finally(() => setLoading(false));
-  };
+    try {
+      const { data, meta } = await apiFetchWithMeta<TitulosResponse>(
+        `/relatorios/titulos?${params.toString()}`,
+        { method: "GET" },
+      );
+      setDados(data);
+      setTotal(meta.totalCount ?? data.resumo.totalTitulos);
+    } finally {
+      setLoading(false);
+    }
+  }, [clienteId, vendaIdFiltro, status, dataVencInicio, dataVencFim, somenteEmAberto]);
 
   useEffect(() => {
-    carregar();
-  }, []);
+    void carregar(page);
+  }, [carregar, page]);
 
   const loadClienteOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({ ativo: "true", take: "40" });
@@ -133,37 +157,17 @@ function RelatorioTitulosContent() {
       };
     });
 
-  const exportarCsv = () => {
-    if (!dados) return;
-    const rows = getExportRows();
-    const header =
-      "Título,Cliente,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Dias Atraso,Status";
-    const body = rows
-      .map((r) =>
-        [
-          r.titulo,
-          r.cliente,
-          r.venda,
-          r.vencimento,
-          r.valorOriginal.toFixed(2),
-          r.valorPago.toFixed(2),
-          r.valorEmAberto.toFixed(2),
-          String(r.diasAtraso),
-          r.status,
-        ]
-          .map((v) => `"${String(v).replaceAll('"', '""')}"`)
-          .join(","),
-      )
-      .join("\n");
-    const blob = new Blob(["\uFEFF" + header + "\n" + body], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `titulos_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportarCsvAsync = async () => {
+    await exportCsv(
+      {
+        clienteId,
+        vendaId: vendaIdFiltro,
+        status,
+        dataVencInicio,
+        dataVencFim,
+        somenteEmAberto,
+      },
+    );
   };
 
   const exportarExcel = () => {
@@ -174,6 +178,8 @@ function RelatorioTitulosContent() {
     XLSX.utils.book_append_sheet(wb, ws, "Titulos");
     XLSX.writeFile(wb, `titulos_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -210,7 +216,7 @@ function RelatorioTitulosContent() {
         </div>
       </div>
 
-      <div className="card p-4 mb-4">
+      <FilterBar className="p-4 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           <div className="md:col-span-3">
             <SearchableSelect
@@ -267,7 +273,16 @@ function RelatorioTitulosContent() {
             />
           </div>
           <div className="md:col-span-1 flex items-end">
-            <button onClick={carregar} className="btn-primary w-full">
+            <button
+              onClick={() => {
+                if (page === 1) {
+                  void carregar(1);
+                } else {
+                  setPage(1);
+                }
+              }}
+              className="btn-primary w-full"
+            >
               Filtrar
             </button>
           </div>
@@ -289,14 +304,24 @@ function RelatorioTitulosContent() {
             />
             Ordenar por maior atraso
           </label>
-          <button onClick={exportarCsv} className="btn-secondary ml-auto">
-            Exportar CSV
+          <button
+            onClick={exportarCsvAsync}
+            disabled={exportandoCsv}
+            className="btn-secondary ml-auto"
+          >
+            {exportandoCsv ? "Gerando CSV..." : "Exportar CSV (assíncrono)"}
           </button>
           <button onClick={exportarExcel} className="btn-secondary">
             Exportar Excel
           </button>
         </div>
-      </div>
+      </FilterBar>
+
+      {erroExportacao ? (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {erroExportacao}
+        </div>
+      ) : null}
 
       {dados && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
@@ -341,8 +366,11 @@ function RelatorioTitulosContent() {
             <TableListSkeleton rows={12} cols={6} />
           </div>
         ) : !dados || dados.titulos.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
-            Nenhum título encontrado
+          <div className="p-4">
+            <EmptyState
+              title="Nenhum título encontrado"
+              description="Ajuste os filtros ou remova restrições para visualizar títulos."
+            />
           </div>
         ) : (
           <table className="w-full">
@@ -430,6 +458,28 @@ function RelatorioTitulosContent() {
             </tbody>
           </table>
         )}
+      </div>
+      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+        <p>Total de registros (filtro): {total}</p>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Anterior
+          </button>
+          <span>
+            Página {page} de {totalPages}
+          </span>
+          <button
+            className="btn-secondary"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Próxima
+          </button>
+        </div>
       </div>
     </div>
   );
