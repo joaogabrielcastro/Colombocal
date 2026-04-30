@@ -74,6 +74,7 @@ router.get("/", async (req, res) => {
       dataFim,
       ordem,
       cliente,
+      emitente,
       banco,
       numero,
       valorMin,
@@ -116,6 +117,14 @@ router.get("/", async (req, res) => {
             { razaoSocial: { contains: term, mode: "insensitive" } },
             { cnpj: { contains: term } },
           ],
+        },
+      });
+    }
+    if (emitente && String(emitente).trim()) {
+      and.push({
+        emitenteNome: {
+          contains: String(emitente).trim(),
+          mode: "insensitive",
         },
       });
     }

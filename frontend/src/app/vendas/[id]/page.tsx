@@ -174,27 +174,23 @@ export default function VendaDetailPage() {
       .join(" - ");
     const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0));
     const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0));
-    const tarifaKg = tarifaTon / 1000;
     const itensRows = venda.itens
       .map((item) => {
-        const unidade = String(item.produto.unidade || "").toLowerCase();
         const quantidade = parseFloat(String(item.quantidade || 0));
-        const tarifaItem =
-          unidade === "saco"
-            ? tarifaSaco
-            : unidade === "ton"
-              ? tarifaTon
-              : unidade === "kg"
-                ? tarifaKg
-                : 0;
-        const freteItem = quantidade * tarifaItem;
+        const unidade = String(item.produto.unidade || "").toLowerCase();
+        const equivalenteTon =
+          unidade === "ton"
+            ? quantidade
+            : unidade === "kg"
+              ? quantidade / 1000
+              : 0;
 
         return `
         <tr>
           <td>${escapeHtml(item.produto.nome)}</td>
           <td style="text-align:right">${escapeHtml(formatQuantidade(item.quantidade, item.produto.unidade))}</td>
-          <td style="text-align:right">${escapeHtml(formatMoney(tarifaItem))}</td>
-          <td style="text-align:right">${escapeHtml(formatMoney(freteItem))}</td>
+          <td style="text-align:right">${unidade === "saco" ? escapeHtml(formatMoney(tarifaSaco)) : "-"}</td>
+          <td style="text-align:right">${equivalenteTon > 0 ? escapeHtml(formatMoney(tarifaTon)) : "-"}</td>
         </tr>`;
       })
       .join("");
@@ -255,8 +251,8 @@ export default function VendaDetailPage() {
       <tr>
         <th>Produto</th>
         <th style="text-align:right">Quantidade</th>
-        <th style="text-align:right">Tarifa da unidade</th>
-        <th style="text-align:right">Frete do item</th>
+        <th style="text-align:right">Preço por saco</th>
+        <th style="text-align:right">Preço por tonelada</th>
       </tr>
     </thead>
     <tbody>
@@ -269,16 +265,10 @@ export default function VendaDetailPage() {
     <div style="margin-top:6px;">${escapeHtml(venda.observacoes || "Sem observações.")}</div>
   </div>
 
-  <div class="box" style="margin-top:10px;">
-    <div class="label">Frete total cobrado</div>
-    <div class="value" style="font-weight:700; margin-top:6px;">
-      ${escapeHtml(formatMoney(venda.frete))}
-    </div>
-  </div>
-
   <div class="assinatura">
-    <div class="linha">Assinatura do Motorista</div>
-    <div class="linha">Assinatura do Recebedor</div>
+    <div class="linha" style="grid-column: 1 / -1; max-width: 320px; margin: 0 auto;">
+      Assinatura do Recebedor
+    </div>
   </div>
 </body>
 </html>`;

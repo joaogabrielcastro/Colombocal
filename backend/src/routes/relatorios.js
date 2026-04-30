@@ -14,18 +14,7 @@ const {
   comissaoPorEmissao,
   comissaoPorCaixa,
 } = require("../services/comissao");
-
-
-function getDateRange(dataInicio, dataFim) {
-  const where = {};
-  if (dataInicio) where.gte = new Date(dataInicio);
-  if (dataFim) {
-    const fim = new Date(dataFim);
-    fim.setHours(23, 59, 59, 999);
-    where.lte = fim;
-  }
-  return where;
-}
+const { getDateRange } = require("../utils/dateRangeQuery");
 
 function buildTitulosWhere(query) {
   const {
@@ -298,8 +287,8 @@ router.get("/comissoes", async (req, res) => {
           ? "caixa"
           : "emissao";
 
-    const where = { ativo: true };
-    if (vendedorId) where.id = parseInt(vendedorId);
+    const where = {};
+    if (vendedorId) where.id = parseInt(vendedorId, 10);
     const vendedores = await prisma.vendedor.findMany({
       where,
     });

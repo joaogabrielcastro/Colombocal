@@ -25,6 +25,8 @@ function ChequesPageContent() {
   const [dataFim, setDataFim] = useState(searchParams.get("dataFim") || "");
   const [clienteInput, setClienteInput] = useState(searchParams.get("cliente") || "");
   const [clienteFiltro, setClienteFiltro] = useState(searchParams.get("cliente") || "");
+  const [emitenteInput, setEmitenteInput] = useState(searchParams.get("emitente") || "");
+  const [emitenteFiltro, setEmitenteFiltro] = useState(searchParams.get("emitente") || "");
   const [bancoInput, setBancoInput] = useState(searchParams.get("banco") || "");
   const [bancoFiltro, setBancoFiltro] = useState(searchParams.get("banco") || "");
   const [numeroInput, setNumeroInput] = useState(searchParams.get("numero") || "");
@@ -40,6 +42,7 @@ function ChequesPageContent() {
     dataInicio,
     dataFim,
     cliente: clienteFiltro,
+    emitente: emitenteFiltro,
     banco: bancoFiltro,
     numero: numeroFiltro,
     valorMin: valorMinFiltro,
@@ -54,6 +57,7 @@ function ChequesPageContent() {
   const aplicarFiltros = () => {
     setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
     setClienteFiltro(clienteInput.trim());
+    setEmitenteFiltro(emitenteInput.trim());
     setBancoFiltro(bancoInput.trim());
     setNumeroFiltro(numeroInput.trim());
     setValorMinFiltro(valorMinInput.trim());
@@ -65,6 +69,7 @@ function ChequesPageContent() {
     const di = searchParams.get("dataInicio") || "";
     const df = searchParams.get("dataFim") || "";
     const cliente = searchParams.get("cliente") || "";
+    const emitente = searchParams.get("emitente") || "";
     const banco = searchParams.get("banco") || "";
     const numero = searchParams.get("numero") || "";
     const valorMin = searchParams.get("valorMin") || "";
@@ -79,6 +84,8 @@ function ChequesPageContent() {
     setDataFim(df);
     setClienteInput(cliente);
     setClienteFiltro(cliente);
+    setEmitenteInput(emitente);
+    setEmitenteFiltro(emitente);
     setBancoInput(banco);
     setBancoFiltro(banco);
     setNumeroInput(numero);
@@ -97,6 +104,7 @@ function ChequesPageContent() {
     if (dataInicio) params.set("dataInicio", dataInicio);
     if (dataFim) params.set("dataFim", dataFim);
     if (clienteFiltro) params.set("cliente", clienteFiltro);
+    if (emitenteFiltro) params.set("emitente", emitenteFiltro);
     if (bancoFiltro) params.set("banco", bancoFiltro);
     if (numeroFiltro) params.set("numero", numeroFiltro);
     if (valorMinFiltro) params.set("valorMin", valorMinFiltro);
@@ -113,6 +121,7 @@ function ChequesPageContent() {
     dataInicio,
     dataFim,
     clienteFiltro,
+    emitenteFiltro,
     bancoFiltro,
     numeroFiltro,
     valorMinFiltro,
@@ -237,6 +246,16 @@ function ChequesPageContent() {
             />
           </div>
           <div>
+            <label className="block text-xs text-gray-500 mb-1">Emitente</label>
+            <input
+              type="text"
+              value={emitenteInput}
+              onChange={(e) => setEmitenteInput(e.target.value)}
+              className="input-field"
+              placeholder="Nome do emitente"
+            />
+          </div>
+          <div>
             <label className="block text-xs text-gray-500 mb-1">Banco</label>
             <input
               type="text"
@@ -349,6 +368,8 @@ function ChequesPageContent() {
                 setOrdemFiltro("");
                 setClienteInput("");
                 setClienteFiltro("");
+                setEmitenteInput("");
+                setEmitenteFiltro("");
                 setBancoInput("");
                 setBancoFiltro("");
                 setNumeroInput("");

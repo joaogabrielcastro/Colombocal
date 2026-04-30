@@ -34,6 +34,7 @@ function FretesContent() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [gerandoValeId, setGerandoValeId] = useState<number | null>(null);
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
@@ -73,6 +74,37 @@ function FretesContent() {
   }, [page, reciboEmitido, vendaFiltro]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const gerarVale = async (row: FreteListRow) => {
+    const valorDefault = Number.parseFloat(String(row.valor || 0)).toFixed(2);
+    const valorRaw = window.prompt("Valor do vale (R$):", valorDefault);
+    if (valorRaw == null) return;
+    const valor = Number(valorRaw.replace(",", "."));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      alert("Informe um valor válido para o vale.");
+      return;
+    }
+    const vencimentoDefault = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    const vencimento = window.prompt("Data de vencimento (AAAA-MM-DD):", vencimentoDefault);
+    if (vencimento == null) return;
+    const observacao = window.prompt("Observação do vale (opcional):", "") ?? "";
+
+    setGerandoValeId(row.id);
+    try {
+      await api.post(`/fretes/${row.id}/vale`, {
+        valor,
+        vencimento,
+        observacao,
+      });
+      alert("Vale criado com sucesso.");
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível criar o vale de frete" });
+    } finally {
+      setGerandoValeId(null);
+    }
+  };
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -153,6 +185,7 @@ function FretesContent() {
                   <th className="table-header">Venda</th>
                   <th className="table-header text-right">Valor</th>
                   <th className="table-header">Frete pago</th>
+                  <th className="table-header text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,6 +232,16 @@ function FretesContent() {
                             : "Pago"
                           : "Pendente"}
                       </span>
+                    </td>
+                    <td className="table-cell text-right">
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        disabled={gerandoValeId === r.id}
+                        onClick={() => void gerarVale(r)}
+                      >
+                        {gerandoValeId === r.id ? "Gerando..." : "Criar vale"}
+                      </button>
                     </td>
                   </tr>
                 ))}

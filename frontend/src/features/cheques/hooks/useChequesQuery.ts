@@ -11,6 +11,7 @@ type ChequesFilters = {
   dataInicio: string;
   dataFim: string;
   cliente: string;
+  emitente: string;
   banco: string;
   numero: string;
   valorMin: string;
@@ -25,6 +26,7 @@ function toParams(f: ChequesFilters) {
   if (f.dataInicio) params.set("dataInicio", f.dataInicio);
   if (f.dataFim) params.set("dataFim", f.dataFim);
   if (f.cliente) params.set("cliente", f.cliente);
+  if (f.emitente) params.set("emitente", f.emitente);
   if (f.banco) params.set("banco", f.banco);
   if (f.numero) params.set("numero", f.numero);
   if (f.valorMin) params.set("valorMin", f.valorMin);

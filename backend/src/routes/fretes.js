@@ -139,4 +139,70 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+// POST /api/fretes/:id/vale — cria título de cobrança (vale de frete)
+router.post("/:id/vale", async (req, res) => {
+  try {
+    const id = parseIntField(req.params.id, "id", { min: 1 });
+    const existing = await prisma.freteMovimento.findUnique({
+      where: { id },
+    });
+    if (!existing) return res.status(404).json({ error: "Frete não encontrado" });
+
+    const valorInformado = req.body?.valor;
+    const valor =
+      valorInformado !== undefined && valorInformado !== null && valorInformado !== ""
+        ? parseNumberField(valorInformado, "valor", { min: 0.01 })
+        : parseFloat(String(existing.valor));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      return res.status(400).json({ error: "Valor do vale inválido" });
+    }
+
+    const vencimento =
+      req.body?.vencimento != null && String(req.body.vencimento).trim() !== ""
+        ? parseDateField(req.body.vencimento, "vencimento", { required: true })
+        : (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 30);
+            return d;
+          })();
+    const observacaoExtra =
+      req.body?.observacao == null ? "" : String(req.body.observacao).trim();
+
+    const titulo = await prisma.$transaction(async (tx) => {
+      const created = await tx.tituloReceber.create({
+        data: {
+          clienteId: existing.clienteId,
+          vendaId: existing.vendaId || null,
+          numero: `VALE-FRETE-${existing.id}`,
+          vencimento,
+          valorOriginal: valor,
+          status: "aberto",
+          observacoes: [observacaoExtra, `Vale criado a partir do frete #${existing.id}`]
+            .filter(Boolean)
+            .join(" · "),
+        },
+        include: {
+          cliente: { select: { id: true, nomeFantasia: true, razaoSocial: true } },
+          venda: { select: { id: true } },
+        },
+      });
+
+      await registrarEventoFinanceiro(tx, {
+        tipo: "FRETE_VALE_CRIADO",
+        entidade: "TituloReceber",
+        entidadeId: created.id,
+        clienteId: created.clienteId,
+        vendaId: created.vendaId,
+        valor,
+        payload: { freteMovimentoId: existing.id },
+      });
+      return created;
+    });
+
+    res.status(201).json(titulo);
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
 module.exports = router;
