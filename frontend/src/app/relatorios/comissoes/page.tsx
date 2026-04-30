@@ -113,10 +113,12 @@ export default function ComissoesPage() {
     URL.revokeObjectURL(url);
   };
 
-  const exportarTemplateAjustes = () => {
-    const rows = dados.flatMap((d) =>
+  const exportarTemplateAjustes = (alvo?: ComissaoVendedor) => {
+    const grupos = alvo ? [alvo] : dados;
+    const rows = grupos.flatMap((d) =>
       d.vendas.map((v: any) => ({
         vendedor: d.vendedor.nome,
+        vendedorId: d.vendedor.id,
         vendaId: v.id,
         dataVenda: formatDate(v.dataVenda),
         cliente: v.cliente?.nomeFantasia || v.cliente?.razaoSocial || "",
@@ -127,10 +129,17 @@ export default function ComissoesPage() {
         motivoAjuste: v.ajusteComissaoMotivo || "",
       })),
     );
+    if (!rows.length) return;
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Ajustes Comissao");
-    XLSX.writeFile(wb, `comissoes-ajustes-${dataInicio}-${dataFim}.xlsx`);
+    const sufixo = alvo
+      ? `${String(alvo.vendedor.nome || `vendedor-${alvo.vendedor.id}`)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || `vendedor-${alvo.vendedor.id}`}`
+      : "geral";
+    XLSX.writeFile(wb, `comissoes-ajustes-${sufixo}-${dataInicio}-${dataFim}.xlsx`);
   };
 
   const importarAjustes = async (file: File) => {
@@ -378,28 +387,19 @@ export default function ComissoesPage() {
               </button>
             )}
             {dados.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  onClick={exportarTemplateAjustes}
-                  className="btn-secondary flex items-center gap-1"
-                >
-                  <ArrowDownTrayIcon className="w-4 h-4" /> Exportar Excel Ajustes
-                </button>
-                <label className="btn-secondary flex items-center gap-1 cursor-pointer">
-                  {importando ? "Importando..." : "Importar Excel Ajustado"}
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void importarAjustes(file);
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-              </>
+              <label className="btn-secondary flex items-center gap-1 cursor-pointer">
+                {importando ? "Importando..." : "Importar Excel Ajustado"}
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void importarAjustes(file);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </label>
             )}
           </div>
         </div>
@@ -471,6 +471,15 @@ export default function ComissoesPage() {
                   >
                     <PrinterIcon className="w-4 h-4" />
                     PDF (este)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => exportarTemplateAjustes(d)}
+                    className="btn-secondary flex items-center gap-1 text-sm shrink-0 print:hidden"
+                    title="Exporta planilha de ajustes somente deste vendedor"
+                  >
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                    Excel (este)
                   </button>
                 </div>
               </div>
