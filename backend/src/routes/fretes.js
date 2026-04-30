@@ -144,8 +144,16 @@ router.post("/vale-avulso", async (req, res) => {
   try {
     const clienteId = parseIntField(req.body?.clienteId, "clienteId", { min: 1 });
     const valor = parseNumberField(req.body?.valor, "valor", { min: 0.01 });
-    const motoristaNome = String(req.body?.motoristaNome || "").trim();
-    const produtoNome = String(req.body?.produtoNome || "").trim();
+    const motoristaId = parseIntField(req.body?.motoristaId, "motoristaId", {
+      required: false,
+      min: 1,
+    });
+    const produtoId = parseIntField(req.body?.produtoId, "produtoId", {
+      required: false,
+      min: 1,
+    });
+    let motoristaNome = String(req.body?.motoristaNome || "").trim();
+    let produtoNome = String(req.body?.produtoNome || "").trim();
     const observacaoLivre = String(req.body?.observacao || "").trim();
     const dataMovimento =
       req.body?.dataMovimento != null && String(req.body.dataMovimento).trim() !== ""
@@ -160,15 +168,33 @@ router.post("/vale-avulso", async (req, res) => {
             return d;
           })();
 
-    const partesObs = [
-      "Vale avulso de frete",
-      motoristaNome ? `Motorista: ${motoristaNome}` : "",
-      produtoNome ? `Produto: ${produtoNome}` : "",
-      observacaoLivre,
-    ].filter(Boolean);
-    const observacao = partesObs.join(" · ");
-
     const result = await prisma.$transaction(async (tx) => {
+      if (motoristaId) {
+        const motorista = await tx.motorista.findUnique({ where: { id: motoristaId } });
+        if (!motorista) {
+          const err = new Error("Motorista não encontrado");
+          err.status = 404;
+          throw err;
+        }
+        motoristaNome = motorista.nome;
+      }
+      if (produtoId) {
+        const produto = await tx.produto.findUnique({ where: { id: produtoId } });
+        if (!produto) {
+          const err = new Error("Produto não encontrado");
+          err.status = 404;
+          throw err;
+        }
+        produtoNome = produto.nome;
+      }
+      const partesObs = [
+        "Vale avulso de frete",
+        motoristaNome ? `Motorista: ${motoristaNome}` : "",
+        produtoNome ? `Produto: ${produtoNome}` : "",
+        observacaoLivre,
+      ].filter(Boolean);
+      const observacao = partesObs.join(" · ");
+
       const frete = await tx.freteMovimento.create({
         data: {
           clienteId,
@@ -204,6 +230,8 @@ router.post("/vale-avulso", async (req, res) => {
         valor,
         payload: {
           tituloId: titulo.id,
+          motoristaId: motoristaId || null,
+          produtoId: produtoId || null,
           motoristaNome: motoristaNome || null,
           produtoNome: produtoNome || null,
         },

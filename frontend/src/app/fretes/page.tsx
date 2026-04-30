@@ -31,6 +31,17 @@ type ClienteOption = {
   nomeFantasia?: string | null;
 };
 
+type MotoristaOption = {
+  id: number;
+  nome: string;
+};
+
+type ProdutoOption = {
+  id: number;
+  nome: string;
+  ativo?: boolean;
+};
+
 function FretesContent() {
   const searchParams = useSearchParams();
   const reciboQ = searchParams.get("reciboEmitido");
@@ -38,10 +49,13 @@ function FretesContent() {
 
   const [rows, setRows] = useState<FreteListRow[]>([]);
   const [clientes, setClientes] = useState<ClienteOption[]>([]);
+  const [motoristas, setMotoristas] = useState<MotoristaOption[]>([]);
+  const [produtos, setProdutos] = useState<ProdutoOption[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [criandoValeAvulso, setCriandoValeAvulso] = useState(false);
+  const [mostrarValeAvulso, setMostrarValeAvulso] = useState(false);
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
@@ -51,8 +65,8 @@ function FretesContent() {
   const hoje = new Date().toISOString().split("T")[0];
   const [valeForm, setValeForm] = useState({
     clienteId: "",
-    motoristaNome: "",
-    produtoNome: "",
+    motoristaId: "",
+    produtoId: "",
     valor: "",
     dataMovimento: hoje,
     vencimento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -104,6 +118,28 @@ function FretesContent() {
         if (!ativo) return;
         setClientes([]);
       });
+
+    api
+      .get<MotoristaOption[]>("/motoristas?take=500&skip=0")
+      .then((r) => {
+        if (!ativo) return;
+        setMotoristas(Array.isArray(r) ? r : []);
+      })
+      .catch(() => {
+        if (!ativo) return;
+        setMotoristas([]);
+      });
+
+    api
+      .get<ProdutoOption[]>("/produtos?ativo=true&take=500&skip=0")
+      .then((r) => {
+        if (!ativo) return;
+        setProdutos(Array.isArray(r) ? r : []);
+      })
+      .catch(() => {
+        if (!ativo) return;
+        setProdutos([]);
+      });
     return () => {
       ativo = false;
     };
@@ -128,8 +164,8 @@ function FretesContent() {
     try {
       await api.post("/fretes/vale-avulso", {
         clienteId,
-        motoristaNome: valeForm.motoristaNome.trim(),
-        produtoNome: valeForm.produtoNome.trim(),
+        motoristaId: valeForm.motoristaId ? Number.parseInt(valeForm.motoristaId, 10) : null,
+        produtoId: valeForm.produtoId ? Number.parseInt(valeForm.produtoId, 10) : null,
         valor,
         dataMovimento: valeForm.dataMovimento || null,
         vencimento: valeForm.vencimento || null,
@@ -138,8 +174,8 @@ function FretesContent() {
       alert("Vale avulso criado com sucesso.");
       setValeForm((s) => ({
         ...s,
-        motoristaNome: "",
-        produtoNome: "",
+        motoristaId: "",
+        produtoId: "",
         valor: "",
         observacao: "",
       }));
@@ -205,12 +241,23 @@ function FretesContent() {
         </button>
       </FilterBar>
 
-      <div className="card p-4 mb-4">
-        <h2 className="text-base font-semibold text-gray-900">Vale avulso de frete (sem venda)</h2>
-        <p className="text-xs text-gray-500 mt-1 mb-3">
-          Crie um vale informando cliente, motorista e produto para cobrança posterior do cliente.
-        </p>
-        <form onSubmit={criarValeAvulso} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="mb-4">
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setMostrarValeAvulso((v) => !v)}
+        >
+          {mostrarValeAvulso ? "Fechar vale avulso" : "Novo vale avulso"}
+        </button>
+      </div>
+
+      {mostrarValeAvulso && (
+        <div className="card p-4 mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Vale avulso de frete (sem venda)</h2>
+          <p className="text-xs text-gray-500 mt-1 mb-3">
+            Crie um vale informando cliente, motorista e produto para cobrança posterior do cliente.
+          </p>
+          <form onSubmit={criarValeAvulso} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Cliente</label>
             <select
@@ -229,21 +276,33 @@ function FretesContent() {
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Motorista</label>
-            <input
-              value={valeForm.motoristaNome}
-              onChange={(e) => setValeForm((s) => ({ ...s, motoristaNome: e.target.value }))}
+            <select
+              value={valeForm.motoristaId}
+              onChange={(e) => setValeForm((s) => ({ ...s, motoristaId: e.target.value }))}
               className="input-field"
-              placeholder="Nome do motorista"
-            />
+            >
+              <option value="">Selecione</option>
+              {motoristas.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nome}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Produto</label>
-            <input
-              value={valeForm.produtoNome}
-              onChange={(e) => setValeForm((s) => ({ ...s, produtoNome: e.target.value }))}
+            <select
+              value={valeForm.produtoId}
+              onChange={(e) => setValeForm((s) => ({ ...s, produtoId: e.target.value }))}
               className="input-field"
-              placeholder="Produto transportado"
-            />
+            >
+              <option value="">Selecione</option>
+              {produtos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Valor (R$)</label>
@@ -289,8 +348,9 @@ function FretesContent() {
               {criandoValeAvulso ? "Criando..." : "Criar vale avulso"}
             </button>
           </div>
-        </form>
-      </div>
+          </form>
+        </div>
+      )}
 
       {loading ? (
         <div className="card p-4">
