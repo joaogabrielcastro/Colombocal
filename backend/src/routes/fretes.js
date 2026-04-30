@@ -139,6 +139,85 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+// POST /api/fretes/vale-avulso — cria frete sem venda + título de cobrança
+router.post("/vale-avulso", async (req, res) => {
+  try {
+    const clienteId = parseIntField(req.body?.clienteId, "clienteId", { min: 1 });
+    const valor = parseNumberField(req.body?.valor, "valor", { min: 0.01 });
+    const motoristaNome = String(req.body?.motoristaNome || "").trim();
+    const produtoNome = String(req.body?.produtoNome || "").trim();
+    const observacaoLivre = String(req.body?.observacao || "").trim();
+    const dataMovimento =
+      req.body?.dataMovimento != null && String(req.body.dataMovimento).trim() !== ""
+        ? parseDateField(req.body.dataMovimento, "dataMovimento", { required: true })
+        : new Date();
+    const vencimento =
+      req.body?.vencimento != null && String(req.body.vencimento).trim() !== ""
+        ? parseDateField(req.body.vencimento, "vencimento", { required: true })
+        : (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 30);
+            return d;
+          })();
+
+    const partesObs = [
+      "Vale avulso de frete",
+      motoristaNome ? `Motorista: ${motoristaNome}` : "",
+      produtoNome ? `Produto: ${produtoNome}` : "",
+      observacaoLivre,
+    ].filter(Boolean);
+    const observacao = partesObs.join(" · ");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const frete = await tx.freteMovimento.create({
+        data: {
+          clienteId,
+          vendaId: null,
+          valor,
+          reciboEmitido: false,
+          data: dataMovimento,
+          observacao,
+        },
+        include: {
+          cliente: { select: { id: true, nomeFantasia: true, razaoSocial: true } },
+        },
+      });
+
+      const titulo = await tx.tituloReceber.create({
+        data: {
+          clienteId,
+          vendaId: null,
+          numero: `VALE-FRETE-${frete.id}`,
+          vencimento,
+          valorOriginal: valor,
+          status: "aberto",
+          observacoes: observacao,
+        },
+      });
+
+      await registrarEventoFinanceiro(tx, {
+        tipo: "FRETE_VALE_AVULSO_CRIADO",
+        entidade: "FreteMovimento",
+        entidadeId: frete.id,
+        clienteId,
+        vendaId: null,
+        valor,
+        payload: {
+          tituloId: titulo.id,
+          motoristaNome: motoristaNome || null,
+          produtoNome: produtoNome || null,
+        },
+      });
+
+      return { frete, titulo };
+    });
+
+    res.status(201).json(result);
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
 // POST /api/fretes/:id/vale — cria título de cobrança (vale de frete)
 router.post("/:id/vale", async (req, res) => {
   try {

@@ -8,6 +8,7 @@ import {
 import { formatMoney, formatDate } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
+import { reportApiError } from "@/lib/report-api-error";
 import * as XLSX from "xlsx";
 
 interface VendaComissaoLinha {
@@ -72,6 +73,11 @@ export default function ComissoesPage() {
         if (!cancelled) {
           setModo(r.modo);
           setDados(r.resultado);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          reportApiError(e, { title: "Não foi possível carregar comissões" });
+          setDados([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -177,6 +183,10 @@ export default function ComissoesPage() {
       .then((r) => {
         setModo(r.modo);
         setDados(r.resultado);
+      })
+      .catch((e) => {
+        reportApiError(e, { title: "Não foi possível calcular comissões" });
+        setDados([]);
       })
       .finally(() => setLoading(false));
   };

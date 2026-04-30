@@ -25,22 +25,41 @@ type FreteListRow = FreteMovimento & {
   } | null;
 };
 
+type ClienteOption = {
+  id: number;
+  razaoSocial: string;
+  nomeFantasia?: string | null;
+};
+
 function FretesContent() {
   const searchParams = useSearchParams();
   const reciboQ = searchParams.get("reciboEmitido");
   const vendaQ = searchParams.get("vendaId") || "";
 
   const [rows, setRows] = useState<FreteListRow[]>([]);
+  const [clientes, setClientes] = useState<ClienteOption[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [gerandoValeId, setGerandoValeId] = useState<number | null>(null);
+  const [criandoValeAvulso, setCriandoValeAvulso] = useState(false);
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
   const [vendaInput, setVendaInput] = useState(vendaQ);
   const [vendaFiltro, setVendaFiltro] = useState(vendaQ.replace(/^#/, "").trim());
   const pageSize = 50;
+  const hoje = new Date().toISOString().split("T")[0];
+  const [valeForm, setValeForm] = useState({
+    clienteId: "",
+    motoristaNome: "",
+    produtoNome: "",
+    valor: "",
+    dataMovimento: hoje,
+    vencimento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0],
+    observacao: "",
+  });
 
   const carregar = async () => {
     const params = new URLSearchParams();
@@ -73,36 +92,62 @@ function FretesContent() {
     carregar();
   }, [page, reciboEmitido, vendaFiltro]);
 
+  useEffect(() => {
+    let ativo = true;
+    api
+      .get<{ clientes: ClienteOption[] }>("/clientes?ativo=true&take=500&skip=0")
+      .then((r) => {
+        if (!ativo) return;
+        setClientes(r.clientes || []);
+      })
+      .catch(() => {
+        if (!ativo) return;
+        setClientes([]);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const gerarVale = async (row: FreteListRow) => {
-    const valorDefault = Number.parseFloat(String(row.valor || 0)).toFixed(2);
-    const valorRaw = window.prompt("Valor do vale (R$):", valorDefault);
-    if (valorRaw == null) return;
-    const valor = Number(valorRaw.replace(",", "."));
-    if (!Number.isFinite(valor) || valor <= 0) {
-      alert("Informe um valor válido para o vale.");
+  const criarValeAvulso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clienteId = Number.parseInt(valeForm.clienteId, 10);
+    const valor = Number(valeForm.valor.replace(",", "."));
+    if (!Number.isFinite(clienteId) || clienteId <= 0) {
+      alert("Selecione o cliente para o vale.");
       return;
     }
-    const vencimentoDefault = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
-    const vencimento = window.prompt("Data de vencimento (AAAA-MM-DD):", vencimentoDefault);
-    if (vencimento == null) return;
-    const observacao = window.prompt("Observação do vale (opcional):", "") ?? "";
+    if (!Number.isFinite(valor) || valor <= 0) {
+      alert("Informe um valor válido.");
+      return;
+    }
 
-    setGerandoValeId(row.id);
+    setCriandoValeAvulso(true);
     try {
-      await api.post(`/fretes/${row.id}/vale`, {
+      await api.post("/fretes/vale-avulso", {
+        clienteId,
+        motoristaNome: valeForm.motoristaNome.trim(),
+        produtoNome: valeForm.produtoNome.trim(),
         valor,
-        vencimento,
-        observacao,
+        dataMovimento: valeForm.dataMovimento || null,
+        vencimento: valeForm.vencimento || null,
+        observacao: valeForm.observacao.trim(),
       });
-      alert("Vale criado com sucesso.");
+      alert("Vale avulso criado com sucesso.");
+      setValeForm((s) => ({
+        ...s,
+        motoristaNome: "",
+        produtoNome: "",
+        valor: "",
+        observacao: "",
+      }));
+      await carregar();
     } catch (e) {
-      reportApiError(e, { title: "Não foi possível criar o vale de frete" });
+      reportApiError(e, { title: "Não foi possível criar o vale avulso" });
     } finally {
-      setGerandoValeId(null);
+      setCriandoValeAvulso(false);
     }
   };
 
@@ -160,6 +205,93 @@ function FretesContent() {
         </button>
       </FilterBar>
 
+      <div className="card p-4 mb-4">
+        <h2 className="text-base font-semibold text-gray-900">Vale avulso de frete (sem venda)</h2>
+        <p className="text-xs text-gray-500 mt-1 mb-3">
+          Crie um vale informando cliente, motorista e produto para cobrança posterior do cliente.
+        </p>
+        <form onSubmit={criarValeAvulso} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+            <select
+              value={valeForm.clienteId}
+              onChange={(e) => setValeForm((s) => ({ ...s, clienteId: e.target.value }))}
+              className="input-field"
+              required
+            >
+              <option value="">Selecione</option>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nomeFantasia?.trim() || c.razaoSocial}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Motorista</label>
+            <input
+              value={valeForm.motoristaNome}
+              onChange={(e) => setValeForm((s) => ({ ...s, motoristaNome: e.target.value }))}
+              className="input-field"
+              placeholder="Nome do motorista"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Produto</label>
+            <input
+              value={valeForm.produtoNome}
+              onChange={(e) => setValeForm((s) => ({ ...s, produtoNome: e.target.value }))}
+              className="input-field"
+              placeholder="Produto transportado"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Valor (R$)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={valeForm.valor}
+              onChange={(e) => setValeForm((s) => ({ ...s, valor: e.target.value }))}
+              className="input-field"
+              placeholder="0,00"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Data do frete</label>
+            <input
+              type="date"
+              value={valeForm.dataMovimento}
+              onChange={(e) => setValeForm((s) => ({ ...s, dataMovimento: e.target.value }))}
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Vencimento</label>
+            <input
+              type="date"
+              value={valeForm.vencimento}
+              onChange={(e) => setValeForm((s) => ({ ...s, vencimento: e.target.value }))}
+              className="input-field"
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">Observação</label>
+            <input
+              value={valeForm.observacao}
+              onChange={(e) => setValeForm((s) => ({ ...s, observacao: e.target.value }))}
+              className="input-field"
+              placeholder="Opcional"
+            />
+          </div>
+          <div className="md:col-span-2 lg:col-span-4">
+            <button type="submit" className="btn-primary" disabled={criandoValeAvulso}>
+              {criandoValeAvulso ? "Criando..." : "Criar vale avulso"}
+            </button>
+          </div>
+        </form>
+      </div>
+
       {loading ? (
         <div className="card p-4">
           <TableListSkeleton rows={10} cols={5} />
@@ -185,7 +317,6 @@ function FretesContent() {
                   <th className="table-header">Venda</th>
                   <th className="table-header text-right">Valor</th>
                   <th className="table-header">Frete pago</th>
-                  <th className="table-header text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -232,16 +363,6 @@ function FretesContent() {
                             : "Pago"
                           : "Pendente"}
                       </span>
-                    </td>
-                    <td className="table-cell text-right">
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        disabled={gerandoValeId === r.id}
-                        onClick={() => void gerarVale(r)}
-                      >
-                        {gerandoValeId === r.id ? "Gerando..." : "Criar vale"}
-                      </button>
                     </td>
                   </tr>
                 ))}
