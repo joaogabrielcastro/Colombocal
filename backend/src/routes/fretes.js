@@ -13,6 +13,176 @@ const {
 } = require("../utils/api");
 const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
 
+function formatMoneyBr(v) {
+  const n = parseFloat(String(v || 0));
+  return Number.isFinite(n)
+    ? n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : "R$ 0,00";
+}
+
+// POST /api/fretes/avulso — cadastro avulso completo (cliente/motorista/produto)
+router.post("/avulso", async (req, res) => {
+  try {
+    const clienteId = parseIntField(req.body?.clienteId, "clienteId", { min: 1 });
+    const motoristaId = parseIntField(req.body?.motoristaId, "motoristaId", { min: 1 });
+    const produtoId = parseIntField(req.body?.produtoId, "produtoId", { min: 1 });
+    const quantidade = parseNumberField(req.body?.quantidade, "quantidade", { min: 0.001 });
+    const precoSaco = parseNumberField(req.body?.precoSaco, "precoSaco", { required: false, min: 0 }) ?? 0;
+    const precoTonelada =
+      parseNumberField(req.body?.precoTonelada, "precoTonelada", { required: false, min: 0 }) ?? 0;
+    const valorTotalInformado =
+      parseNumberField(req.body?.valorTotal, "valorTotal", { required: false, min: 0.01 }) ?? null;
+    const dataMovimento =
+      req.body?.dataMovimento != null && String(req.body.dataMovimento).trim() !== ""
+        ? parseDateField(req.body.dataMovimento, "dataMovimento", { required: true })
+        : new Date();
+    const vencimento =
+      req.body?.vencimento != null && String(req.body.vencimento).trim() !== ""
+        ? parseDateField(req.body.vencimento, "vencimento", { required: true })
+        : (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 30);
+            return d;
+          })();
+    const pagoNoAto = !!req.body?.pagoNoAto;
+    const pagamentoTipo = String(req.body?.pagamentoTipo || "dinheiro");
+    const pagamentoData =
+      req.body?.pagamentoData != null && String(req.body.pagamentoData).trim() !== ""
+        ? parseDateField(req.body.pagamentoData, "pagamentoData", { required: true })
+        : dataMovimento;
+    const observacaoLivre = String(req.body?.observacao || "").trim();
+
+    const result = await prisma.$transaction(async (tx) => {
+      const [cliente, motorista, produto] = await Promise.all([
+        tx.cliente.findUnique({ where: { id: clienteId } }),
+        tx.motorista.findUnique({ where: { id: motoristaId } }),
+        tx.produto.findUnique({ where: { id: produtoId } }),
+      ]);
+      if (!cliente) {
+        const err = new Error("Cliente não encontrado");
+        err.status = 404;
+        throw err;
+      }
+      if (!motorista) {
+        const err = new Error("Motorista não encontrado");
+        err.status = 404;
+        throw err;
+      }
+      if (!produto) {
+        const err = new Error("Produto não encontrado");
+        err.status = 404;
+        throw err;
+      }
+
+      const unidade = String(produto.unidade || "").trim().toLowerCase();
+      const valorCalculado =
+        unidade === "saco"
+          ? quantidade * precoSaco
+          : unidade === "ton"
+            ? quantidade * precoTonelada
+            : unidade === "kg"
+              ? quantidade * (precoTonelada / 1000)
+              : 0;
+      const valorFinal = valorTotalInformado != null ? valorTotalInformado : valorCalculado;
+
+      const observacao = [
+        "Frete avulso",
+        `Motorista: ${motorista.nome}`,
+        `Produto: ${produto.nome}`,
+        `Quantidade: ${quantidade} ${produto.unidade || ""}`.trim(),
+        observacaoLivre,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      const frete = await tx.freteMovimento.create({
+        data: {
+          vendaId: null,
+          clienteId,
+          valor: valorFinal,
+          reciboEmitido: pagoNoAto,
+          reciboData: pagoNoAto ? pagamentoData : null,
+          data: dataMovimento,
+          observacao,
+        },
+        include: { cliente: true },
+      });
+
+      let titulo = null;
+      let pagamento = null;
+      if (pagoNoAto) {
+        pagamento = await tx.pagamento.create({
+          data: {
+            clienteId,
+            vendaId: null,
+            tipo: pagamentoTipo === "transferencia" ? "transferencia" : "dinheiro",
+            valor: valorFinal,
+            data: pagamentoData,
+            observacoes: `Pagamento de frete avulso #${frete.id}`,
+          },
+        });
+      } else {
+        titulo = await tx.tituloReceber.create({
+          data: {
+            clienteId,
+            vendaId: null,
+            numero: `FRETE-AVULSO-${frete.id}`,
+            vencimento,
+            valorOriginal: valorFinal,
+            status: "aberto",
+            observacoes: observacao,
+          },
+        });
+      }
+
+      await registrarEventoFinanceiro(tx, {
+        tipo: "FRETE_AVULSO_CRIADO",
+        entidade: "FreteMovimento",
+        entidadeId: frete.id,
+        clienteId,
+        vendaId: null,
+        valor: valorFinal,
+        payload: {
+          motoristaId,
+          produtoId,
+          quantidade,
+          precoSaco,
+          precoTonelada,
+          valorCalculado,
+          valorFinal,
+          pagoNoAto,
+          tituloId: titulo?.id || null,
+          pagamentoId: pagamento?.id || null,
+        },
+      });
+
+      return {
+        frete,
+        titulo,
+        pagamento,
+        resumoImpressao: {
+          freteId: frete.id,
+          cliente: cliente.nomeFantasia || cliente.razaoSocial,
+          motorista: motorista.nome,
+          produto: produto.nome,
+          unidade: produto.unidade || "",
+          quantidade,
+          precoSaco,
+          precoTonelada,
+          valorFinal,
+          pagoNoAto,
+          valorLabel: formatMoneyBr(valorFinal),
+          data: dataMovimento,
+        },
+      };
+    });
+
+    res.status(201).json(result);
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
 
 // GET /api/fretes — listagem com filtros (painel / relatório)
 router.get("/", async (req, res) => {
