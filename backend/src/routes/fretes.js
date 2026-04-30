@@ -20,13 +20,21 @@ function formatMoneyBr(v) {
     : "R$ 0,00";
 }
 
+function normalizarUnidade(unidadeRaw) {
+  const u = String(unidadeRaw || "")
+    .trim()
+    .toLowerCase();
+  if (["saco", "sacos", "sc"].includes(u)) return "saco";
+  if (["ton", "tonelada", "toneladas", "t"].includes(u)) return "ton";
+  if (["kg", "quilo", "quilos"].includes(u)) return "kg";
+  return u;
+}
+
 // POST /api/fretes/avulso — cadastro avulso completo (cliente/motorista/produto)
 router.post("/avulso", async (req, res) => {
   try {
     const clienteId = parseIntField(req.body?.clienteId, "clienteId", { min: 1 });
     const motoristaId = parseIntField(req.body?.motoristaId, "motoristaId", { min: 1 });
-    const produtoId = parseIntField(req.body?.produtoId, "produtoId", { min: 1 });
-    const quantidade = parseNumberField(req.body?.quantidade, "quantidade", { min: 0.001 });
     const precoSaco = parseNumberField(req.body?.precoSaco, "precoSaco", { required: false, min: 0 }) ?? 0;
     const precoTonelada =
       parseNumberField(req.body?.precoTonelada, "precoTonelada", { required: false, min: 0 }) ?? 0;
@@ -51,12 +59,12 @@ router.post("/avulso", async (req, res) => {
         ? parseDateField(req.body.pagamentoData, "pagamentoData", { required: true })
         : dataMovimento;
     const observacaoLivre = String(req.body?.observacao || "").trim();
+    const itensEntrada = Array.isArray(req.body?.itens) ? req.body.itens : null;
 
     const result = await prisma.$transaction(async (tx) => {
-      const [cliente, motorista, produto] = await Promise.all([
+      const [cliente, motorista] = await Promise.all([
         tx.cliente.findUnique({ where: { id: clienteId } }),
         tx.motorista.findUnique({ where: { id: motoristaId } }),
-        tx.produto.findUnique({ where: { id: produtoId } }),
       ]);
       if (!cliente) {
         const err = new Error("Cliente não encontrado");
@@ -68,28 +76,66 @@ router.post("/avulso", async (req, res) => {
         err.status = 404;
         throw err;
       }
-      if (!produto) {
-        const err = new Error("Produto não encontrado");
-        err.status = 404;
+
+      const itens = [];
+      if (itensEntrada && itensEntrada.length > 0) {
+        for (const item of itensEntrada) {
+          const produtoId = parseIntField(item?.produtoId, "produtoId", { min: 1 });
+          const quantidade = parseNumberField(item?.quantidade, "quantidade", { min: 0.001 });
+          const produto = await tx.produto.findUnique({ where: { id: produtoId } });
+          if (!produto) {
+            const err = new Error(`Produto #${produtoId} não encontrado`);
+            err.status = 404;
+            throw err;
+          }
+          itens.push({ produto, quantidade });
+        }
+      } else {
+        const produtoId = parseIntField(req.body?.produtoId, "produtoId", { min: 1 });
+        const quantidade = parseNumberField(req.body?.quantidade, "quantidade", { min: 0.001 });
+        const produto = await tx.produto.findUnique({ where: { id: produtoId } });
+        if (!produto) {
+          const err = new Error("Produto não encontrado");
+          err.status = 404;
+          throw err;
+        }
+        itens.push({ produto, quantidade });
+      }
+
+      if (!itens.length) {
+        const err = new Error("Informe ao menos um item para o frete");
+        err.status = 400;
         throw err;
       }
 
-      const unidade = String(produto.unidade || "").trim().toLowerCase();
-      const valorCalculado =
-        unidade === "saco"
-          ? quantidade * precoSaco
-          : unidade === "ton"
-            ? quantidade * precoTonelada
-            : unidade === "kg"
-              ? quantidade * (precoTonelada / 1000)
-              : 0;
+      const itensCalculados = itens.map((it) => {
+        const unidade = normalizarUnidade(it.produto.unidade);
+        const subtotal =
+          unidade === "saco"
+            ? it.quantidade * precoSaco
+            : unidade === "ton"
+              ? it.quantidade * precoTonelada
+              : unidade === "kg"
+                ? it.quantidade * (precoTonelada / 1000)
+                : 0;
+        return {
+          produtoId: it.produto.id,
+          produtoNome: it.produto.nome,
+          unidade: it.produto.unidade || "",
+          quantidade: it.quantidade,
+          subtotal,
+        };
+      });
+      const valorCalculado = itensCalculados.reduce((acc, item) => acc + item.subtotal, 0);
       const valorFinal = valorTotalInformado != null ? valorTotalInformado : valorCalculado;
 
       const observacao = [
         "Frete avulso",
         `Motorista: ${motorista.nome}`,
-        `Produto: ${produto.nome}`,
-        `Quantidade: ${quantidade} ${produto.unidade || ""}`.trim(),
+        ...itensCalculados.map(
+          (item) =>
+            `${item.produtoNome}: ${item.quantidade} ${item.unidade} (${formatMoneyBr(item.subtotal)})`,
+        ),
         observacaoLivre,
       ]
         .filter(Boolean)
@@ -144,8 +190,7 @@ router.post("/avulso", async (req, res) => {
         valor: valorFinal,
         payload: {
           motoristaId,
-          produtoId,
-          quantidade,
+          itens: itensCalculados,
           precoSaco,
           precoTonelada,
           valorCalculado,
@@ -164,9 +209,7 @@ router.post("/avulso", async (req, res) => {
           freteId: frete.id,
           cliente: cliente.nomeFantasia || cliente.razaoSocial,
           motorista: motorista.nome,
-          produto: produto.nome,
-          unidade: produto.unidade || "",
-          quantidade,
+          itens: itensCalculados,
           precoSaco,
           precoTonelada,
           valorFinal,

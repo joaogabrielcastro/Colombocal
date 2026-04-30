@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { formatMoney } from "@/lib/utils";
 import { reportApiError } from "@/lib/report-api-error";
+import SearchableSelect from "@/components/SearchableSelect";
 
 type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; fretePadraoSaco?: number; fretePadraoTonelada?: number };
 type Motorista = { id: number; nome: string };
 type Produto = { id: number; nome: string; unidade: string };
+type FreteItemForm = { produtoId: string; quantidade: string };
 
 export default function NovoFretePage() {
   const router = useRouter();
@@ -23,8 +25,6 @@ export default function NovoFretePage() {
   const [form, setForm] = useState({
     clienteId: "",
     motoristaId: "",
-    produtoId: "",
-    quantidade: "",
     precoSaco: "",
     precoTonelada: "",
     valorTotal: "",
@@ -35,6 +35,7 @@ export default function NovoFretePage() {
     pagamentoTipo: "dinheiro" as "dinheiro" | "transferencia",
     pagamentoData: new Date().toISOString().split("T")[0],
   });
+  const [itens, setItens] = useState<FreteItemForm[]>([{ produtoId: "", quantidade: "" }]);
 
   useEffect(() => {
     let active = true;
@@ -58,10 +59,6 @@ export default function NovoFretePage() {
     };
   }, []);
 
-  const produtoSelecionado = useMemo(
-    () => produtos.find((p) => String(p.id) === form.produtoId) || null,
-    [produtos, form.produtoId],
-  );
   const clienteSelecionado = useMemo(
     () => clientes.find((c) => String(c.id) === form.clienteId) || null,
     [clientes, form.clienteId],
@@ -76,17 +73,25 @@ export default function NovoFretePage() {
     }));
   }, [clienteSelecionado]);
 
-  const quantidade = Number(form.quantidade.replace(",", ".")) || 0;
   const precoSaco = Number(form.precoSaco.replace(",", ".")) || 0;
   const precoTonelada = Number(form.precoTonelada.replace(",", ".")) || 0;
-  const valorCalculado =
-    produtoSelecionado?.unidade?.toLowerCase() === "saco"
-      ? quantidade * precoSaco
-      : produtoSelecionado?.unidade?.toLowerCase() === "ton"
-        ? quantidade * precoTonelada
-        : produtoSelecionado?.unidade?.toLowerCase() === "kg"
-          ? quantidade * (precoTonelada / 1000)
-          : 0;
+  const subtotais = itens.map((item) => {
+    const produto = produtos.find((p) => String(p.id) === item.produtoId);
+    const unidadeRaw = String(produto?.unidade || "").trim().toLowerCase();
+    const unidade =
+      unidadeRaw === "sacos" ? "saco" : ["tonelada", "toneladas", "t"].includes(unidadeRaw) ? "ton" : unidadeRaw;
+    const quantidade = Number(item.quantidade.replace(",", ".")) || 0;
+    const subtotal =
+      unidade === "saco"
+        ? quantidade * precoSaco
+        : unidade === "ton"
+          ? quantidade * precoTonelada
+          : unidade === "kg"
+            ? quantidade * (precoTonelada / 1000)
+            : 0;
+    return { produto, quantidade, subtotal };
+  });
+  const valorCalculado = subtotais.reduce((acc, item) => acc + item.subtotal, 0);
   const valorFinal = Number(form.valorTotal.replace(",", ".")) || valorCalculado;
 
   const abrirImpressao = (resumo: any) => {
@@ -97,7 +102,9 @@ export default function NovoFretePage() {
     <h2>Comprovante de Frete Avulso #${resumo.freteId}</h2>
     <div class="box"><div class="k">Cliente</div><div class="v">${resumo.cliente}</div></div>
     <div class="box"><div class="k">Motorista</div><div class="v">${resumo.motorista}</div></div>
-    <div class="box"><div class="k">Produto</div><div class="v">${resumo.produto} (${resumo.quantidade} ${resumo.unidade})</div></div>
+    <div class="box"><div class="k">Itens</div><div class="v">${(resumo.itens || [])
+      .map((i: any) => `${i.produtoNome} (${i.quantidade} ${i.unidade})`)
+      .join("<br/>")}</div></div>
     <div class="box"><div class="k">Valor</div><div class="v">${resumo.valorLabel}</div></div>
     <div class="box"><div class="k">Pagamento</div><div class="v">${resumo.pagoNoAto ? "Pago no ato" : "A receber (gerado título)"}</div></div>
     </body></html>`);
@@ -109,9 +116,14 @@ export default function NovoFretePage() {
   const salvar = async (printAfter: boolean) => {
     const clienteId = Number.parseInt(form.clienteId, 10);
     const motoristaId = Number.parseInt(form.motoristaId, 10);
-    const produtoId = Number.parseInt(form.produtoId, 10);
-    if (!clienteId || !motoristaId || !produtoId || quantidade <= 0 || valorFinal <= 0) {
-      alert("Preencha cliente, motorista, produto, quantidade e valor.");
+    const itensValidos = itens
+      .map((item) => ({
+        produtoId: Number.parseInt(item.produtoId, 10),
+        quantidade: Number(item.quantidade.replace(",", ".")),
+      }))
+      .filter((item) => item.produtoId > 0 && Number.isFinite(item.quantidade) && item.quantidade > 0);
+    if (!clienteId || !motoristaId || itensValidos.length === 0 || valorFinal <= 0) {
+      alert("Preencha cliente, motorista, pelo menos um item e valor.");
       return;
     }
     printAfter ? setImprimindo(true) : setSalvando(true);
@@ -119,8 +131,7 @@ export default function NovoFretePage() {
       const resp = await api.post<{ frete: { id: number }; resumoImpressao: any }>("/fretes/avulso", {
         clienteId,
         motoristaId,
-        produtoId,
-        quantidade,
+        itens: itensValidos,
         precoSaco,
         precoTonelada,
         valorTotal: valorFinal,
@@ -141,6 +152,61 @@ export default function NovoFretePage() {
     }
   };
 
+  const adicionarItem = () => setItens((prev) => [...prev, { produtoId: "", quantidade: "" }]);
+  const removerItem = (index: number) =>
+    setItens((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
+  const loadClienteOptions = useCallback(
+    async (q: string) =>
+      clientes
+        .filter((c) => {
+          const nome = `${c.nomeFantasia || ""} ${c.razaoSocial || ""}`.toLowerCase();
+          return nome.includes(q.toLowerCase());
+        })
+        .slice(0, 80)
+        .map((c) => ({
+          id: c.id,
+          label: c.nomeFantasia?.trim() || c.razaoSocial,
+        })),
+    [clientes],
+  );
+  const loadClienteLabelById = useCallback(
+    async (id: string) => {
+      const c = clientes.find((x) => String(x.id) === id);
+      return c ? c.nomeFantasia?.trim() || c.razaoSocial : null;
+    },
+    [clientes],
+  );
+  const loadMotoristaOptions = useCallback(
+    async (q: string) =>
+      motoristas
+        .filter((m) => m.nome.toLowerCase().includes(q.toLowerCase()))
+        .slice(0, 80)
+        .map((m) => ({ id: m.id, label: m.nome })),
+    [motoristas],
+  );
+  const loadMotoristaLabelById = useCallback(
+    async (id: string) => {
+      const m = motoristas.find((x) => String(x.id) === id);
+      return m ? m.nome : null;
+    },
+    [motoristas],
+  );
+  const loadProdutoOptions = useCallback(
+    async (q: string) =>
+      produtos
+        .filter((p) => `${p.nome} ${p.unidade}`.toLowerCase().includes(q.toLowerCase()))
+        .slice(0, 80)
+        .map((p) => ({ id: p.id, label: `${p.nome} (${p.unidade})` })),
+    [produtos],
+  );
+  const loadProdutoLabelById = useCallback(
+    async (id: string) => {
+      const p = produtos.find((x) => String(x.id) === id);
+      return p ? `${p.nome} (${p.unidade})` : null;
+    },
+    [produtos],
+  );
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -151,35 +217,71 @@ export default function NovoFretePage() {
       </div>
 
       <div className="card p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Cliente</label>
-          <select className="input-field" value={form.clienteId} onChange={(e) => setForm((s) => ({ ...s, clienteId: e.target.value }))}>
-            <option value="">Selecione</option>
-            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nomeFantasia?.trim() || c.razaoSocial}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Motorista</label>
-          <select className="input-field" value={form.motoristaId} onChange={(e) => setForm((s) => ({ ...s, motoristaId: e.target.value }))}>
-            <option value="">Selecione</option>
-            {motoristas.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Produto</label>
-          <select className="input-field" value={form.produtoId} onChange={(e) => setForm((s) => ({ ...s, produtoId: e.target.value }))}>
-            <option value="">Selecione</option>
-            {produtos.map((p) => <option key={p.id} value={p.id}>{p.nome} ({p.unidade})</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Quantidade</label>
-          <input className="input-field" value={form.quantidade} onChange={(e) => setForm((s) => ({ ...s, quantidade: e.target.value }))} />
-        </div>
-
+        <SearchableSelect
+          label="Cliente"
+          value={form.clienteId}
+          onChange={(id) => setForm((s) => ({ ...s, clienteId: id }))}
+          loadOptions={loadClienteOptions}
+          loadLabelById={loadClienteLabelById}
+          minChars={0}
+          placeholder="Buscar cliente..."
+        />
+        <SearchableSelect
+          label="Motorista"
+          value={form.motoristaId}
+          onChange={(id) => setForm((s) => ({ ...s, motoristaId: id }))}
+          loadOptions={loadMotoristaOptions}
+          loadLabelById={loadMotoristaLabelById}
+          minChars={0}
+          placeholder="Buscar motorista..."
+        />
         <div>
           <label className="block text-sm text-gray-600 mb-1">Preço por saco</label>
           <input className="input-field" value={form.precoSaco} onChange={(e) => setForm((s) => ({ ...s, precoSaco: e.target.value }))} />
+        </div>
+
+        <div className="lg:col-span-4 border rounded-lg border-gray-200 p-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-gray-800">Itens do frete</p>
+            <button type="button" className="btn-secondary text-xs py-1.5" onClick={adicionarItem}>
+              + Adicionar item
+            </button>
+          </div>
+          <div className="space-y-2">
+            {itens.map((item, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                <div className="md:col-span-7">
+                  <SearchableSelect
+                    hideLabel
+                    label={`Produto item ${index + 1}`}
+                    value={item.produtoId}
+                    onChange={(id) =>
+                      setItens((prev) => prev.map((it, i) => (i === index ? { ...it, produtoId: id } : it)))
+                    }
+                    loadOptions={loadProdutoOptions}
+                    loadLabelById={loadProdutoLabelById}
+                    minChars={0}
+                    placeholder="Buscar produto..."
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <input
+                    className="input-field"
+                    placeholder="Quantidade"
+                    value={item.quantidade}
+                    onChange={(e) =>
+                      setItens((prev) => prev.map((it, i) => (i === index ? { ...it, quantidade: e.target.value } : it)))
+                    }
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <button type="button" className="btn-secondary w-full" onClick={() => removerItem(index)}>
+                    Remover
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         <div>
           <label className="block text-sm text-gray-600 mb-1">Preço por tonelada</label>

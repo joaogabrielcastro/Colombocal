@@ -287,7 +287,7 @@ router.get("/comissoes", async (req, res) => {
           ? "caixa"
           : "emissao";
 
-    const where = {};
+    const where = { ativo: true };
     if (vendedorId) where.id = parseInt(vendedorId, 10);
     const vendedores = await prisma.vendedor.findMany({
       where,

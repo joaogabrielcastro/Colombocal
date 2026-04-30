@@ -16,6 +16,7 @@ import {
   type Cliente,
   type Produto,
   type Cheque,
+  type FreteMovimento,
 } from "@/lib/utils";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -82,6 +83,10 @@ export default function ClienteDetailPage() {
   const [filtroChqFim, setFiltroChqFim] = useState("");
   const [buscaChq, setBuscaChq] = useState("");
   const [reconciliando, setReconciliando] = useState(false);
+  const [fretesPendentes, setFretesPendentes] = useState<FreteMovimento[]>([]);
+  const [pagandoFreteId, setPagandoFreteId] = useState<number | null>(null);
+  const [pgFreteTipo, setPgFreteTipo] = useState<"dinheiro" | "transferencia">("dinheiro");
+  const [pgFreteData, setPgFreteData] = useState(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
     const abaUrl = searchParams.get("aba");
@@ -129,6 +134,17 @@ export default function ClienteDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const carregarFretesPendentes = useCallback(() => {
+    return api
+      .get<FreteMovimento[]>(`/fretes?clienteId=${id}&reciboEmitido=false&take=300&skip=0`)
+      .then((rows) => {
+        setFretesPendentes((rows || []).filter((f) => !f.vendaId));
+      })
+      .catch(() => {
+        setFretesPendentes([]);
+      });
+  }, [id]);
+
   const loadVendedorOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({ take: "80" });
     if (q.trim()) p.set("busca", q.trim());
@@ -143,11 +159,36 @@ export default function ClienteDetailPage() {
 
   useEffect(() => {
     void carregarPrincipal();
-  }, [carregarPrincipal]);
+    void carregarFretesPendentes();
+  }, [carregarPrincipal, carregarFretesPendentes]);
 
   useEffect(() => {
     carregarCheques();
   }, [id]);
+
+  const handlePagarFrete = async (frete: FreteMovimento) => {
+    setPagandoFreteId(frete.id);
+    try {
+      await api.post("/pagamentos", {
+        clienteId: Number(id),
+        vendaId: null,
+        tipo: pgFreteTipo,
+        valor: Number(frete.valor),
+        data: pgFreteData,
+        observacoes: `Pagamento de frete avulso #${frete.id}`,
+      });
+      await api.patch(`/fretes/${frete.id}`, {
+        reciboEmitido: true,
+        reciboData: pgFreteData,
+      });
+      toast.success("Frete avulso pago com sucesso.");
+      await Promise.all([carregarPrincipal(), carregarFretesPendentes()]);
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível pagar o frete avulso" });
+    } finally {
+      setPagandoFreteId(null);
+    }
+  };
 
   const handleReconciliarRecebiveis = async () => {
     setReconciliando(true);
@@ -463,6 +504,64 @@ export default function ClienteDetailPage() {
                     </div>
                   );
                 })
+              )}
+            </div>
+          </div>
+          <div className="card lg:col-span-2">
+            <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2">
+              <h3 className="font-semibold text-gray-900">
+                Fretes avulsos pendentes ({fretesPendentes.length})
+              </h3>
+              <Link href={`/fretes/novo`} className="text-blue-600 text-xs hover:underline">
+                + Novo frete avulso
+              </Link>
+            </div>
+            <div className="px-5 py-3 border-b border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Forma de pagamento</label>
+                <select
+                  value={pgFreteTipo}
+                  onChange={(e) => setPgFreteTipo(e.target.value as "dinheiro" | "transferencia")}
+                  className="input-field text-sm"
+                >
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="transferencia">Transferência / Pix</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Data</label>
+                <input
+                  type="date"
+                  value={pgFreteData}
+                  onChange={(e) => setPgFreteData(e.target.value)}
+                  className="input-field text-sm"
+                />
+              </div>
+            </div>
+            <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+              {fretesPendentes.length === 0 ? (
+                <p className="p-4 text-gray-400 text-sm text-center">Nenhum frete avulso pendente.</p>
+              ) : (
+                fretesPendentes.map((f) => (
+                  <div key={f.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                    <div>
+                      <p className="text-sm font-medium">Frete avulso #{f.id}</p>
+                      <p className="text-xs text-gray-400">{formatDate(f.data)}</p>
+                      {f.observacao && <p className="text-xs text-gray-500 mt-1">{f.observacao}</p>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-amber-700">{formatMoney(f.valor)}</span>
+                      <button
+                        type="button"
+                        onClick={() => void handlePagarFrete(f)}
+                        disabled={pagandoFreteId === f.id}
+                        className="btn-primary text-xs"
+                      >
+                        {pagandoFreteId === f.id ? "Pagando..." : "Pagar frete"}
+                      </button>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
