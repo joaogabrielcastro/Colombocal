@@ -36,7 +36,7 @@ router.get("/", async (req, res) => {
       aggMes,
       titulosAgg,
       todosClientes,
-      chequesPendentes,
+      chequesEmMaosAgg,
       totalProdutosAtivos,
       ultimasVendas,
       comissaoModo,
@@ -105,8 +105,8 @@ router.get("/", async (req, res) => {
       (acc, c) => acc + c.aberto,
       0,
     );
-    const totalChequesPendentes = parseFloat(
-      String(chequesPendentes._sum?.valor ?? 0),
+    const totalChequesEmMaos = parseFloat(
+      String(chequesEmMaosAgg._sum?.valor ?? 0),
     );
 
     // Faturamento dos últimos 6 meses: uma única query ao invés de 6 consultas separadas.
@@ -144,8 +144,8 @@ router.get("/", async (req, res) => {
       quantidadeVendasMes: aggMes._count.id,
       clientesDevendo: clientesDevendo.length,
       totalEmAberto,
-      chequesPendentes: chequesPendentes._count?.id ?? 0,
-      totalChequesPendentes,
+      chequesEmMaos: chequesEmMaosAgg._count?.id ?? 0,
+      totalChequesEmMaos,
       totalProdutosAtivos,
       ultimasVendas,
       faturamentoPorMes: faturamentoMeses,

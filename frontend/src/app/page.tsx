@@ -21,8 +21,8 @@ interface DashboardData {
   quantidadeVendasMes: number;
   clientesDevendo: number;
   totalEmAberto: number;
-  chequesPendentes: number;
-  totalChequesPendentes: number;
+  chequesEmMaos: number;
+  totalChequesEmMaos: number;
   totalProdutosAtivos: number;
   ultimasVendas: {
     id: number;
@@ -159,12 +159,12 @@ export default function DashboardPage() {
           href="/relatorios/financeiro"
         />
         <StatCard
-          title="Cheques Pendentes"
-          value={String(d.chequesPendentes)}
-          sub={`Total: ${formatMoney(d.totalChequesPendentes)}`}
+          title="Cheques em mãos"
+          value={String(d.chequesEmMaos)}
+          sub={`Total: ${formatMoney(d.totalChequesEmMaos)}`}
           icon={BanknotesIcon}
           color={
-            d.chequesPendentes > 0
+            d.chequesEmMaos > 0
               ? "bg-yellow-100 text-yellow-600"
               : "bg-gray-100 text-gray-500"
           }
