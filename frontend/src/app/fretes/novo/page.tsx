@@ -216,31 +216,45 @@ export default function NovoFretePage() {
         <h1 className="text-2xl font-bold text-gray-900">Novo Frete Avulso</h1>
       </div>
 
-      <div className="card p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SearchableSelect
-          label="Cliente"
-          value={form.clienteId}
-          onChange={(id) => setForm((s) => ({ ...s, clienteId: id }))}
-          loadOptions={loadClienteOptions}
-          loadLabelById={loadClienteLabelById}
-          minChars={0}
-          placeholder="Buscar cliente..."
-        />
-        <SearchableSelect
-          label="Motorista"
-          value={form.motoristaId}
-          onChange={(id) => setForm((s) => ({ ...s, motoristaId: id }))}
-          loadOptions={loadMotoristaOptions}
-          loadLabelById={loadMotoristaLabelById}
-          minChars={0}
-          placeholder="Buscar motorista..."
-        />
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Preço por saco</label>
-          <input className="input-field" value={form.precoSaco} onChange={(e) => setForm((s) => ({ ...s, precoSaco: e.target.value }))} />
+      <div className="card p-5 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <SearchableSelect
+            label="Cliente"
+            value={form.clienteId}
+            onChange={(id) => setForm((s) => ({ ...s, clienteId: id }))}
+            loadOptions={loadClienteOptions}
+            loadLabelById={loadClienteLabelById}
+            minChars={0}
+            placeholder="Buscar cliente..."
+          />
+          <SearchableSelect
+            label="Motorista"
+            value={form.motoristaId}
+            onChange={(id) => setForm((s) => ({ ...s, motoristaId: id }))}
+            loadOptions={loadMotoristaOptions}
+            loadLabelById={loadMotoristaLabelById}
+            minChars={0}
+            placeholder="Buscar motorista..."
+          />
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Preço por saco</label>
+            <input
+              className="input-field"
+              value={form.precoSaco}
+              onChange={(e) => setForm((s) => ({ ...s, precoSaco: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Preço por tonelada</label>
+            <input
+              className="input-field"
+              value={form.precoTonelada}
+              onChange={(e) => setForm((s) => ({ ...s, precoTonelada: e.target.value }))}
+            />
+          </div>
         </div>
 
-        <div className="lg:col-span-4 border rounded-lg border-gray-200 p-3">
+        <div className="border rounded-lg border-gray-200 p-3">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-gray-800">Itens do frete</p>
             <button type="button" className="btn-secondary text-xs py-1.5" onClick={adicionarItem}>
@@ -283,33 +297,50 @@ export default function NovoFretePage() {
             ))}
           </div>
         </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Preço por tonelada</label>
-          <input className="input-field" value={form.precoTonelada} onChange={(e) => setForm((s) => ({ ...s, precoTonelada: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Total calculado</label>
-          <input className="input-field bg-gray-50" value={formatMoney(valorCalculado)} readOnly />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Total final (editável)</label>
-          <input className="input-field" value={form.valorTotal} onChange={(e) => setForm((s) => ({ ...s, valorTotal: e.target.value }))} placeholder={valorCalculado.toFixed(2)} />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Total calculado</label>
+            <input className="input-field bg-gray-50" value={formatMoney(valorCalculado)} readOnly />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Total final (editável)</label>
+            <input
+              className="input-field"
+              value={form.valorTotal}
+              onChange={(e) => setForm((s) => ({ ...s, valorTotal: e.target.value }))}
+              placeholder={valorCalculado.toFixed(2)}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Data do frete</label>
+            <input
+              type="date"
+              className="input-field"
+              value={form.dataMovimento}
+              onChange={(e) => setForm((s) => ({ ...s, dataMovimento: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Vencimento (se a receber)</label>
+            <input
+              type="date"
+              className="input-field"
+              value={form.vencimento}
+              onChange={(e) => setForm((s) => ({ ...s, vencimento: e.target.value }))}
+            />
+          </div>
+          <div className="lg:col-span-4">
+            <label className="block text-sm text-gray-600 mb-1">Observação</label>
+            <input
+              className="input-field"
+              value={form.observacao}
+              onChange={(e) => setForm((s) => ({ ...s, observacao: e.target.value }))}
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Data do frete</label>
-          <input type="date" className="input-field" value={form.dataMovimento} onChange={(e) => setForm((s) => ({ ...s, dataMovimento: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Vencimento (se a receber)</label>
-          <input type="date" className="input-field" value={form.vencimento} onChange={(e) => setForm((s) => ({ ...s, vencimento: e.target.value }))} />
-        </div>
-        <div className="lg:col-span-2">
-          <label className="block text-sm text-gray-600 mb-1">Observação</label>
-          <input className="input-field" value={form.observacao} onChange={(e) => setForm((s) => ({ ...s, observacao: e.target.value }))} />
-        </div>
-
-        <div className="lg:col-span-4 border-t pt-3">
+        <div className="border-t pt-3">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.pagoNoAto} onChange={(e) => setForm((s) => ({ ...s, pagoNoAto: e.target.checked }))} />
             Pago no ato (não gerar a receber)
