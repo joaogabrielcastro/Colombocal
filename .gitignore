@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Production builds
+backend/dist/
+backend/build/
+
+# Environment variables
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Prisma
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Legacy migration artifacts (outside core runtime)
+backend/scripts/legacy_exports/
+backend/scripts/legacy_exports_bdgeral/
+backend/scripts/*.mdb
+backend/scripts/*.ldb
+backend/scripts/legacy_import_plan.json
+backend/scripts/legacy_migration_map.json
+backend/scripts/legacy_movime2_profile.json
+backend/scripts/legacy_nsiste_profile.json
+
+# Local build/cache
+frontend/tsconfig.tsbuildinfo

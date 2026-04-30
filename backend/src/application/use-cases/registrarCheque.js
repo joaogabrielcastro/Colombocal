@@ -1,0 +1,122 @@
+const { AppError } = require("../../shared/errors/appError");
+const { calcularSaldoAbertoVenda, splitValorComTroco } = require("../../domain/financeiro");
+const { recalcularTodosTitulosCliente } = require("../../services/recebiveis");
+const { registrarEventoFinanceiro } = require("../../services/financeiroEventos");
+const { findVendaFinanceiraById } = require("../../infra/prisma/repositories/vendaRepository");
+const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRepository");
+const { createCheque, findChequeById } = require("../../infra/prisma/repositories/chequeRepository");
+
+async function registrarCheque(prisma, payload) {
+  const statusInicial = "ativo";
+  const dataRecebimentoDate =
+    payload.dataRecebimento instanceof Date
+      ? payload.dataRecebimento
+      : payload.dataRecebimento
+        ? new Date(payload.dataRecebimento)
+        : null;
+  const dataCompensacaoDate =
+    payload.dataCompensacao instanceof Date
+      ? payload.dataCompensacao
+      : payload.dataCompensacao
+        ? new Date(payload.dataCompensacao)
+        : null;
+
+  const result = await prisma.$transaction(async (tx) => {
+    let valorPrincipal = payload.valor;
+    let trocoValor = 0;
+
+    if (payload.vendaId) {
+      const venda = await findVendaFinanceiraById(tx, payload.vendaId);
+      if (venda) {
+        const saldoAberto = calcularSaldoAbertoVenda(venda);
+        if (payload.valor > saldoAberto) {
+          if (!payload.trocoTipo) {
+            throw new AppError(
+              "Valor do cheque ultrapassa o saldo da venda. Informe trocoTipo (dinheiro ou transferencia/pix).",
+              { code: "CHEQUE_EXCEDE_SALDO", httpStatus: 400 },
+            );
+          }
+          const split = splitValorComTroco(payload.valor, saldoAberto);
+          trocoValor = split.trocoValor;
+          valorPrincipal = split.valorPrincipal;
+        }
+      }
+    }
+
+    const novoCheque = await createCheque(tx, {
+      clienteId: payload.clienteId,
+      vendaId: payload.vendaId ?? null,
+      valor: payload.valor,
+      emitenteNome: payload.emitenteNome ?? null,
+      banco: payload.banco ?? null,
+      numero: payload.numero ?? null,
+      agencia: payload.agencia ?? null,
+      conta: payload.conta ?? null,
+      dataRecebimento: dataRecebimentoDate || new Date(),
+      dataCompensacao: dataCompensacaoDate,
+      status: statusInicial,
+      observacoes: payload.observacoes ?? null,
+    });
+
+    await createPagamento(tx, {
+      clienteId: payload.clienteId,
+      vendaId: novoCheque.vendaId,
+      tipo: "cheque",
+      valor: valorPrincipal,
+      data: dataRecebimentoDate || new Date(),
+      chequeId: novoCheque.id,
+      observacoes: `Cheque #${payload.numero || novoCheque.id} - ${payload.banco || ""}`,
+    });
+
+    if (trocoValor > 0.0001) {
+      const trocoTipo = payload.trocoTipo || "dinheiro";
+      await createPagamento(tx, {
+        clienteId: payload.clienteId,
+        vendaId: novoCheque.vendaId,
+        tipo: `troco_${trocoTipo}`,
+        valor: -trocoValor,
+        data: dataRecebimentoDate || new Date(),
+        observacoes:
+          `Troco de cheque da venda #${novoCheque.vendaId} ` +
+          `(${trocoTipo === "transferencia" ? "pix/transferência" : "dinheiro"})`,
+      });
+    }
+
+    await recalcularTodosTitulosCliente(tx, payload.clienteId);
+    await registrarEventoFinanceiro(tx, {
+      tipo: "CHEQUE_CRIADO",
+      entidade: "Cheque",
+      entidadeId: novoCheque.id,
+      chequeId: novoCheque.id,
+      clienteId: payload.clienteId,
+      vendaId: novoCheque.vendaId,
+      valor: payload.valor,
+      payload: {
+        status: statusInicial,
+        banco: payload.banco || null,
+        trocoValor,
+        trocoTipo: trocoValor > 0.0001 ? (payload.trocoTipo || "dinheiro") : null,
+      },
+    });
+
+    return {
+      chequeId: novoCheque.id,
+      trocoValor,
+      trocoTipo: trocoValor > 0.0001 ? (payload.trocoTipo || "dinheiro") : null,
+    };
+  });
+
+  const chequeCompleto = await findChequeById(prisma, result.chequeId, {
+    cliente: true,
+    venda: true,
+    pagamento: true,
+  });
+
+  return {
+    cheque: chequeCompleto,
+    trocoValor: result.trocoValor,
+    trocoTipo: result.trocoTipo,
+  };
+}
+
+module.exports = { registrarCheque };

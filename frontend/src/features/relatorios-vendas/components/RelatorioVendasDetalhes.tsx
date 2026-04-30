@@ -1,0 +1,41 @@
+"use client";
+
+import { formatDate, formatFreteReciboLinha, formatMoney, type Venda } from "@/lib/utils";
+
+export function RelatorioVendasDetalhes({ vendas }: { vendas: Venda[] }) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100">
+        <h3 className="font-semibold">Detalhamento das Vendas</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="table-header">#</th>
+              <th className="table-header">Data</th>
+              <th className="table-header">Cliente</th>
+              <th className="table-header">Vendedor</th>
+              <th className="table-header text-right">Frete</th>
+              <th className="table-header">Frete pago</th>
+              <th className="table-header text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vendas.map((v) => (
+              <tr key={v.id} className="table-row">
+                <td className="table-cell text-gray-400">#{v.id}</td>
+                <td className="table-cell">{formatDate(v.dataVenda)}</td>
+                <td className="table-cell font-medium">{v.cliente.nomeFantasia || v.cliente.razaoSocial}</td>
+                <td className="table-cell">{v.vendedor.nome}</td>
+                <td className="table-cell text-right">{formatMoney(v.frete)}</td>
+                <td className="table-cell text-xs text-gray-600 max-w-[11rem]">{formatFreteReciboLinha(v)}</td>
+                <td className="table-cell text-right font-semibold">{formatMoney(v.valorTotal)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,202 @@
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+require("dotenv").config();
+const { prisma, ensureDatabaseCompat } = require("./lib/prisma");
+const {
+  requestIdMiddleware,
+  sendErrorAlert,
+} = require("./shared/http/observability");
+
+// Garante uso do engine local no ambiente de desenvolvimento
+process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
+delete process.env.PRISMA_GENERATE_NO_ENGINE;
+delete process.env.PRISMA_GENERATE_DATAPROXY;
+
+const app = express();
+app.use(requestIdMiddleware);
+
+const trustProxy = process.env.TRUST_PROXY;
+if (typeof trustProxy !== "undefined") {
+  if (trustProxy === "true") {
+    app.set("trust proxy", true);
+  } else if (trustProxy === "false") {
+    app.set("trust proxy", false);
+  } else {
+    const hops = Number(trustProxy);
+    if (!Number.isNaN(hops)) {
+      app.set("trust proxy", hops);
+    }
+  }
+} else if (process.env.NODE_ENV === "production") {
+  // In production, requests usually come from a reverse proxy/load balancer.
+  app.set("trust proxy", 1);
+}
+
+const corsOrigin = process.env.CORS_ORIGIN;
+app.use(
+  cors({
+    origin: corsOrigin || true,
+  }),
+);
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+app.use(express.json());
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_MAX_PER_WINDOW ?? 600),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.originalUrl.includes("/api/cnpj"),
+});
+
+const cnpjLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_CNPJ_PER_MIN ?? 25),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api/cnpj", cnpjLimiter);
+app.use("/api", apiLimiter);
+
+// Health check
+app.get("/", (req, res) => {
+  res.json({ message: "API Colombocal funcionando 🚀" });
+});
+
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "colombocal-backend",
+    requestId: req.requestId,
+    uptimeSec: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/ready", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: "ready",
+      service: "colombocal-backend",
+      requestId: req.requestId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    await sendErrorAlert(error, {
+      requestId: req.requestId,
+      source: "readiness_check",
+    });
+    res.status(503).json({
+      status: "not_ready",
+      error: "database_unreachable",
+      requestId: req.requestId,
+    });
+  }
+});
+
+// Routes
+app.use("/api/clientes", require("./routes/clientes"));
+app.use("/api/produtos", require("./routes/produtos"));
+app.use("/api/motoristas", require("./routes/motoristas"));
+app.use("/api/vendedores", require("./routes/vendedores"));
+app.use("/api/vendas", require("./routes/vendas"));
+app.use("/api/fretes", require("./routes/fretes"));
+app.use("/api/config", require("./routes/config"));
+app.use("/api/cheques", require("./routes/cheques"));
+app.use("/api/pagamentos", require("./routes/pagamentos"));
+app.use("/api/relatorios", require("./routes/relatorios"));
+app.use("/api/dashboard", require("./routes/dashboard"));
+app.use("/api/cnpj", require("./routes/cnpj"));
+
+// Global error handler
+app.use((err, req, res, next) => {
+  const requestId = req.requestId || "unknown";
+  console.error(
+    JSON.stringify({
+      level: "error",
+      type: "http_unhandled_error",
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      message: err?.message,
+      stack: err?.stack,
+    }),
+  );
+  void sendErrorAlert(err, {
+    requestId,
+    method: req.method,
+    path: req.originalUrl,
+    source: "express_error_handler",
+  });
+  res
+    .status(500)
+    .json({
+      error: "Erro interno do servidor",
+      details: err.message,
+      requestId,
+    });
+});
+
+const PORT = process.env.PORT || 3011;
+
+function shouldRunStartupDbCompat() {
+  if (process.env.ALLOW_STARTUP_DB_COMPAT === "true") {
+    return true;
+  }
+  return process.env.NODE_ENV !== "production";
+}
+
+async function startServer() {
+  try {
+    if (shouldRunStartupDbCompat()) {
+      await ensureDatabaseCompat();
+    } else {
+      console.log(
+        "ℹ️ Compatibilidade automática de schema desativada em produção (ALLOW_STARTUP_DB_COMPAT != true).",
+      );
+    }
+    app.listen(PORT, () => {
+      console.log(`✅ Servidor Colombocal rodando na porta ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Falha ao validar compatibilidade do banco:", error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
+
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  console.error(
+    JSON.stringify({
+      level: "error",
+      type: "unhandled_rejection",
+      message: err.message,
+      stack: err.stack,
+    }),
+  );
+  void sendErrorAlert(err, { source: "process_unhandled_rejection" });
+});
+
+process.on("uncaughtException", (error) => {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      type: "uncaught_exception",
+      message: error.message,
+      stack: error.stack,
+    }),
+  );
+  void sendErrorAlert(error, { source: "process_uncaught_exception" });
+});
+
+module.exports = app;
