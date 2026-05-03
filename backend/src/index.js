@@ -136,13 +136,14 @@ app.use((err, req, res, next) => {
     path: req.originalUrl,
     source: "express_error_handler",
   });
-  res
-    .status(500)
-    .json({
-      error: "Erro interno do servidor",
-      details: err.message,
-      requestId,
-    });
+  const body = {
+    error: "Erro interno do servidor",
+    requestId,
+  };
+  if (process.env.NODE_ENV !== "production") {
+    body.details = err?.message;
+  }
+  res.status(500).json(body);
 });
 
 const PORT = process.env.PORT || 3011;
