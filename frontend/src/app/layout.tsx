@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import Sidebar from '@/components/Sidebar';
+import ClientShell from '@/components/ClientShell';
 import AppProviders from '@/components/AppProviders';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -16,10 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body className={inter.className}>
         <AppProviders>
-          <div className="flex h-screen overflow-hidden bg-gray-50">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto">{children}</main>
-          </div>
+          <ClientShell>{children}</ClientShell>
         </AppProviders>
       </body>
     </html>

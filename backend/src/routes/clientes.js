@@ -22,6 +22,10 @@ function toMoneyNumber(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function tenant(req) {
+  return { tenantId: req.tenantId };
+}
+
 // GET /api/clientes - listar todos os clientes
 router.get("/", async (req, res) => {
   try {
@@ -30,7 +34,7 @@ router.get("/", async (req, res) => {
       defaultTake: 100,
       maxTake: 500,
     });
-    const where = {};
+    const where = { ...tenant(req) };
     if (ativo !== undefined) where.ativo = ativo === "true";
     if (busca) {
       where.OR = [
@@ -66,6 +70,12 @@ router.get("/:id/precos", async (req, res) => {
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: "ID de cliente inválido" });
     }
+    const cli = await prisma.cliente.findFirst({
+      where: { id, ...tenant(req) },
+      select: { id: true },
+    });
+    if (!cli) return res.status(404).json({ error: "Cliente não encontrado" });
+
     const busca = (req.query.busca || "").trim();
     const takeRaw = req.query.take;
     const take =
@@ -73,7 +83,7 @@ router.get("/:id/precos", async (req, res) => {
         ? Math.min(500, Math.max(1, parseInt(String(takeRaw), 10) || 80))
         : null;
 
-    const produtoWhere = {};
+    const produtoWhere = { ...tenant(req) };
     const produtoIdOne = req.query.produtoId;
     if (produtoIdOne) {
       const pid = parseInt(String(produtoIdOne), 10);
@@ -124,12 +134,15 @@ router.get("/:id/precos", async (req, res) => {
 router.get("/:id/conta", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const cliente = await prisma.cliente.findUnique({ where: { id } });
+    const cliente = await prisma.cliente.findFirst({
+      where: { id, ...tenant(req) },
+    });
     if (!cliente)
       return res.status(404).json({ error: "Cliente não encontrado" });
 
+    const tw = tenant(req);
     const vendas = await prisma.venda.findMany({
-      where: { clienteId: id },
+      where: { clienteId: id, ...tw },
       include: {
         itens: { include: { produto: true } },
         vendedor: true,
@@ -139,13 +152,13 @@ router.get("/:id/conta", async (req, res) => {
     });
 
     const pagamentos = await prisma.pagamento.findMany({
-      where: { clienteId: id },
+      where: { clienteId: id, ...tw },
       include: { cheque: true, venda: true },
       orderBy: { data: "desc" },
     });
 
     const titulos = await prisma.tituloReceber.findMany({
-      where: { clienteId: id },
+      where: { clienteId: id, ...tw },
       include: { venda: true },
       orderBy: { vencimento: "asc" },
     });
@@ -186,8 +199,8 @@ router.get("/:id/conta", async (req, res) => {
 // GET /api/clientes/:id - buscar cliente por ID
 router.get("/:id", async (req, res) => {
   try {
-    const cliente = await prisma.cliente.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const cliente = await prisma.cliente.findFirst({
+      where: { id: parseInt(req.params.id), ...tenant(req) },
       include: {
         precosEspeciais: { include: { produto: true } },
         vendedor: true,
@@ -208,8 +221,8 @@ router.post("/:id/reconciliar-recebiveis", async (req, res) => {
     if (!Number.isFinite(clienteId)) {
       return res.status(400).json({ error: "ID de cliente inválido" });
     }
-    const existe = await prisma.cliente.findUnique({
-      where: { id: clienteId },
+    const existe = await prisma.cliente.findFirst({
+      where: { id: clienteId, ...tenant(req) },
       select: { id: true },
     });
     if (!existe) return res.status(404).json({ error: "Cliente não encontrado" });
@@ -228,6 +241,7 @@ router.post("/", async (req, res) => {
     const b = parseBody(clienteCreateSchema, req.body);
     const cnpjLimpo = b.cnpj.replace(/\D/g, "");
     const data = {
+      ...tenant(req),
       cnpj: cnpjLimpo,
       razaoSocial: b.razaoSocial,
       nomeFantasia: b.nomeFantasia,
@@ -247,8 +261,8 @@ router.post("/", async (req, res) => {
           : parseFloat(String(b.comissaoFixaPercentual)),
     };
 
-    const existente = await prisma.cliente.findUnique({
-      where: { cnpj: cnpjLimpo },
+    const existente = await prisma.cliente.findFirst({
+      where: { cnpj: cnpjLimpo, ...tenant(req) },
       select: { id: true, ativo: true },
     });
 
@@ -281,8 +295,15 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const b = parseBody(clienteUpdateSchema, req.body);
+    const id = parseInt(req.params.id);
+    const atual = await prisma.cliente.findFirst({
+      where: { id, ...tenant(req) },
+      select: { id: true },
+    });
+    if (!atual) return res.status(404).json({ error: "Cliente não encontrado" });
+
     const cliente = await prisma.cliente.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: {
         razaoSocial: b.razaoSocial,
         nomeFantasia: b.nomeFantasia,
@@ -320,6 +341,12 @@ router.put("/:id", async (req, res) => {
 router.put("/:id/precos", async (req, res) => {
   try {
     const clienteId = parseInt(req.params.id);
+    const cli = await prisma.cliente.findFirst({
+      where: { id: clienteId, ...tenant(req) },
+      select: { id: true },
+    });
+    if (!cli) return res.status(404).json({ error: "Cliente não encontrado" });
+
     const { precos } = parseBody(clientePrecosSchema, req.body);
     for (const p of precos) {
       if (p.preco === null || p.preco === "") {
@@ -343,8 +370,15 @@ router.put("/:id/precos", async (req, res) => {
 // DELETE /api/clientes/:id - inativar cliente
 router.delete("/:id", async (req, res) => {
   try {
+    const id = parseInt(req.params.id);
+    const atual = await prisma.cliente.findFirst({
+      where: { id, ...tenant(req) },
+      select: { id: true },
+    });
+    if (!atual) return res.status(404).json({ error: "Cliente não encontrado" });
+
     await prisma.cliente.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: { ativo: false },
     });
     res.json({ success: true });

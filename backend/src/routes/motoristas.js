@@ -7,6 +7,10 @@ const {
   handleRouteError,
 } = require("../utils/api");
 
+function tw(req) {
+  return { tenantId: req.tenantId };
+}
+
 router.get("/", async (req, res) => {
   try {
     const { busca } = req.query;
@@ -14,7 +18,7 @@ router.get("/", async (req, res) => {
       defaultTake: 200,
       maxTake: 500,
     });
-    const where = { ativo: true };
+    const where = { ...tw(req), ativo: true };
     if (busca && String(busca).trim()) {
       where.nome = { contains: String(busca).trim(), mode: "insensitive" };
     }
@@ -36,8 +40,8 @@ router.get("/", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const motorista = await prisma.motorista.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const motorista = await prisma.motorista.findFirst({
+      where: { id: parseInt(req.params.id), ...tw(req) },
     });
     if (!motorista)
       return res.status(404).json({ error: "Motorista não encontrado" });
@@ -51,7 +55,7 @@ router.post("/", async (req, res) => {
   try {
     const { nome, telefone, veiculo, placa } = req.body;
     const motorista = await prisma.motorista.create({
-      data: { nome, telefone, veiculo, placa },
+      data: { ...tw(req), nome, telefone, veiculo, placa },
     });
     res.status(201).json(motorista);
   } catch (error) {
@@ -61,9 +65,13 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   try {
+    const id = parseInt(req.params.id);
+    const exists = await prisma.motorista.count({ where: { id, ...tw(req) } });
+    if (!exists) return res.status(404).json({ error: "Motorista não encontrado" });
+
     const { nome, telefone, veiculo, placa, ativo } = req.body;
     const motorista = await prisma.motorista.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: { nome, telefone, veiculo, placa, ativo },
     });
     res.json(motorista);
@@ -74,8 +82,12 @@ router.put("/:id", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   try {
+    const id = parseInt(req.params.id);
+    const exists = await prisma.motorista.count({ where: { id, ...tw(req) } });
+    if (!exists) return res.status(404).json({ error: "Motorista não encontrado" });
+
     await prisma.motorista.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: { ativo: false },
     });
     res.json({ success: true });

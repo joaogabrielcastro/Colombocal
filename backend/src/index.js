@@ -8,6 +8,7 @@ const {
   requestIdMiddleware,
   sendErrorAlert,
 } = require("./shared/http/observability");
+const { requireTenantUser } = require("./middleware/auth");
 
 // Garante uso do engine local no ambiente de desenvolvimento
 process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
@@ -102,19 +103,22 @@ app.get("/ready", async (req, res) => {
   }
 });
 
-// Routes
-app.use("/api/clientes", require("./routes/clientes"));
-app.use("/api/produtos", require("./routes/produtos"));
-app.use("/api/motoristas", require("./routes/motoristas"));
-app.use("/api/vendedores", require("./routes/vendedores"));
-app.use("/api/vendas", require("./routes/vendas"));
-app.use("/api/fretes", require("./routes/fretes"));
-app.use("/api/config", require("./routes/config"));
-app.use("/api/cheques", require("./routes/cheques"));
-app.use("/api/pagamentos", require("./routes/pagamentos"));
-app.use("/api/relatorios", require("./routes/relatorios"));
-app.use("/api/dashboard", require("./routes/dashboard"));
-app.use("/api/cnpj", require("./routes/cnpj"));
+// Rotas públicas de autenticação (sem JWT)
+app.use("/api/auth", require("./routes/auth"));
+
+// API protegida: multi-tenant + JWT (ou AUTH_DISABLED=true em desenvolvimento)
+app.use("/api/clientes", requireTenantUser, require("./routes/clientes"));
+app.use("/api/produtos", requireTenantUser, require("./routes/produtos"));
+app.use("/api/motoristas", requireTenantUser, require("./routes/motoristas"));
+app.use("/api/vendedores", requireTenantUser, require("./routes/vendedores"));
+app.use("/api/vendas", requireTenantUser, require("./routes/vendas"));
+app.use("/api/fretes", requireTenantUser, require("./routes/fretes"));
+app.use("/api/config", requireTenantUser, require("./routes/config"));
+app.use("/api/cheques", requireTenantUser, require("./routes/cheques"));
+app.use("/api/pagamentos", requireTenantUser, require("./routes/pagamentos"));
+app.use("/api/relatorios", requireTenantUser, require("./routes/relatorios"));
+app.use("/api/dashboard", requireTenantUser, require("./routes/dashboard"));
+app.use("/api/cnpj", requireTenantUser, require("./routes/cnpj"));
 
 // Global error handler
 app.use((err, req, res, next) => {

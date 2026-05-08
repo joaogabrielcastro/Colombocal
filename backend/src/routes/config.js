@@ -44,6 +44,7 @@ router.post("/reset-financeiro-legacy", async (req, res) => {
 
     const zerarTotal = req.body?.zerarTotal === true;
     const result = await executarResetFinanceiroLegacy(prisma, {
+      tenantId: req.tenantId,
       criarAjustes: !zerarTotal,
       zerarPagamentosGerais: zerarTotal,
       zerarVendasETitulos: zerarTotal,
@@ -57,7 +58,9 @@ router.post("/reset-financeiro-legacy", async (req, res) => {
 // GET /api/config — regras visíveis na UI
 router.get("/", async (req, res) => {
   try {
-    const comissaoModo = (await getConfig(prisma, "COMISSAO_MODO")) || DEFAULTS.COMISSAO_MODO;
+    const comissaoModo =
+      (await getConfig(prisma, req.tenantId, "COMISSAO_MODO")) ||
+      DEFAULTS.COMISSAO_MODO;
     res.json({
       comissaoModo: comissaoModo === "caixa" ? "caixa" : "emissao",
       descricaoComissao: {
@@ -71,7 +74,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// PUT /api/config — ajuste de regras (sem auth por enquanto)
+// PUT /api/config — ajuste de regras (protegido por JWT + tenant)
 router.put("/", async (req, res) => {
   try {
     const { comissaoModo } = req.body;
@@ -79,9 +82,11 @@ router.put("/", async (req, res) => {
       return res.status(400).json({ error: "comissaoModo inválido" });
     }
     if (comissaoModo) {
-      await setConfig(prisma, "COMISSAO_MODO", comissaoModo);
+      await setConfig(prisma, req.tenantId, "COMISSAO_MODO", comissaoModo);
     }
-    const modo = (await getConfig(prisma, "COMISSAO_MODO")) || DEFAULTS.COMISSAO_MODO;
+    const modo =
+      (await getConfig(prisma, req.tenantId, "COMISSAO_MODO")) ||
+      DEFAULTS.COMISSAO_MODO;
     res.json({ comissaoModo: modo });
   } catch (e) {
     handleRouteError(res, e);

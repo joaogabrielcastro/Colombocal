@@ -1,6 +1,6 @@
-async function findVendaFinanceiraById(db, id) {
-  return db.venda.findUnique({
-    where: { id },
+async function findVendaFinanceiraById(db, id, tenantId) {
+  return db.venda.findFirst({
+    where: { id, tenantId },
     include: { titulos: true, pagamentos: true },
   });
 }

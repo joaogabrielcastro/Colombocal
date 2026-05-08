@@ -6,6 +6,11 @@ const { findVendaFinanceiraById } = require("../../infra/prisma/repositories/ven
 const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRepository");
 
 async function registrarPagamento(prisma, payload) {
+  const tenantId = payload.tenantId;
+  if (tenantId == null) {
+    throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
+  }
+
   if (payload.tipo === "cheque") {
     throw new AppError("Para cheques, use a rota /api/cheques", {
       code: "PAGAMENTO_TIPO_INVALIDO",
@@ -25,7 +30,7 @@ async function registrarPagamento(prisma, payload) {
     let trocoValor = 0;
 
     if (payload.vendaId) {
-      const venda = await findVendaFinanceiraById(tx, payload.vendaId);
+      const venda = await findVendaFinanceiraById(tx, payload.vendaId, tenantId);
       if (venda) {
         const saldoAberto = calcularSaldoAbertoVenda(venda);
         const split = splitValorComTroco(payload.valor, saldoAberto);
@@ -37,6 +42,7 @@ async function registrarPagamento(prisma, payload) {
     const novoPagamento = await createPagamento(
       tx,
       {
+        tenantId,
         clienteId: payload.clienteId,
         vendaId: payload.vendaId ?? null,
         tipo: payload.tipo,
@@ -50,6 +56,7 @@ async function registrarPagamento(prisma, payload) {
     if (trocoValor > 0) {
       const trocoTipo = payload.trocoTipo || payload.tipo;
       await createPagamento(tx, {
+        tenantId,
         clienteId: payload.clienteId,
         vendaId: payload.vendaId ?? null,
         tipo: `troco_${trocoTipo}`,
@@ -63,6 +70,7 @@ async function registrarPagamento(prisma, payload) {
 
     await recalcularTodosTitulosCliente(tx, payload.clienteId);
     await registrarEventoFinanceiro(tx, {
+      tenantId,
       tipo: "PAGAMENTO_CRIADO",
       entidade: "Pagamento",
       entidadeId: novoPagamento.id,

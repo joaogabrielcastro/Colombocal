@@ -7,6 +7,11 @@ const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRe
 const { createCheque, findChequeById } = require("../../infra/prisma/repositories/chequeRepository");
 
 async function registrarCheque(prisma, payload) {
+  const tenantId = payload.tenantId;
+  if (tenantId == null) {
+    throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
+  }
+
   const statusInicial = "ativo";
   const dataRecebimentoDate =
     payload.dataRecebimento instanceof Date
@@ -26,7 +31,7 @@ async function registrarCheque(prisma, payload) {
     let trocoValor = 0;
 
     if (payload.vendaId) {
-      const venda = await findVendaFinanceiraById(tx, payload.vendaId);
+      const venda = await findVendaFinanceiraById(tx, payload.vendaId, tenantId);
       if (venda) {
         const saldoAberto = calcularSaldoAbertoVenda(venda);
         if (payload.valor > saldoAberto) {
@@ -44,6 +49,7 @@ async function registrarCheque(prisma, payload) {
     }
 
     const novoCheque = await createCheque(tx, {
+      tenantId,
       clienteId: payload.clienteId,
       vendaId: payload.vendaId ?? null,
       valor: payload.valor,
@@ -59,6 +65,7 @@ async function registrarCheque(prisma, payload) {
     });
 
     await createPagamento(tx, {
+      tenantId,
       clienteId: payload.clienteId,
       vendaId: novoCheque.vendaId,
       tipo: "cheque",
@@ -71,6 +78,7 @@ async function registrarCheque(prisma, payload) {
     if (trocoValor > 0.0001) {
       const trocoTipo = payload.trocoTipo || "dinheiro";
       await createPagamento(tx, {
+        tenantId,
         clienteId: payload.clienteId,
         vendaId: novoCheque.vendaId,
         tipo: `troco_${trocoTipo}`,
@@ -84,6 +92,7 @@ async function registrarCheque(prisma, payload) {
 
     await recalcularTodosTitulosCliente(tx, payload.clienteId);
     await registrarEventoFinanceiro(tx, {
+      tenantId,
       tipo: "CHEQUE_CRIADO",
       entidade: "Cheque",
       entidadeId: novoCheque.id,
@@ -106,7 +115,7 @@ async function registrarCheque(prisma, payload) {
     };
   });
 
-  const chequeCompleto = await findChequeById(prisma, result.chequeId, {
+  const chequeCompleto = await findChequeById(prisma, result.chequeId, tenantId, {
     cliente: true,
     venda: true,
     pagamento: true,

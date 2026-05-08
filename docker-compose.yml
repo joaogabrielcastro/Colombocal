@@ -1,5 +1,11 @@
 # Stack de desenvolvimento local
 # Uso: na raiz do projeto -> docker compose up --build
+#
+# Auth / multi-tenant (dev): backend AUTH_DISABLED=true + DEFAULT_TENANT_ID=1 aceita API sem JWT.
+# Frontend: NEXT_PUBLIC_REQUIRE_LOGIN=false evita redirecionar para /login sem token.
+# Produção: AUTH_DISABLED não vale em NODE_ENV=production; defina JWT_SECRET; NEXT_PUBLIC_REQUIRE_LOGIN=true.
+# Seed (`npm run db:seed` no backend): tenants `default` (admin@local) e `demo` (demo@local); variáveis SEED_ADMIN_PASSWORD e SEED_DEMO_PASSWORD opcionais.
+#
 # Serviços:
 # - frontend: http://localhost:3010
 # - backend:  http://localhost:3011
@@ -29,12 +35,16 @@ services:
     container_name: colombocal-backend-dev
     working_dir: /app
     # postinstall roda prisma generate; generate explícito evita client Prisma velho no volume node_modules
-    command: sh -c "npm install && npx prisma generate && npm run dev"
+    command: sh -c "npm install && npx prisma migrate deploy && npx prisma generate && npm run dev"
     environment:
       NODE_ENV: development
       PORT: 3011
       DATABASE_URL: postgresql://postgres:colombocal_dev@db:5432/colombocal_dev?schema=public
       PRISMA_CLIENT_ENGINE_TYPE: library
+      JWT_SECRET: dev_jwt_secret_change_in_production
+      JWT_EXPIRES_IN: 7d
+      AUTH_DISABLED: "true"
+      DEFAULT_TENANT_ID: "1"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
@@ -52,6 +62,8 @@ services:
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_ORIGIN: http://backend:3011
+      # "true" força /login sem token (alinhar com backend sem AUTH_DISABLED).
+      NEXT_PUBLIC_REQUIRE_LOGIN: "false"
       # Menu lateral reduzido (piloto). Para ver todos os atalhos no menu: "false"
       NEXT_PUBLIC_UI_HIDE_ADVANCED: "true"
       # Docker Desktop (Windows/macOS): o watcher nem sempre enxerga mudanças no bind mount;

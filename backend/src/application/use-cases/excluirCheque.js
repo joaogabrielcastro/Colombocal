@@ -9,9 +9,12 @@ const {
   deleteChequeById,
 } = require("../../infra/prisma/repositories/chequeRepository");
 
-async function excluirCheque(prisma, chequeId) {
+async function excluirCheque(prisma, chequeId, tenantId) {
+  if (tenantId == null) {
+    throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
+  }
   return prisma.$transaction(async (tx) => {
-    const cheque = await findChequeById(tx, chequeId, { pagamento: true });
+    const cheque = await findChequeById(tx, chequeId, tenantId, { pagamento: true });
     if (!cheque) {
       throw new AppError("Cheque não encontrado", {
         code: "CHEQUE_NAO_ENCONTRADO",
@@ -19,9 +22,10 @@ async function excluirCheque(prisma, chequeId) {
       });
     }
 
-    await deletePagamentosByChequeId(tx, chequeId);
-    await deleteChequeById(tx, chequeId);
+    await deletePagamentosByChequeId(tx, chequeId, tenantId);
+    await deleteChequeById(tx, chequeId, tenantId);
     await registrarEventoFinanceiro(tx, {
+      tenantId,
       tipo: "CHEQUE_EXCLUIDO",
       entidade: "Cheque",
       entidadeId: cheque.id,

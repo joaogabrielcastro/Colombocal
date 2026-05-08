@@ -6,9 +6,12 @@ const {
   deletePagamentoById,
 } = require("../../infra/prisma/repositories/pagamentoRepository");
 
-async function excluirPagamento(prisma, pagamentoId) {
+async function excluirPagamento(prisma, pagamentoId, tenantId) {
+  if (tenantId == null) {
+    throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
+  }
   return prisma.$transaction(async (tx) => {
-    const pagamento = await findPagamentoById(tx, pagamentoId);
+    const pagamento = await findPagamentoById(tx, pagamentoId, tenantId);
     if (!pagamento) {
       throw new AppError("Pagamento não encontrado", {
         code: "PAGAMENTO_NAO_ENCONTRADO",
@@ -16,8 +19,9 @@ async function excluirPagamento(prisma, pagamentoId) {
       });
     }
 
-    await deletePagamentoById(tx, pagamentoId);
+    await deletePagamentoById(tx, pagamentoId, tenantId);
     await registrarEventoFinanceiro(tx, {
+      tenantId,
       tipo: "PAGAMENTO_EXCLUIDO",
       entidade: "Pagamento",
       entidadeId: pagamento.id,

@@ -7,11 +7,16 @@ const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRe
 const { createCheque } = require("../../infra/prisma/repositories/chequeRepository");
 
 async function registrarChequeLote(prisma, payload) {
+  const tenantId = payload.tenantId;
+  if (tenantId == null) {
+    throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
+  }
+
   const clienteId = payload.clienteId;
   const vendaId = payload.vendaId;
 
   return prisma.$transaction(async (tx) => {
-    const venda = await findVendaFinanceiraById(tx, vendaId);
+    const venda = await findVendaFinanceiraById(tx, vendaId, tenantId);
     if (!venda) {
       throw new AppError("Venda não encontrada", { code: "VENDA_NAO_ENCONTRADA", httpStatus: 404 });
     }
@@ -48,6 +53,7 @@ async function registrarChequeLote(prisma, payload) {
             : null;
 
       const novoCheque = await createCheque(tx, {
+        tenantId,
         clienteId,
         vendaId,
         valor: item.valor,
@@ -63,6 +69,7 @@ async function registrarChequeLote(prisma, payload) {
       });
 
       await createPagamento(tx, {
+        tenantId,
         clienteId,
         vendaId,
         tipo: "cheque",
@@ -73,6 +80,7 @@ async function registrarChequeLote(prisma, payload) {
       });
 
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "CHEQUE_CRIADO_LOTE",
         entidade: "Cheque",
         entidadeId: novoCheque.id,
@@ -89,6 +97,7 @@ async function registrarChequeLote(prisma, payload) {
     if (excedente > 0.0001) {
       const trocoTipo = payload.trocoTipo || "dinheiro";
       await createPagamento(tx, {
+        tenantId,
         clienteId,
         vendaId,
         tipo: `troco_${trocoTipo}`,

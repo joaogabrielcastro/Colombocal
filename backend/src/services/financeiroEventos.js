@@ -8,8 +8,13 @@
  */
 async function registrarEventoFinanceiro(tx, data) {
   const payload = data.payload || null;
+  const tenantId = data.tenantId;
+  if (tenantId == null) {
+    throw new Error("registrarEventoFinanceiro: tenantId obrigatório");
+  }
   await tx.financeiroEvento.create({
     data: {
+      tenantId,
       tipo: data.tipo,
       entidade: data.entidade,
       entidadeId: data.entidadeId ?? null,

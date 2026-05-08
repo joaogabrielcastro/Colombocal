@@ -7,6 +7,9 @@ const { handleRouteError } = require("../utils/api");
 // GET /api/dashboard
 router.get("/", async (req, res) => {
   try {
+    const tenantId = req.tenantId;
+    const tw = { tenantId };
+
     const hoje = new Date();
     const inicioDia = new Date(
       hoje.getFullYear(),
@@ -42,37 +45,38 @@ router.get("/", async (req, res) => {
       comissaoModo,
     ] = await Promise.all([
       prisma.venda.findMany({
-        where: { dataVenda: { gte: inicioDia, lte: fimDia } },
+        where: { ...tw, dataVenda: { gte: inicioDia, lte: fimDia } },
         include: { cliente: true },
       }),
       prisma.venda.aggregate({
-        where: { dataVenda: { gte: inicioMes, lte: fimMes } },
+        where: { ...tw, dataVenda: { gte: inicioMes, lte: fimMes } },
         _sum: { valorTotal: true },
         _count: { id: true },
       }),
       prisma.tituloReceber.groupBy({
         by: ["clienteId"],
-        where: { status: { in: ["aberto", "parcial"] } },
+        where: { ...tw, status: { in: ["aberto", "parcial"] } },
         _sum: { valorOriginal: true, valorPago: true },
       }),
       prisma.cliente.findMany({
-        where: { ativo: true },
+        where: { ...tw, ativo: true },
         select: { id: true, razaoSocial: true, nomeFantasia: true, telefone: true },
       }),
       prisma.cheque.aggregate({
-        where: { status: "ativo" },
+        where: { ...tw, status: "ativo" },
         _sum: { valor: true },
         _count: { id: true },
       }),
       prisma.produto.count({
-        where: { ativo: true },
+        where: { ...tw, ativo: true },
       }),
       prisma.venda.findMany({
+        where: tw,
         take: 5,
         orderBy: { dataVenda: "desc" },
         include: { cliente: true, vendedor: true },
       }),
-      getConfig(prisma, "COMISSAO_MODO"),
+      getConfig(prisma, tenantId, "COMISSAO_MODO"),
     ]);
 
     const faturamentoHoje = vendasHoje.reduce(
@@ -109,7 +113,6 @@ router.get("/", async (req, res) => {
       String(chequesEmMaosAgg._sum?.valor ?? 0),
     );
 
-    // Faturamento dos últimos 6 meses: uma única query ao invés de 6 consultas separadas.
     const inicioJanela = new Date(hoje.getFullYear(), hoje.getMonth() - 5, 1);
     const rawMeses = await prisma.$queryRaw`
       SELECT
@@ -117,14 +120,14 @@ router.get("/", async (req, res) => {
         SUM("valorTotal")::float         AS total
       FROM "Venda"
       WHERE "dataVenda" >= ${inicioJanela}
+        AND "tenantId" = ${tenantId}
       GROUP BY DATE_TRUNC('month', "dataVenda")
       ORDER BY mes_inicio ASC
     `;
 
-    // Gera os 6 meses esperados (pode haver meses sem vendas) e cruza com o resultado
     const totalPorMes = new Map(
       rawMeses.map((r) => [
-        new Date(r.mes_inicio).toISOString().slice(0, 7), // "YYYY-MM"
+        new Date(r.mes_inicio).toISOString().slice(0, 7),
         parseFloat(String(r.total || 0)),
       ]),
     );

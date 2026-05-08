@@ -17,6 +17,7 @@ import {
   filterMainNavForSidebar,
   filterReportsForSidebar,
 } from '@/lib/navigation';
+import { clearAuthToken } from '@/lib/auth-token';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -163,6 +164,16 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-4 py-3 border-t border-gray-700 space-y-1">
+        <button
+          type="button"
+          className="w-full text-left text-sm text-gray-400 hover:text-white py-2 px-2 rounded-lg hover:bg-gray-800"
+          onClick={() => {
+            clearAuthToken();
+            window.location.href = '/login';
+          }}
+        >
+          Sair
+        </button>
         {UI_HIDE_ADVANCED && (
           <p className="text-gray-500 text-[10px] text-center leading-snug">
             Modo piloto: cadastros extras e títulos em Avançado. Frete na venda; histórico em Vendas.

@@ -12,6 +12,10 @@ const {
   handleRouteError,
 } = require("../utils/api");
 
+function tw(req) {
+  return { tenantId: req.tenantId };
+}
+
 // GET /api/pagamentos
 router.get("/", async (req, res) => {
   try {
@@ -20,7 +24,7 @@ router.get("/", async (req, res) => {
       defaultTake: 100,
       maxTake: 500,
     });
-    const where = {};
+    const where = { ...tw(req) };
     if (clienteId) where.clienteId = parseInt(clienteId);
     if (vendaId) where.vendaId = parseInt(vendaId);
     const [pagamentos, total] = await Promise.all([
@@ -44,7 +48,10 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const b = parseBody(pagamentoCreateSchema, req.body);
-    const pagamento = await registrarPagamento(prisma, b);
+    const pagamento = await registrarPagamento(prisma, {
+      ...b,
+      tenantId: req.tenantId,
+    });
     res.status(201).json(pagamento);
   } catch (error) {
     handleRouteError(res, error);
@@ -55,7 +62,7 @@ router.post("/", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    await excluirPagamento(prisma, id);
+    await excluirPagamento(prisma, id, req.tenantId);
     res.json({ success: true });
   } catch (error) {
     handleRouteError(res, error);

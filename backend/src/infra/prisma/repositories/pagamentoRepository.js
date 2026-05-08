@@ -5,16 +5,16 @@ async function createPagamento(db, data, include) {
   });
 }
 
-async function findPagamentoById(db, id) {
-  return db.pagamento.findUnique({ where: { id } });
+async function findPagamentoById(db, id, tenantId) {
+  return db.pagamento.findFirst({ where: { id, tenantId } });
 }
 
-async function deletePagamentoById(db, id) {
-  return db.pagamento.delete({ where: { id } });
+async function deletePagamentoById(db, id, tenantId) {
+  return db.pagamento.deleteMany({ where: { id, tenantId } });
 }
 
-async function deletePagamentosByChequeId(db, chequeId) {
-  return db.pagamento.deleteMany({ where: { chequeId } });
+async function deletePagamentosByChequeId(db, chequeId, tenantId) {
+  return db.pagamento.deleteMany({ where: { chequeId, tenantId } });
 }
 
 module.exports = {

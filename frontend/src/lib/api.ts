@@ -1,3 +1,5 @@
+import { getAuthToken } from './auth-token';
+
 export const API_BASE = '/api';
 
 export class ApiError extends Error {
@@ -31,6 +33,32 @@ async function parseJsonSafe(text: string): Promise<unknown> {
 
 type FetchOptions = RequestInit & { retries?: number };
 
+function mergeAuthHeaders(
+  headers?: HeadersInit,
+): Record<string, string> {
+  const base: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+  };
+  if (!headers) return base;
+  if (headers instanceof Headers) {
+    headers.forEach((v, k) => {
+      base[k] = v;
+    });
+    return base;
+  }
+  if (Array.isArray(headers)) {
+    for (const [k, v] of headers) base[k] = v;
+    return base;
+  }
+  return { ...base, ...(headers as Record<string, string>) };
+}
+
+function authHeaders(): Record<string, string> {
+  const t = typeof window !== 'undefined' ? getAuthToken() : null;
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 function messageFromErrorBody(body: unknown, status: number): string {
   if (body && typeof body === 'object' && body !== null && 'error' in body) {
     const e = (body as { error?: unknown }).error;
@@ -50,7 +78,7 @@ export async function apiFetch<T>(path: string, options?: FetchOptions): Promise
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(`${API_BASE}${path}`, {
-        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        headers: mergeAuthHeaders(options?.headers),
         ...options,
       });
       const text = await res.text();
@@ -103,7 +131,7 @@ export async function apiFetchWithMeta<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(`${API_BASE}${path}`, {
-        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        headers: mergeAuthHeaders(options?.headers),
         ...options,
       });
       const text = await res.text();

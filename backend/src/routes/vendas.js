@@ -16,6 +16,10 @@ const {
   handleRouteError,
 } = require("../utils/api");
 
+function tw(req) {
+  return { tenantId: req.tenantId };
+}
+
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -35,7 +39,7 @@ function calcularFreteAutomatico(itens, produtosPorId, fretePorSaco, fretePorTon
     if (unidade === "saco") return acc + item.quantidade * (Number.isFinite(tarifaSaco) ? tarifaSaco : 0);
     if (unidade === "ton") return acc + item.quantidade * (Number.isFinite(tarifaTon) ? tarifaTon : 0);
     if (unidade === "kg") return acc + item.quantidade * tarifaKg;
-    return acc; // m3/un/outros não entram no cálculo automático por peso
+    return acc;
   }, 0);
 }
 
@@ -57,7 +61,7 @@ router.get("/", async (req, res) => {
       defaultTake: 100,
       maxTake: 500,
     });
-    const where = {};
+    const where = { ...tw(req) };
     if (clienteId) where.clienteId = parseInt(clienteId, 10);
     if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
     if (motoristaId !== undefined && motoristaId !== "") {
@@ -83,7 +87,6 @@ router.get("/", async (req, res) => {
       if (!Number.isNaN(v)) range.lte = v;
     }
     if (Object.keys(range).length) where.valorTotal = range;
-    /** Só vendas com parcela ainda em aberto (título aberto/parcial). Útil p.ex. vincular cheque à ordem certa. */
     if (saldoEmAberto === "true" || saldoEmAberto === "1") {
       where.titulos = {
         some: {
@@ -147,8 +150,8 @@ router.get("/", async (req, res) => {
 // GET /api/vendas/:id
 router.get("/:id", async (req, res) => {
   try {
-    const venda = await prisma.venda.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const venda = await prisma.venda.findFirst({
+      where: { id: parseInt(req.params.id), ...tw(req) },
       include: {
         cliente: true,
         vendedor: true,
@@ -179,8 +182,9 @@ router.patch("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
     const b = parseBody(vendaFretePatchSchema, req.body);
+    const tenantId = req.tenantId;
 
-    const venda = await prisma.venda.findUnique({ where: { id } });
+    const venda = await prisma.venda.findFirst({ where: { id, ...tw(req) } });
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
     const dataVenda = {};
@@ -198,7 +202,7 @@ router.patch("/:id", async (req, res) => {
       });
 
       const fretes = await tx.freteMovimento.findMany({
-        where: { vendaId: id },
+        where: { vendaId: id, tenantId },
         orderBy: { id: "asc" },
       });
 
@@ -226,6 +230,7 @@ router.patch("/:id", async (req, res) => {
         if (valorFrete > 0) {
           await tx.freteMovimento.create({
             data: {
+              tenantId,
               vendaId: id,
               clienteId: v.clienteId,
               valor: valorFrete,
@@ -243,6 +248,7 @@ router.patch("/:id", async (req, res) => {
       }
 
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "VENDA_FRETE_ATUALIZADO",
         entidade: "Venda",
         entidadeId: id,
@@ -254,8 +260,8 @@ router.patch("/:id", async (req, res) => {
       return v;
     });
 
-    const completa = await prisma.venda.findUnique({
-      where: { id: updated.id },
+    const completa = await prisma.venda.findFirst({
+      where: { id: updated.id, ...tw(req) },
       include: {
         cliente: true,
         vendedor: true,
@@ -275,6 +281,7 @@ router.patch("/:id", async (req, res) => {
 // POST /api/vendas - criar venda
 router.post("/", async (req, res) => {
   try {
+    const tenantId = req.tenantId;
     const {
       clienteId,
       vendedorId,
@@ -314,8 +321,8 @@ router.post("/", async (req, res) => {
     );
     const produtos = await Promise.all(
       itensValidos.map((item) =>
-        prisma.produto.findUnique({
-          where: { id: item.produtoId },
+        prisma.produto.findFirst({
+          where: { id: item.produtoId, tenantId },
           select: { id: true, unidade: true },
         }),
       ),
@@ -332,15 +339,22 @@ router.post("/", async (req, res) => {
     }
 
     const venda = await prisma.$transaction(async (tx) => {
-      const cliente = await tx.cliente.findUnique({
-        where: { id: clienteIdNum },
+      const cliente = await tx.cliente.findFirst({
+        where: { id: clienteIdNum, tenantId },
       });
       if (!cliente) throw new Error("Cliente não encontrado");
 
-      const vendedor = await tx.vendedor.findUnique({
-        where: { id: vendedorIdNum },
+      const vendedor = await tx.vendedor.findFirst({
+        where: { id: vendedorIdNum, tenantId },
       });
       if (!vendedor) throw new Error("Vendedor não encontrado");
+
+      if (motoristaIdNum != null) {
+        const mot = await tx.motorista.findFirst({
+          where: { id: motoristaIdNum, tenantId },
+        });
+        if (!mot) throw new Error("Motorista não encontrado");
+      }
 
       const comissaoPercentualAplicado =
         cliente.comissaoFixaPercentual != null
@@ -365,6 +379,7 @@ router.post("/", async (req, res) => {
 
       const novaVenda = await tx.venda.create({
         data: {
+          tenantId,
           clienteId: clienteIdNum,
           vendedorId: vendedorIdNum,
           motoristaId: motoristaIdNum,
@@ -392,6 +407,7 @@ router.post("/", async (req, res) => {
 
       await tx.tituloReceber.create({
         data: {
+          tenantId,
           clienteId: clienteIdNum,
           vendaId: novaVenda.id,
           numero: `VENDA-${novaVenda.id}`,
@@ -409,6 +425,7 @@ router.post("/", async (req, res) => {
             : null;
         await tx.freteMovimento.create({
           data: {
+            tenantId,
             vendaId: novaVenda.id,
             clienteId: clienteIdNum,
             valor: freteFinal,
@@ -422,6 +439,7 @@ router.post("/", async (req, res) => {
       }
 
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "VENDA_CRIADA",
         entidade: "Venda",
         entidadeId: novaVenda.id,
@@ -441,6 +459,7 @@ router.post("/", async (req, res) => {
       for (const item of itensValidos) {
         await tx.movimentacaoEstoque.create({
           data: {
+            tenantId,
             produtoId: item.produtoId,
             tipo: "saida",
             quantidade: item.quantidade,
@@ -453,8 +472,8 @@ router.post("/", async (req, res) => {
       return novaVenda;
     });
 
-    const vendaCompleta = await prisma.venda.findUnique({
-      where: { id: venda.id },
+    const vendaCompleta = await prisma.venda.findFirst({
+      where: { id: venda.id, ...tw(req) },
       include: {
         cliente: true,
         vendedor: true,
@@ -475,9 +494,10 @@ router.post("/", async (req, res) => {
 // DELETE /api/vendas/:id - cancelar venda
 router.delete("/:id", async (req, res) => {
   try {
+    const tenantId = req.tenantId;
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    const vendaExistente = await prisma.venda.findUnique({
-      where: { id },
+    const vendaExistente = await prisma.venda.findFirst({
+      where: { id, ...tw(req) },
       include: {
         pagamentos: true,
         cheques: { select: { id: true, status: true } },
@@ -502,17 +522,18 @@ router.delete("/:id", async (req, res) => {
     }
 
     await prisma.$transaction(async (tx) => {
-      const venda = await tx.venda.findUnique({
-        where: { id },
+      const venda = await tx.venda.findFirst({
+        where: { id, tenantId },
         include: { itens: true },
       });
       if (!venda) throw new Error("Venda não encontrada");
-      await tx.cheque.deleteMany({ where: { vendaId: id } });
-      await tx.movimentacaoEstoque.deleteMany({ where: { vendaId: id } });
-      await tx.freteMovimento.deleteMany({ where: { vendaId: id } });
-      await tx.tituloReceber.deleteMany({ where: { vendaId: id } });
+      await tx.cheque.deleteMany({ where: { vendaId: id, tenantId } });
+      await tx.movimentacaoEstoque.deleteMany({ where: { vendaId: id, tenantId } });
+      await tx.freteMovimento.deleteMany({ where: { vendaId: id, tenantId } });
+      await tx.tituloReceber.deleteMany({ where: { vendaId: id, tenantId } });
       await tx.venda.delete({ where: { id } });
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "VENDA_CANCELADA",
         entidade: "Venda",
         entidadeId: venda.id,

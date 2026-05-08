@@ -5,11 +5,14 @@ const { registrarCheque } = require("../src/application/use-cases/registrarChequ
 const { registrarChequeLote } = require("../src/application/use-cases/registrarChequeLote");
 const { AppError } = require("../src/shared/errors/appError");
 
+const TENANT_ID = 1;
+
 function makeFakePrisma() {
   const state = {
     vendas: [
       {
         id: 1,
+        tenantId: TENANT_ID,
         clienteId: 10,
         titulos: [{ id: 1001, clienteId: 10, vendaId: 1, valorOriginal: 100, valorPago: 0, status: "aberto" }],
       },
@@ -24,8 +27,8 @@ function makeFakePrisma() {
 
   const tx = {
     venda: {
-      findUnique: async ({ where }) => {
-        const v = state.vendas.find((x) => x.id === where.id);
+      findFirst: async ({ where }) => {
+        const v = state.vendas.find((x) => x.id === where.id && x.tenantId === where.tenantId);
         if (!v) return null;
         const titulos = state.titulos.filter((t) => t.vendaId === v.id);
         const pagamentos = state.pagamentos.filter((p) => p.vendaId === v.id);
@@ -34,7 +37,7 @@ function makeFakePrisma() {
     },
     pagamento: {
       create: async ({ data, include }) => {
-        const created = { id: pagamentoIdSeq++, ...data };
+        const created = { id: pagamentoIdSeq++, tenantId: data.tenantId, ...data };
         state.pagamentos.push(created);
         if (include) {
           return { ...created, cliente: { id: data.clienteId }, venda: data.vendaId ? { id: data.vendaId } : null };
@@ -48,16 +51,22 @@ function makeFakePrisma() {
       },
     },
     cheque: {
+      aggregate: async ({ where }) => {
+        const list = state.cheques.filter((c) => c.tenantId === where.tenantId);
+        const max = list.reduce((m, c) => Math.max(m, c.numeroOrdem || 0), 0);
+        return { _max: { numeroOrdem: max || null } };
+      },
       create: async ({ data }) => {
         const created = { id: chequeIdSeq++, ...data };
         state.cheques.push(created);
         return created;
       },
-      findUnique: async ({ where }) => {
-        const ch = state.cheques.find((c) => c.id === where.id);
+      findFirst: async ({ where, include }) => {
+        const ch = state.cheques.find((c) => c.id === where.id && c.tenantId === where.tenantId);
         if (!ch) return null;
         const pagamento = state.pagamentos.find((p) => p.chequeId === ch.id) || null;
-        return { ...ch, cliente: { id: ch.clienteId }, venda: ch.vendaId ? { id: ch.vendaId } : null, pagamento };
+        const base = { ...ch, cliente: { id: ch.clienteId }, venda: ch.vendaId ? { id: ch.vendaId } : null, pagamento };
+        return include ? base : ch;
       },
     },
     tituloReceber: {
@@ -96,6 +105,7 @@ function makeFakePrisma() {
 test("registrarPagamento cria troco quando pagamento excede saldo da venda", async () => {
   const { prisma, state } = makeFakePrisma();
   const pagamento = await registrarPagamento(prisma, {
+    tenantId: TENANT_ID,
     clienteId: 10,
     vendaId: 1,
     tipo: "dinheiro",
@@ -115,6 +125,7 @@ test("registrarPagamento cria troco quando pagamento excede saldo da venda", asy
 test("registrarCheque retorna troco quando cheque excede saldo da venda", async () => {
   const { prisma, state } = makeFakePrisma();
   const result = await registrarCheque(prisma, {
+    tenantId: TENANT_ID,
     clienteId: 10,
     vendaId: 1,
     valor: 120,
@@ -138,6 +149,7 @@ test("registrarChequeLote exige trocoTipo quando lote excede saldo", async () =>
   await assert.rejects(
     () =>
       registrarChequeLote(prisma, {
+        tenantId: TENANT_ID,
         clienteId: 10,
         vendaId: 1,
         itens: [
@@ -152,6 +164,7 @@ test("registrarChequeLote exige trocoTipo quando lote excede saldo", async () =>
 test("registrarChequeLote cria troco quando total excede saldo", async () => {
   const { prisma, state } = makeFakePrisma();
   const result = await registrarChequeLote(prisma, {
+    tenantId: TENANT_ID,
     clienteId: 10,
     vendaId: 1,
     trocoTipo: "transferencia",

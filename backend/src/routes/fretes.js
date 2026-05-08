@@ -13,6 +13,10 @@ const {
 } = require("../utils/api");
 const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
 
+function tw(req) {
+  return { tenantId: req.tenantId };
+}
+
 function formatMoneyBr(v) {
   const n = parseFloat(String(v || 0));
   return Number.isFinite(n)
@@ -61,10 +65,11 @@ router.post("/avulso", async (req, res) => {
     const observacaoLivre = String(req.body?.observacao || "").trim();
     const itensEntrada = Array.isArray(req.body?.itens) ? req.body.itens : null;
 
+    const tenantId = req.tenantId;
     const result = await prisma.$transaction(async (tx) => {
       const [cliente, motorista] = await Promise.all([
-        tx.cliente.findUnique({ where: { id: clienteId } }),
-        tx.motorista.findUnique({ where: { id: motoristaId } }),
+        tx.cliente.findFirst({ where: { id: clienteId, tenantId } }),
+        tx.motorista.findFirst({ where: { id: motoristaId, tenantId } }),
       ]);
       if (!cliente) {
         const err = new Error("Cliente não encontrado");
@@ -82,7 +87,7 @@ router.post("/avulso", async (req, res) => {
         for (const item of itensEntrada) {
           const produtoId = parseIntField(item?.produtoId, "produtoId", { min: 1 });
           const quantidade = parseNumberField(item?.quantidade, "quantidade", { min: 0.001 });
-          const produto = await tx.produto.findUnique({ where: { id: produtoId } });
+          const produto = await tx.produto.findFirst({ where: { id: produtoId, tenantId } });
           if (!produto) {
             const err = new Error(`Produto #${produtoId} não encontrado`);
             err.status = 404;
@@ -93,7 +98,7 @@ router.post("/avulso", async (req, res) => {
       } else {
         const produtoId = parseIntField(req.body?.produtoId, "produtoId", { min: 1 });
         const quantidade = parseNumberField(req.body?.quantidade, "quantidade", { min: 0.001 });
-        const produto = await tx.produto.findUnique({ where: { id: produtoId } });
+        const produto = await tx.produto.findFirst({ where: { id: produtoId, tenantId } });
         if (!produto) {
           const err = new Error("Produto não encontrado");
           err.status = 404;
@@ -143,6 +148,7 @@ router.post("/avulso", async (req, res) => {
 
       const frete = await tx.freteMovimento.create({
         data: {
+          tenantId,
           vendaId: null,
           clienteId,
           valor: valorFinal,
@@ -159,6 +165,7 @@ router.post("/avulso", async (req, res) => {
       if (pagoNoAto) {
         pagamento = await tx.pagamento.create({
           data: {
+            tenantId,
             clienteId,
             vendaId: null,
             tipo: pagamentoTipo === "transferencia" ? "transferencia" : "dinheiro",
@@ -170,6 +177,7 @@ router.post("/avulso", async (req, res) => {
       } else {
         titulo = await tx.tituloReceber.create({
           data: {
+            tenantId,
             clienteId,
             vendaId: null,
             numero: `FRETE-AVULSO-${frete.id}`,
@@ -182,6 +190,7 @@ router.post("/avulso", async (req, res) => {
       }
 
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "FRETE_AVULSO_CRIADO",
         entidade: "FreteMovimento",
         entidadeId: frete.id,
@@ -236,7 +245,7 @@ router.get("/", async (req, res) => {
       maxTake: 500,
     });
 
-    const where = {};
+    const where = { ...tw(req) };
     if (clienteId) where.clienteId = parseInt(clienteId, 10);
     if (vendaId) where.vendaId = parseInt(vendaId, 10);
     if (reciboEmitido === "true") where.reciboEmitido = true;
@@ -286,8 +295,9 @@ router.patch("/:id", async (req, res) => {
       valor,
     } = req.body;
 
-    const existing = await prisma.freteMovimento.findUnique({
-      where: { id },
+    const tenantId = req.tenantId;
+    const existing = await prisma.freteMovimento.findFirst({
+      where: { id, ...tw(req) },
       include: { venda: true },
     });
     if (!existing) return res.status(404).json({ error: "Frete não encontrado" });
@@ -317,7 +327,7 @@ router.patch("/:id", async (req, res) => {
 
       if (f.vendaId && f.venda) {
         const primeiros = await tx.freteMovimento.findMany({
-          where: { vendaId: f.vendaId },
+          where: { vendaId: f.vendaId, tenantId },
           orderBy: { id: "asc" },
         });
         const primeiro = primeiros[0];
@@ -334,6 +344,7 @@ router.patch("/:id", async (req, res) => {
       }
 
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "FRETE_ALTERADO",
         entidade: "FreteMovimento",
         entidadeId: id,
@@ -381,9 +392,10 @@ router.post("/vale-avulso", async (req, res) => {
             return d;
           })();
 
+    const tenantId = req.tenantId;
     const result = await prisma.$transaction(async (tx) => {
       if (motoristaId) {
-        const motorista = await tx.motorista.findUnique({ where: { id: motoristaId } });
+        const motorista = await tx.motorista.findFirst({ where: { id: motoristaId, tenantId } });
         if (!motorista) {
           const err = new Error("Motorista não encontrado");
           err.status = 404;
@@ -392,7 +404,7 @@ router.post("/vale-avulso", async (req, res) => {
         motoristaNome = motorista.nome;
       }
       if (produtoId) {
-        const produto = await tx.produto.findUnique({ where: { id: produtoId } });
+        const produto = await tx.produto.findFirst({ where: { id: produtoId, tenantId } });
         if (!produto) {
           const err = new Error("Produto não encontrado");
           err.status = 404;
@@ -410,6 +422,7 @@ router.post("/vale-avulso", async (req, res) => {
 
       const frete = await tx.freteMovimento.create({
         data: {
+          tenantId,
           clienteId,
           vendaId: null,
           valor,
@@ -424,6 +437,7 @@ router.post("/vale-avulso", async (req, res) => {
 
       const titulo = await tx.tituloReceber.create({
         data: {
+          tenantId,
           clienteId,
           vendaId: null,
           numero: `VALE-FRETE-${frete.id}`,
@@ -435,6 +449,7 @@ router.post("/vale-avulso", async (req, res) => {
       });
 
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "FRETE_VALE_AVULSO_CRIADO",
         entidade: "FreteMovimento",
         entidadeId: frete.id,
@@ -463,8 +478,9 @@ router.post("/vale-avulso", async (req, res) => {
 router.post("/:id/vale", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    const existing = await prisma.freteMovimento.findUnique({
-      where: { id },
+    const tenantId = req.tenantId;
+    const existing = await prisma.freteMovimento.findFirst({
+      where: { id, ...tw(req) },
     });
     if (!existing) return res.status(404).json({ error: "Frete não encontrado" });
 
@@ -491,6 +507,7 @@ router.post("/:id/vale", async (req, res) => {
     const titulo = await prisma.$transaction(async (tx) => {
       const created = await tx.tituloReceber.create({
         data: {
+          tenantId,
           clienteId: existing.clienteId,
           vendaId: existing.vendaId || null,
           numero: `VALE-FRETE-${existing.id}`,
@@ -508,6 +525,7 @@ router.post("/:id/vale", async (req, res) => {
       });
 
       await registrarEventoFinanceiro(tx, {
+        tenantId,
         tipo: "FRETE_VALE_CRIADO",
         entidade: "TituloReceber",
         entidadeId: created.id,

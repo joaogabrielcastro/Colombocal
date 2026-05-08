@@ -53,6 +53,7 @@ test("reset financeiro total remove vendas e titulos", async () => {
   };
 
   const result = await executarResetFinanceiroLegacy(prisma, {
+    tenantId: 1,
     criarAjustes: false,
     zerarPagamentosGerais: true,
     zerarVendasETitulos: true,
@@ -64,7 +65,14 @@ test("reset financeiro total remove vendas e titulos", async () => {
   assert.equal(result.pagamentosGeraisRemovidos, 2);
   assert.equal(result.modo.zerarVendasETitulos, true);
   assert.ok(
-    calls.some((c) => c.key === "pagamento.deleteMany" && c.args && !c.args.where),
-    "Deve remover pagamentos gerais no modo total",
+    calls.some(
+      (c) =>
+        c.key === "pagamento.deleteMany" &&
+        c.args &&
+        c.args.where &&
+        c.args.where.tenantId === 1 &&
+        Object.keys(c.args.where).length === 1,
+    ),
+    "Deve remover pagamentos gerais no modo total (escopo tenant)",
   );
 });

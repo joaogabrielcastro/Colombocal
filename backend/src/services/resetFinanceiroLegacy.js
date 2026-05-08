@@ -4,17 +4,24 @@ const EPS = 0.009;
  * Quita títulos, remove cheques e pagamentos de cheque, cria ajustes de transferência
  * para zerar débito na conta corrente (vendas − pagamentos).
  * @param {import("@prisma/client").PrismaClient} prisma
+ * @param {{ tenantId: number, criarAjustes?: boolean, zerarPagamentosGerais?: boolean, zerarVendasETitulos?: boolean }} options
  */
 async function executarResetFinanceiroLegacy(prisma, options = {}) {
+  const tenantId = options.tenantId;
+  if (tenantId == null) {
+    throw new Error("executarResetFinanceiroLegacy: tenantId obrigatório");
+  }
+  const tw = { tenantId };
+
   const criarAjustes = options.criarAjustes !== false;
   const zerarPagamentosGerais = options.zerarPagamentosGerais === true;
   const zerarVendasETitulos = options.zerarVendasETitulos === true;
 
   return prisma.$transaction(async (tx) => {
-    const titulosAntes = await tx.tituloReceber.count();
+    const titulosAntes = await tx.tituloReceber.count({ where: tw });
     let titulosRemovidos = 0;
     if (zerarVendasETitulos) {
-      const delTit = await tx.tituloReceber.deleteMany({});
+      const delTit = await tx.tituloReceber.deleteMany({ where: tw });
       titulosRemovidos = delTit.count;
     } else {
       await tx.$executeRaw`
@@ -22,43 +29,45 @@ async function executarResetFinanceiroLegacy(prisma, options = {}) {
         SET "valorPago" = "valorOriginal",
             "status" = 'quitado',
             "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "tenantId" = ${tenantId}
       `;
     }
 
     const pagamentosCheque = await tx.pagamento.count({
-      where: { chequeId: { not: null } },
+      where: { ...tw, chequeId: { not: null } },
     });
-    await tx.pagamento.deleteMany({ where: { chequeId: { not: null } } });
+    await tx.pagamento.deleteMany({ where: { ...tw, chequeId: { not: null } } });
 
     let pagamentosGeraisRemovidos = 0;
     if (zerarPagamentosGerais) {
-      const delPag = await tx.pagamento.deleteMany({});
+      const delPag = await tx.pagamento.deleteMany({ where: tw });
       pagamentosGeraisRemovidos = delPag.count;
     }
 
-    const chequesAntes = await tx.cheque.count();
-    await tx.cheque.deleteMany({});
+    const chequesAntes = await tx.cheque.count({ where: tw });
+    await tx.cheque.deleteMany({ where: tw });
 
     let vendasRemovidas = 0;
     if (zerarVendasETitulos) {
-      const delVendas = await tx.venda.deleteMany({});
+      const delVendas = await tx.venda.deleteMany({ where: tw });
       vendasRemovidas = delVendas.count;
-      // No modo reset total, limpar também fretes sem vínculo preservado.
-      await tx.freteMovimento.deleteMany({});
+      await tx.freteMovimento.deleteMany({ where: tw });
     }
 
     let ajustesCriados = 0;
     const ajustes = [];
 
     if (criarAjustes) {
-      const clientes = await tx.cliente.findMany({ select: { id: true } });
+      const clientes = await tx.cliente.findMany({ where: tw, select: { id: true } });
       const [vendasPorCliente, pagamentosPorCliente] = await Promise.all([
         tx.venda.groupBy({
           by: ["clienteId"],
+          where: tw,
           _sum: { valorTotal: true },
         }),
         tx.pagamento.groupBy({
           by: ["clienteId"],
+          where: tw,
           _sum: { valor: true },
         }),
       ]);
@@ -84,6 +93,7 @@ async function executarResetFinanceiroLegacy(prisma, options = {}) {
           const rounded = Math.round(falta * 100) / 100;
           const p = await tx.pagamento.create({
             data: {
+              tenantId,
               clienteId,
               vendaId: null,
               tipo: "transferencia",

@@ -26,7 +26,9 @@ async function main() {
   }
 
   const zerarTotal = process.argv.includes("--zerar-total");
+  const tenantId = Number(process.env.DEFAULT_TENANT_ID ?? 1);
   const result = await executarResetFinanceiroLegacy(prisma, {
+    tenantId: Number.isFinite(tenantId) && tenantId > 0 ? tenantId : 1,
     criarAjustes: !zerarTotal,
     zerarPagamentosGerais: zerarTotal,
     zerarVendasETitulos: zerarTotal,

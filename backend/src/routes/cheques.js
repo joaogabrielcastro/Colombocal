@@ -19,17 +19,23 @@ const {
   handleRouteError,
 } = require("../utils/api");
 
+function tw(req) {
+  return { tenantId: req.tenantId };
+}
+
 /**
  * Mesma regra do PATCH /:id/status (pagamento + títulos), dentro de tx.
  * @param {import("@prisma/client").Prisma.TransactionClient} tx
  */
 async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataCompensacaoDate) {
   const id = chequeAtual.id;
+  const tenantId = chequeAtual.tenantId;
   const data = { status: statusValidado };
   if (statusValidado === "ativo" && dataCompensacaoDate) data.dataCompensacao = dataCompensacaoDate;
 
   await tx.cheque.update({ where: { id }, data });
   await registrarEventoFinanceiro(tx, {
+    tenantId,
     tipo: "CHEQUE_STATUS_ALTERADO",
     entidade: "Cheque",
     entidadeId: chequeAtual.id,
@@ -46,6 +52,7 @@ async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataC
   if (precisaPagamento && !temPagamento) {
     await tx.pagamento.create({
       data: {
+        tenantId,
         clienteId: chequeAtual.clienteId,
         vendaId: chequeAtual.vendaId,
         tipo: "cheque",
@@ -59,7 +66,7 @@ async function aplicarMudancaStatusCheque(tx, chequeAtual, statusValidado, dataC
   }
 
   if (!precisaPagamento && temPagamento) {
-    await tx.pagamento.deleteMany({ where: { chequeId: chequeAtual.id } });
+    await tx.pagamento.deleteMany({ where: { chequeId: chequeAtual.id, tenantId } });
     await recalcularTitulos(tx, { clienteId: chequeAtual.clienteId, vendaId: chequeAtual.vendaId });
   }
 }
@@ -87,7 +94,7 @@ router.get("/", async (req, res) => {
     const includeResumo =
       req.query.resumo === "1" || req.query.resumo === "true";
 
-    const and = [];
+    const and = [{ ...tw(req) }];
     if (clienteId) and.push({ clienteId: parseInt(clienteId, 10) });
     // status unico: nao aplicamos filtro de status na listagem
     if (dataInicio || dataFim) {
@@ -150,7 +157,9 @@ router.get("/", async (req, res) => {
       }
       if (Object.keys(vr).length) and.push({ valor: vr });
     }
-    const where = and.length ? { AND: and } : {};
+    const where = and.length > 1 || (and.length === 1 && Object.keys(and[0]).length > 1)
+      ? { AND: and }
+      : and[0];
 
     const queries = [
       prisma.cheque.findMany({
@@ -207,8 +216,8 @@ router.get("/", async (req, res) => {
 // GET /api/cheques/:id
 router.get("/:id", async (req, res) => {
   try {
-    const cheque = await prisma.cheque.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const cheque = await prisma.cheque.findFirst({
+      where: { id: parseInt(req.params.id), ...tw(req) },
       include: { cliente: true, pagamento: true },
     });
     if (!cheque)
@@ -224,7 +233,7 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const b = parseBody(chequeCreateSchema, req.body);
-    const result = await registrarCheque(prisma, b);
+    const result = await registrarCheque(prisma, { ...b, tenantId: req.tenantId });
     res.status(201).json(result);
   } catch (error) {
     handleRouteError(res, error);
@@ -235,7 +244,7 @@ router.post("/", async (req, res) => {
 router.post("/lote", async (req, res) => {
   try {
     const b = parseBody(chequeLoteCreateSchema, req.body);
-    const result = await registrarChequeLote(prisma, b);
+    const result = await registrarChequeLote(prisma, { ...b, tenantId: req.tenantId });
     res.status(201).json(result);
   } catch (error) {
     handleRouteError(res, error);
@@ -255,8 +264,8 @@ router.patch("/:id/status", async (req, res) => {
           ? new Date(body.dataCompensacao)
           : null;
 
-    const chequeAtual = await prisma.cheque.findUnique({
-      where: { id },
+    const chequeAtual = await prisma.cheque.findFirst({
+      where: { id, ...tw(req) },
       include: { pagamento: true },
     });
     if (!chequeAtual)
@@ -271,8 +280,8 @@ router.patch("/:id/status", async (req, res) => {
       );
     });
 
-    const cheque = await prisma.cheque.findUnique({
-      where: { id },
+    const cheque = await prisma.cheque.findFirst({
+      where: { id, ...tw(req) },
       include: { cliente: true, venda: true },
     });
     res.json(cheque);
@@ -285,7 +294,7 @@ router.patch("/:id/status", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    await excluirCheque(prisma, id);
+    await excluirCheque(prisma, id, req.tenantId);
     res.json({ success: true });
   } catch (error) {
     handleRouteError(res, error);

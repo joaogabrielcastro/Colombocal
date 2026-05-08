@@ -7,6 +7,10 @@ const {
   handleRouteError,
 } = require("../utils/api");
 
+function tw(req) {
+  return { tenantId: req.tenantId };
+}
+
 router.get("/", async (req, res) => {
   try {
     const { busca } = req.query;
@@ -14,7 +18,7 @@ router.get("/", async (req, res) => {
       defaultTake: 200,
       maxTake: 500,
     });
-    const where = { ativo: true };
+    const where = { ...tw(req), ativo: true };
     if (busca && String(busca).trim()) {
       where.nome = { contains: String(busca).trim(), mode: "insensitive" };
     }
@@ -36,8 +40,8 @@ router.get("/", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const vendedor = await prisma.vendedor.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const vendedor = await prisma.vendedor.findFirst({
+      where: { id: parseInt(req.params.id), ...tw(req) },
     });
     if (!vendedor)
       return res.status(404).json({ error: "Vendedor não encontrado" });
@@ -51,7 +55,12 @@ router.post("/", async (req, res) => {
   try {
     const { nome, telefone, comissaoPercentual } = req.body;
     const vendedor = await prisma.vendedor.create({
-      data: { nome, telefone, comissaoPercentual: comissaoPercentual || 0 },
+      data: {
+        ...tw(req),
+        nome,
+        telefone,
+        comissaoPercentual: comissaoPercentual || 0,
+      },
     });
     res.status(201).json(vendedor);
   } catch (error) {
@@ -61,9 +70,13 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   try {
+    const id = parseInt(req.params.id);
+    const exists = await prisma.vendedor.count({ where: { id, ...tw(req) } });
+    if (!exists) return res.status(404).json({ error: "Vendedor não encontrado" });
+
     const { nome, telefone, comissaoPercentual, ativo } = req.body;
     const vendedor = await prisma.vendedor.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: { nome, telefone, comissaoPercentual, ativo },
     });
     res.json(vendedor);
@@ -74,8 +87,12 @@ router.put("/:id", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   try {
+    const id = parseInt(req.params.id);
+    const exists = await prisma.vendedor.count({ where: { id, ...tw(req) } });
+    if (!exists) return res.status(404).json({ error: "Vendedor não encontrado" });
+
     await prisma.vendedor.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: { ativo: false },
     });
     res.json({ success: true });

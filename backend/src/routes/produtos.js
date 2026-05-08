@@ -7,6 +7,10 @@ const {
   handleRouteError,
 } = require("../utils/api");
 
+function tw(req) {
+  return { tenantId: req.tenantId };
+}
+
 // GET /api/produtos
 router.get("/", async (req, res) => {
   try {
@@ -15,7 +19,7 @@ router.get("/", async (req, res) => {
       defaultTake: 200,
       maxTake: 500,
     });
-    const where = {};
+    const where = { ...tw(req) };
     if (ativo !== undefined) where.ativo = ativo === "true";
     if (busca) {
       where.OR = [
@@ -42,10 +46,14 @@ router.get("/", async (req, res) => {
 // GET /api/produtos/:id
 router.get("/:id", async (req, res) => {
   try {
-    const produto = await prisma.produto.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const produto = await prisma.produto.findFirst({
+      where: { id: parseInt(req.params.id), ...tw(req) },
       include: {
-        movimentacoes: { orderBy: { data: "desc" }, take: 20 },
+        movimentacoes: {
+          where: tw(req),
+          orderBy: { data: "desc" },
+          take: 20,
+        },
       },
     });
     if (!produto)
@@ -69,6 +77,7 @@ router.post("/", async (req, res) => {
       `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     const produto = await prisma.produto.create({
       data: {
+        ...tw(req),
         nome,
         codigo: codigoFinal,
         precoPadrao,
@@ -86,9 +95,13 @@ router.post("/", async (req, res) => {
 // PUT /api/produtos/:id
 router.put("/:id", async (req, res) => {
   try {
+    const id = parseInt(req.params.id);
+    const exists = await prisma.produto.count({ where: { id, ...tw(req) } });
+    if (!exists) return res.status(404).json({ error: "Produto não encontrado" });
+
     const { nome, codigo, precoPadrao, unidade, ativo } = req.body;
     const produto = await prisma.produto.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: { nome, codigo, precoPadrao, unidade, ativo },
     });
     res.json(produto);
@@ -100,8 +113,12 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/produtos/:id - inativar
 router.delete("/:id", async (req, res) => {
   try {
+    const id = parseInt(req.params.id);
+    const exists = await prisma.produto.count({ where: { id, ...tw(req) } });
+    if (!exists) return res.status(404).json({ error: "Produto não encontrado" });
+
     await prisma.produto.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id },
       data: { ativo: false },
     });
     res.json({ success: true });

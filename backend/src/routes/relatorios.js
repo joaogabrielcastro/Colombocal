@@ -16,7 +16,7 @@ const {
 } = require("../services/comissao");
 const { getDateRange } = require("../utils/dateRangeQuery");
 
-function buildTitulosWhere(query) {
+function buildTitulosWhere(query, tenantId) {
   const {
     clienteId,
     status,
@@ -26,7 +26,7 @@ function buildTitulosWhere(query) {
     vendaId,
   } = query;
 
-  const where = {};
+  const where = { tenantId };
   if (clienteId) where.clienteId = parseInt(clienteId, 10);
   if (vendaId != null && String(vendaId).trim() !== "") {
     const vid = parseInt(String(vendaId).replace(/^#/, "").trim(), 10);
@@ -40,9 +40,9 @@ function buildTitulosWhere(query) {
   return where;
 }
 
-function buildVendasWhere(query) {
+function buildVendasWhere(query, tenantId) {
   const { dataInicio, dataFim, clienteId, vendedorId, produtoId, busca } = query;
-  const where = {};
+  const where = { tenantId };
   if (clienteId) where.clienteId = parseInt(clienteId, 10);
   if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
   if (dataInicio || dataFim) where.dataVenda = getDateRange(dataInicio, dataFim);
@@ -68,7 +68,7 @@ router.get("/vendas", async (req, res) => {
       defaultTake: 200,
       maxTake: 1000,
     });
-    const where = buildVendasWhere(req.query);
+    const where = buildVendasWhere(req.query, req.tenantId);
 
     const aggWhere = { ...where };
     const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg] = await Promise.all([
@@ -126,19 +126,19 @@ router.get("/vendas", async (req, res) => {
     const [vendedores, clientes, produtos] = await Promise.all([
       vendedorIds.length
         ? prisma.vendedor.findMany({
-            where: { id: { in: vendedorIds } },
+            where: { tenantId: req.tenantId, id: { in: vendedorIds } },
             select: { id: true, nome: true, comissaoPercentual: true },
           })
         : [],
       clienteIds.length
         ? prisma.cliente.findMany({
-            where: { id: { in: clienteIds } },
+            where: { tenantId: req.tenantId, id: { in: clienteIds } },
             select: { id: true, razaoSocial: true, nomeFantasia: true },
           })
         : [],
       produtoIds.length
         ? prisma.produto.findMany({
-            where: { id: { in: produtoIds } },
+            where: { tenantId: req.tenantId, id: { in: produtoIds } },
             select: { id: true, nome: true, unidade: true },
           })
         : [],
@@ -218,6 +218,7 @@ router.get("/vendas", async (req, res) => {
 router.post("/vendas/export-async", async (req, res) => {
   try {
     const payload = {
+      tenantId: String(req.tenantId),
       dataInicio: req.body?.dataInicio ? String(req.body.dataInicio) : "",
       dataFim: req.body?.dataFim ? String(req.body.dataFim) : "",
       busca: req.body?.busca ? String(req.body.busca) : "",
@@ -231,7 +232,7 @@ router.post("/vendas/export-async", async (req, res) => {
     setImmediate(async () => {
       try {
         markRunning(jobId);
-        const where = buildVendasWhere(payload);
+        const where = buildVendasWhere(payload, parseInt(payload.tenantId, 10));
         const vendas = await prisma.venda.findMany({
           where,
           include: {
@@ -279,7 +280,7 @@ router.post("/vendas/export-async", async (req, res) => {
 router.get("/comissoes", async (req, res) => {
   try {
     const { dataInicio, dataFim, vendedorId, modo: modoQ } = req.query;
-    const stored = await getConfig(prisma, "COMISSAO_MODO");
+    const stored = await getConfig(prisma, req.tenantId, "COMISSAO_MODO");
     const modo =
       modoQ === "caixa" || modoQ === "emissao"
         ? modoQ
@@ -287,14 +288,14 @@ router.get("/comissoes", async (req, res) => {
           ? "caixa"
           : "emissao";
 
-    const where = { ativo: true };
+    const where = { tenantId: req.tenantId, ativo: true };
     if (vendedorId) where.id = parseInt(vendedorId, 10);
     const vendedores = await prisma.vendedor.findMany({
       where,
     });
 
     const vendedorIds = vendedores.map((v) => v.id);
-    const vendaWhere = { vendedorId: { in: vendedorIds } };
+    const vendaWhere = { tenantId: req.tenantId, vendedorId: { in: vendedorIds } };
     if (dataInicio || dataFim) {
       vendaWhere.dataVenda = getDateRange(dataInicio, dataFim);
     }
@@ -319,7 +320,7 @@ router.get("/comissoes", async (req, res) => {
       vendaIds.length === 0
         ? []
         : await prisma.pagamento.findMany({
-            where: { vendaId: { in: vendaIds } },
+            where: { tenantId: req.tenantId, vendaId: { in: vendaIds } },
             select: { vendaId: true, valor: true, data: true, tipo: true },
           });
     const pagByVenda = new Map();
@@ -416,6 +417,17 @@ router.post("/comissoes/ajustes-lote", async (req, res) => {
     if (!ids.length) {
       return res.status(400).json({ error: "vendaId inválido no lote" });
     }
+    const vendaIdsSolicitados = new Set(ids);
+
+    const vendasDoTenant = await prisma.venda.findMany({
+      where: { tenantId: req.tenantId, id: { in: [...vendaIdsSolicitados] } },
+      select: { id: true },
+    });
+    if (vendasDoTenant.length !== vendaIdsSolicitados.size) {
+      return res.status(400).json({
+        error: "Uma ou mais vendas não existem ou não pertencem ao seu ambiente",
+      });
+    }
 
     await prisma.$transaction(async (tx) => {
       for (const item of ajustes) {
@@ -427,7 +439,12 @@ router.post("/comissoes/ajustes-lote", async (req, res) => {
         await tx.comissaoAjusteVenda.upsert({
           where: { vendaId },
           update: { ajusteValor: Number.isFinite(ajusteValor) ? ajusteValor : 0, motivo },
-          create: { vendaId, ajusteValor: Number.isFinite(ajusteValor) ? ajusteValor : 0, motivo },
+          create: {
+            tenantId: req.tenantId,
+            vendaId,
+            ajusteValor: Number.isFinite(ajusteValor) ? ajusteValor : 0,
+            motivo,
+          },
         });
       }
     });
@@ -484,6 +501,7 @@ router.get("/financeiro", async (req, res) => {
       maxTake: 500,
     });
     const chequePendenteWhere = {
+      tenantId: req.tenantId,
       status: "ativo",
     };
     // Todos clientes ativos com suas contas (baseado em títulos)
@@ -496,13 +514,15 @@ router.get("/financeiro", async (req, res) => {
       chequesPendentesRows,
       chequesDevolvidos,
     ] = await Promise.all([
-      prisma.cliente.findMany({ where: { ativo: true } }),
+      prisma.cliente.findMany({ where: { tenantId: req.tenantId, ativo: true } }),
       prisma.tituloReceber.groupBy({
         by: ["clienteId"],
+        where: { tenantId: req.tenantId },
         _sum: { valorOriginal: true, valorPago: true },
       }),
       prisma.cheque.groupBy({
         by: ["status"],
+        where: { tenantId: req.tenantId },
         _sum: { valor: true },
         _count: { id: true },
       }),
@@ -581,17 +601,23 @@ router.get("/financeiro", async (req, res) => {
 router.post("/financeiro/export-async", async (req, res) => {
   try {
     const aba = req.body?.aba === "pendentes" ? "pendentes" : "devedores";
-    const jobId = createExportJob("financeiro_csv", { aba });
+    const tenantSnap = req.tenantId;
+    const jobId = createExportJob("financeiro_csv", {
+      aba,
+      tenantId: String(tenantSnap),
+    });
     res.status(202).json({ jobId, status: "pending" });
 
     setImmediate(async () => {
       try {
         markRunning(jobId);
-        const chequePendenteWhere = { status: "ativo" };
+        const tenantId = tenantSnap;
+        const chequePendenteWhere = { tenantId, status: "ativo" };
         const [clientes, titulosAgg] = await Promise.all([
-          prisma.cliente.findMany({ where: { ativo: true } }),
+          prisma.cliente.findMany({ where: { tenantId, ativo: true } }),
           prisma.tituloReceber.groupBy({
             by: ["clienteId"],
+            where: { tenantId },
             _sum: { valorOriginal: true, valorPago: true },
           }),
         ]);
@@ -679,7 +705,7 @@ router.get("/titulos", async (req, res) => {
       defaultTake: 100,
       maxTake: 500,
     });
-    const where = buildTitulosWhere(req.query);
+    const where = buildTitulosWhere(req.query, req.tenantId);
 
     const [titulos, totalTitulosCount, aggTotais] = await Promise.all([
       prisma.tituloReceber.findMany({
@@ -759,6 +785,7 @@ router.post("/titulos/export-async", async (req, res) => {
   try {
     const raw = req.body || {};
     const payload = {
+      tenantId: String(req.tenantId),
       clienteId: raw.clienteId ? String(raw.clienteId) : "",
       vendaId: raw.vendaId ? String(raw.vendaId) : "",
       status: raw.status ? String(raw.status) : "",
@@ -773,7 +800,7 @@ router.post("/titulos/export-async", async (req, res) => {
     setImmediate(async () => {
       try {
         markRunning(jobId);
-        const where = buildTitulosWhere(payload);
+        const where = buildTitulosWhere(payload, parseInt(payload.tenantId, 10));
         const titulos = await prisma.tituloReceber.findMany({
           where,
           include: {
