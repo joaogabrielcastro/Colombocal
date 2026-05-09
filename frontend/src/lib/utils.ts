@@ -25,6 +25,15 @@ export function formatQuantidade(
   return `${num.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })} ${unidade}`;
 }
 
+/** Número exibido na lista e impressos (#). Sequencial por tenant; sem campo, usa o id. */
+export function vendaNumeroPublico(v: {
+  id: number;
+  numeroVenda?: number | null;
+}): number {
+  const n = v.numeroVenda;
+  return n != null && n > 0 ? n : v.id;
+}
+
 export type StatusCheque = "ativo";
 
 export const STATUS_CHEQUE_LABEL: Record<StatusCheque, string> = {
@@ -99,6 +108,8 @@ export interface ItemVenda {
 
 export interface Venda {
   id: number;
+  /** Número amigável por tenant (# na lista); o `id` é usado na URL. */
+  numeroVenda?: number;
   clienteId: number;
   vendedorId: number;
   motoristaId?: number;
@@ -163,7 +174,12 @@ export interface Cheque {
   status: StatusCheque;
   observacoes?: string;
   cliente: Cliente;
-  venda?: { id: number; dataVenda: string; valorTotal: number } | null;
+  venda?: {
+    id: number;
+    numeroVenda?: number | null;
+    dataVenda: string;
+    valorTotal: number;
+  } | null;
 }
 
 export interface Pagamento {
@@ -175,7 +191,12 @@ export interface Pagamento {
   data: string;
   observacoes?: string;
   cheque?: Cheque;
-  venda?: { id: number; dataVenda: string; valorTotal: number } | null;
+  venda?: {
+    id: number;
+    numeroVenda?: number | null;
+    dataVenda: string;
+    valorTotal: number;
+  } | null;
 }
 
 /** Resumo do status de pagamento do frete (primeiro movimento ou flags na venda). */

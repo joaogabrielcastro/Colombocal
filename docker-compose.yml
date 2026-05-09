@@ -10,6 +10,9 @@
 # - frontend: http://localhost:3010
 # - backend:  http://localhost:3011
 # - postgres: localhost:5432
+#
+# O frontend só sobe depois do backend passar no healthcheck (evita ENOTFOUND/EAI_AGAIN em
+# http://backend:3011 enquanto migrate/npm ainda rodam).
 
 services:
   db:
@@ -50,6 +53,18 @@ services:
       - backend_node_modules:/app/node_modules
     ports:
       - "3011:3011"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3011/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
     depends_on:
       db:
         condition: service_healthy
@@ -76,7 +91,8 @@ services:
     ports:
       - "3010:3010"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   colombocal_pgdata:

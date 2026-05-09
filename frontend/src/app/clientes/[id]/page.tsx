@@ -17,6 +17,7 @@ import {
   type Produto,
   type Cheque,
   type FreteMovimento,
+  vendaNumeroPublico,
 } from "@/lib/utils";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -403,7 +404,7 @@ export default function ClienteDetailPage() {
                     className="flex justify-between px-5 py-3 hover:bg-gray-50"
                   >
                     <div>
-                      <p className="text-sm font-medium">Venda #{v.id}</p>
+                      <p className="text-sm font-medium">Venda #{vendaNumeroPublico(v)}</p>
                       <p className="text-xs text-gray-400">
                         {formatDate(v.dataVenda)}
                       </p>
@@ -446,7 +447,7 @@ export default function ClienteDetailPage() {
                           href={`/vendas/${p.vendaId}`}
                           className="text-xs text-blue-600 hover:underline"
                         >
-                          Venda #{p.vendaId}
+                          Venda #{p.venda ? vendaNumeroPublico(p.venda) : p.vendaId}
                         </Link>
                       )}
                     </div>
@@ -671,7 +672,7 @@ export default function ClienteDetailPage() {
                           href={`/vendas/${c.venda.id}`}
                           className="text-blue-600 hover:underline text-sm"
                         >
-                          Venda #{c.venda.id}
+                          Venda #{c.venda ? vendaNumeroPublico(c.venda) : c.vendaId}
                         </Link>
                       ) : (
                         <span className="text-gray-400 text-sm">-</span>

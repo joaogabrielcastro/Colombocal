@@ -5,7 +5,7 @@ import {
   ArrowDownTrayIcon,
   PrinterIcon,
 } from "@heroicons/react/24/outline";
-import { formatMoney, formatDate } from "@/lib/utils";
+import { formatMoney, formatDate, vendaNumeroPublico } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 
 interface VendaComissaoLinha {
   id: number;
+  numeroVenda?: number | null;
   valorTotal: unknown;
   comissaoCalculada?: number;
   comissaoFinal?: number;
@@ -501,7 +502,7 @@ export default function ComissoesPage() {
                     <tbody>
                       {d.vendas.map((v: any) => (
                         <tr key={v.id} className="table-row bg-gray-50">
-                          <td className="table-cell text-gray-400">#{v.id}</td>
+                          <td className="table-cell text-gray-400">#{vendaNumeroPublico(v)}</td>
                           <td className="table-cell">
                             {formatDate(v.dataVenda)}
                           </td>

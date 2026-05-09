@@ -14,6 +14,7 @@ import {
   type Venda,
   type Vendedor,
   type Motorista,
+  vendaNumeroPublico,
 } from '@/lib/utils';
 import api from '@/lib/api';
 import { ListPageSkeleton, TableListSkeleton } from '@/components/ui/skeletons';
@@ -347,7 +348,7 @@ function VendasPageContent() {
             <tbody>
               {vendas.map((v) => (
                 <tr key={v.id} className="table-row">
-                  <td className="table-cell text-gray-400 font-mono">#{v.id}</td>
+                  <td className="table-cell text-gray-400 font-mono">#{vendaNumeroPublico(v)}</td>
                   <td className="table-cell">{formatDate(v.dataVenda)}</td>
                   <td className="table-cell">
                     <p className="font-medium">

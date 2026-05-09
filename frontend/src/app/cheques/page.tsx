@@ -8,6 +8,7 @@ import {
   formatDate,
   STATUS_CHEQUE_LABEL,
   STATUS_CHEQUE_COLOR,
+  vendaNumeroPublico,
 } from "@/lib/utils";
 import * as XLSX from "xlsx";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
@@ -136,7 +137,7 @@ function ChequesPageContent() {
       cliente: c.cliente.nomeFantasia || c.cliente.razaoSocial,
       banco: c.banco || "",
       numeroCheque: c.numero || "",
-      venda: c.venda ? `Venda #${c.venda.id}` : "-",
+      venda: c.venda ? `Venda #${vendaNumeroPublico(c.venda)}` : "-",
       valor: parseFloat(String(c.valor)),
       emitente: c.emitenteNome || "",
       preDatado: formatDate(c.dataRecebimento),
@@ -163,7 +164,7 @@ function ChequesPageContent() {
         <td>#${c.numeroOrdem}</td>
         <td>${c.cliente.nomeFantasia || c.cliente.razaoSocial}</td>
         <td>${c.banco || "-"}${c.numero ? ` / Nº ${c.numero}` : ""}</td>
-        <td>${c.venda ? `Venda #${c.venda.id}` : "-"}</td>
+        <td>${c.venda ? `Venda #${vendaNumeroPublico(c.venda)}` : "-"}</td>
         <td>${formatMoney(c.valor)}</td>
         <td>${formatDate(c.dataRecebimento)}</td>
         <td>${formatDate(c.dataCompensacao)}</td>
@@ -461,7 +462,7 @@ function ChequesPageContent() {
                         href={`/vendas/${c.venda.id}`}
                         className="text-blue-600 hover:underline text-sm"
                       >
-                        Venda #{c.venda.id}
+                        Venda #{vendaNumeroPublico(c.venda)}
                       </Link>
                     ) : (
                       <span className="text-gray-400 text-sm">-</span>

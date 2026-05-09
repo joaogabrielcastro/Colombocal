@@ -145,6 +145,8 @@ model Vendedor {
 model Venda {
   id              Int      @id @default(autoincrement())
   tenantId        Int
+  /// Número exibido (#) reiniciado por tenant (1, 2, 3…). O `id` continua sendo a chave técnica.
+  numeroVenda     Int
   clienteId       Int
   vendedorId      Int
   motoristaId     Int?
@@ -174,6 +176,7 @@ model Venda {
   fretes         FreteMovimento[]
   comissaoAjuste ComissaoAjusteVenda?
 
+  @@unique([tenantId, numeroVenda])
   @@index([tenantId, clienteId, dataVenda])
   @@index([tenantId, vendedorId, dataVenda])
 }

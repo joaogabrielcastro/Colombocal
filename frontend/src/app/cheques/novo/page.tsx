@@ -3,7 +3,7 @@ import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
-import { formatMoney, type Cliente, type Venda } from "@/lib/utils";
+import { formatMoney, type Cliente, type Venda, vendaNumeroPublico } from "@/lib/utils";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -12,7 +12,7 @@ import { useVendasEmAberto } from "@/features/cheques/hooks/useVendasEmAberto";
 
 function vendaOptionLabel(v: Venda) {
   const valor = formatMoney(v.valorTotal);
-  const base = `Venda #${v.id} – ${new Date(v.dataVenda).toLocaleDateString("pt-BR")} – ${valor}`;
+  const base = `Venda #${vendaNumeroPublico(v)} – ${new Date(v.dataVenda).toLocaleDateString("pt-BR")} – ${valor}`;
   const saldo =
     v.saldoEmAbertoTitulos != null && v.saldoEmAbertoTitulos > 0
       ? ` · em aberto ${formatMoney(v.saldoEmAbertoTitulos)}`

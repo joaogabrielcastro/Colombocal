@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatDate, formatMoney, type Cliente } from "@/lib/utils";
+import { formatDate, formatMoney, type Cliente, vendaNumeroPublico } from "@/lib/utils";
 import api from "@/lib/api";
 import { apiFetchWithMeta } from "@/lib/api";
 import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
@@ -20,7 +20,7 @@ interface TituloItem {
   valorPago: number;
   status: "aberto" | "parcial" | "quitado";
   cliente: { id: number; razaoSocial: string; nomeFantasia?: string | null };
-  venda?: { id: number; dataVenda: string; valorTotal: number } | null;
+  venda?: { id: number; numeroVenda?: number | null; dataVenda: string; valorTotal: number } | null;
 }
 
 interface TitulosResponse {
@@ -147,7 +147,7 @@ function RelatorioTitulosContent() {
       return {
         titulo: t.numero || `#${t.id}`,
         cliente: t.cliente.nomeFantasia || t.cliente.razaoSocial,
-        venda: t.venda ? `Venda #${t.venda.id}` : "-",
+        venda: t.venda ? `Venda #${vendaNumeroPublico(t.venda)}` : "-",
         vencimento: formatDate(t.vencimento),
         valorOriginal: parseFloat(String(t.valorOriginal)),
         valorPago: parseFloat(String(t.valorPago)),
@@ -420,7 +420,7 @@ function RelatorioTitulosContent() {
                           href={`/vendas/${t.venda.id}`}
                           className="text-blue-600 hover:underline"
                         >
-                          Venda #{t.venda.id}
+                          Venda #{vendaNumeroPublico(t.venda)}
                         </Link>
                       ) : (
                         "-"

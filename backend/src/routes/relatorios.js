@@ -303,6 +303,7 @@ router.get("/comissoes", async (req, res) => {
       where: vendaWhere,
       select: {
         id: true,
+        numeroVenda: true,
         vendedorId: true,
         valorTotal: true,
         comissaoValor: true,
@@ -712,7 +713,7 @@ router.get("/titulos", async (req, res) => {
         where,
         include: {
           cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
-          venda: { select: { id: true, dataVenda: true, valorTotal: true } },
+          venda: { select: { id: true, numeroVenda: true, dataVenda: true, valorTotal: true } },
         },
         orderBy: [{ vencimento: "asc" }, { id: "desc" }],
         take,
@@ -805,7 +806,7 @@ router.post("/titulos/export-async", async (req, res) => {
           where,
           include: {
             cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
-            venda: { select: { id: true, dataVenda: true, valorTotal: true } },
+            venda: { select: { id: true, numeroVenda: true, dataVenda: true, valorTotal: true } },
           },
           orderBy: [{ vencimento: "asc" }, { id: "desc" }],
         });
@@ -820,7 +821,7 @@ router.post("/titulos/export-async", async (req, res) => {
             const cols = [
               t.numero || `#${t.id}`,
               t.cliente.nomeFantasia || t.cliente.razaoSocial,
-              t.venda ? `Venda #${t.venda.id}` : "-",
+              t.venda ? `Venda #${t.venda.numeroVenda ?? t.venda.id}` : "-",
               new Date(t.vencimento).toLocaleDateString("pt-BR"),
               original.toFixed(2),
               pago.toFixed(2),

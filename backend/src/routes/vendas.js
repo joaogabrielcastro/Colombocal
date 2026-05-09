@@ -377,9 +377,17 @@ router.post("/", async (req, res) => {
         fretePorTonAplicado,
       );
 
+      const ultimaNum = await tx.venda.findFirst({
+        where: { tenantId },
+        orderBy: { numeroVenda: "desc" },
+        select: { numeroVenda: true },
+      });
+      const numeroVenda = (ultimaNum?.numeroVenda ?? 0) + 1;
+
       const novaVenda = await tx.venda.create({
         data: {
           tenantId,
+          numeroVenda,
           clienteId: clienteIdNum,
           vendedorId: vendedorIdNum,
           motoristaId: motoristaIdNum,
@@ -410,11 +418,11 @@ router.post("/", async (req, res) => {
           tenantId,
           clienteId: clienteIdNum,
           vendaId: novaVenda.id,
-          numero: `VENDA-${novaVenda.id}`,
+          numero: `VENDA-${numeroVenda}`,
           vencimento: addDays(dataEfetivaVenda, 30),
           valorOriginal: valorTotal,
           status: "aberto",
-          observacoes: `Titulo gerado automaticamente para venda #${novaVenda.id}`,
+          observacoes: `Titulo gerado automaticamente para venda #${numeroVenda}`,
         },
       });
 
@@ -433,7 +441,7 @@ router.post("/", async (req, res) => {
             reciboNumero: freteReciboNum || null,
             reciboData: rd,
             data: dataEfetivaVenda,
-            observacao: `Frete da venda #${novaVenda.id}`,
+            observacao: `Frete da venda #${numeroVenda}`,
           },
         });
       }
@@ -464,7 +472,7 @@ router.post("/", async (req, res) => {
             tipo: "saida",
             quantidade: item.quantidade,
             vendaId: novaVenda.id,
-            observacao: `Venda #${novaVenda.id}`,
+            observacao: `Venda #${numeroVenda}`,
           },
         });
       }

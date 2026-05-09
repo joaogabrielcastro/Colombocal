@@ -1,7 +1,7 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { formatDate, formatFreteReciboLinha, formatMoney } from "@/lib/utils";
+import { formatDate, formatFreteReciboLinha, formatMoney, vendaNumeroPublico } from "@/lib/utils";
 import type { RelVendas } from "../types";
 
 export function exportarRelatorioVendasCSV(data: RelVendas, dataInicio: string, dataFim: string) {
@@ -31,7 +31,7 @@ export function exportarRelatorioVendasCSV(data: RelVendas, dataInicio: string, 
 
 export function exportarRelatorioVendasExcel(data: RelVendas, dataInicio: string, dataFim: string) {
   const detalhes = data.vendas.map((v) => ({
-    id: v.id,
+    numero: vendaNumeroPublico(v),
     data: formatDate(v.dataVenda),
     cliente: v.cliente.nomeFantasia || v.cliente.razaoSocial,
     vendedor: v.vendedor.nome,
@@ -71,7 +71,7 @@ export function exportarRelatorioVendasPdf(data: RelVendas, dataInicio: string, 
     .map(
       (v) => `
       <tr>
-        <td>#${v.id}</td>
+        <td>#${vendaNumeroPublico(v)}</td>
         <td>${formatDate(v.dataVenda)}</td>
         <td>${(v.cliente.nomeFantasia || v.cliente.razaoSocial).replace(/</g, "&lt;")}</td>
         <td>${v.vendedor.nome}</td>

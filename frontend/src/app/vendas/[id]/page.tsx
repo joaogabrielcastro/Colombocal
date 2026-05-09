@@ -14,6 +14,7 @@ import {
   toInputDate,
   type Venda,
   type Pagamento,
+  vendaNumeroPublico,
 } from "@/lib/utils";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -138,7 +139,7 @@ export default function VendaDetailPage() {
         valor: v,
         trocoTipo,
         data: dataBaixa,
-        observacoes: obsBaixa || `Baixa venda #${venda.id}`,
+        observacoes: obsBaixa || `Baixa venda #${vendaNumeroPublico(venda)}`,
       });
       setValorBaixa("");
       setObsBaixa("");
@@ -163,6 +164,7 @@ export default function VendaDetailPage() {
     if (!venda) return;
     const w = window.open("", "_blank");
     if (!w) return;
+    const numPub = vendaNumeroPublico(venda);
 
     const clienteNome = venda.cliente.nomeFantasia || venda.cliente.razaoSocial;
     const enderecoCliente = [
@@ -172,25 +174,17 @@ export default function VendaDetailPage() {
     ]
       .filter(Boolean)
       .join(" - ");
-    const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0));
-    const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0));
+    const freteVenda = parseFloat(String(venda.frete ?? 0));
     const itensRows = venda.itens
       .map((item) => {
-        const quantidade = parseFloat(String(item.quantidade || 0));
-        const unidade = String(item.produto.unidade || "").toLowerCase();
-        const equivalenteTon =
-          unidade === "ton"
-            ? quantidade
-            : unidade === "kg"
-              ? quantidade / 1000
-              : 0;
-
+        const preco = parseFloat(String(item.precoUnitario ?? 0));
+        const subtotal = parseFloat(String(item.subtotal ?? 0));
         return `
         <tr>
           <td>${escapeHtml(item.produto.nome)}</td>
           <td style="text-align:right">${escapeHtml(formatQuantidade(item.quantidade, item.produto.unidade))}</td>
-          <td style="text-align:right">${unidade === "saco" ? escapeHtml(formatMoney(tarifaSaco)) : "-"}</td>
-          <td style="text-align:right">${equivalenteTon > 0 ? escapeHtml(formatMoney(tarifaTon)) : "-"}</td>
+          <td style="text-align:right">${escapeHtml(formatMoney(preco))}</td>
+          <td style="text-align:right">${escapeHtml(formatMoney(subtotal))}</td>
         </tr>`;
       })
       .join("");
@@ -199,7 +193,7 @@ export default function VendaDetailPage() {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Ordem de Serviço - Venda #${venda.id}</title>
+  <title>Ordem de Serviço - Venda #${numPub}</title>
   <style>
     body { font-family: Arial, sans-serif; color:#111827; margin: 24px; }
     h1 { margin:0; font-size:20px; }
@@ -218,7 +212,7 @@ export default function VendaDetailPage() {
 </head>
 <body>
   <h1>Ordem de Serviço - Entrega</h1>
-  <div class="meta">Venda #${venda.id} • Data ${formatDate(venda.dataVenda)}</div>
+  <div class="meta">Venda #${numPub} • Data ${formatDate(venda.dataVenda)}</div>
 
   <div class="grid">
     <div class="box">
@@ -251,14 +245,22 @@ export default function VendaDetailPage() {
       <tr>
         <th>Produto</th>
         <th style="text-align:right">Quantidade</th>
-        <th style="text-align:right">Preço por saco</th>
-        <th style="text-align:right">Preço por tonelada</th>
+        <th style="text-align:right">Preço unit.</th>
+        <th style="text-align:right">Subtotal</th>
       </tr>
     </thead>
     <tbody>
       ${itensRows}
     </tbody>
   </table>
+
+  <div class="box" style="margin-top:12px;">
+    <div class="label">Totais</div>
+    <div class="value" style="margin-top:6px;">
+      Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>
+      &nbsp;•&nbsp; Frete (cobrado à parte): <strong>${escapeHtml(formatMoney(freteVenda))}</strong>
+    </div>
+  </div>
 
   <div class="obs">
     <div class="label">Observações</div>
@@ -314,7 +316,7 @@ export default function VendaDetailPage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900">
-            Venda #{venda.id}
+            Venda #{vendaNumeroPublico(venda)}
           </h1>
           <p className="text-gray-500 text-sm">{formatDate(venda.dataVenda)}</p>
         </div>

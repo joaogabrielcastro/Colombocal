@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDate, formatFreteReciboLinha, formatMoney, type Venda } from "@/lib/utils";
+import { formatDate, formatFreteReciboLinha, formatMoney, type Venda, vendaNumeroPublico } from "@/lib/utils";
 
 export function RelatorioVendasDetalhes({ vendas }: { vendas: Venda[] }) {
   return (
@@ -24,7 +24,7 @@ export function RelatorioVendasDetalhes({ vendas }: { vendas: Venda[] }) {
           <tbody>
             {vendas.map((v) => (
               <tr key={v.id} className="table-row">
-                <td className="table-cell text-gray-400">#{v.id}</td>
+                <td className="table-cell text-gray-400">#{vendaNumeroPublico(v)}</td>
                 <td className="table-cell">{formatDate(v.dataVenda)}</td>
                 <td className="table-cell font-medium">{v.cliente.nomeFantasia || v.cliente.razaoSocial}</td>
                 <td className="table-cell">{v.vendedor.nome}</td>

@@ -266,7 +266,14 @@ router.get("/", async (req, res) => {
         include: {
           cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
           venda: {
-            select: { id: true, dataVenda: true, valorTotal: true, freteRecibo: true, freteReciboNum: true },
+            select: {
+              id: true,
+              numeroVenda: true,
+              dataVenda: true,
+              valorTotal: true,
+              freteRecibo: true,
+              freteReciboNum: true,
+            },
           },
         },
         orderBy: { data: "desc" },
@@ -520,7 +527,7 @@ router.post("/:id/vale", async (req, res) => {
         },
         include: {
           cliente: { select: { id: true, nomeFantasia: true, razaoSocial: true } },
-          venda: { select: { id: true } },
+          venda: { select: { id: true, numeroVenda: true } },
         },
       });
 

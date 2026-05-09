@@ -166,7 +166,7 @@ router.get("/", async (req, res) => {
         where,
         include: {
           cliente: true,
-          venda: { select: { id: true, dataVenda: true, valorTotal: true } },
+          venda: { select: { id: true, numeroVenda: true, dataVenda: true, valorTotal: true } },
         },
         orderBy: { numeroOrdem: "desc" },
         take,

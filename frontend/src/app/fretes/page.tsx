@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatMoney, formatDate } from "@/lib/utils";
+import { formatMoney, formatDate, vendaNumeroPublico } from "@/lib/utils";
 import api, { apiFetchWithMeta } from "@/lib/api";
 import type { FreteMovimento } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -19,6 +19,7 @@ type FreteListRow = FreteMovimento & {
   };
   venda?: {
     id: number;
+    numeroVenda?: number | null;
     dataVenda: string;
     valorTotal: unknown;
     freteRecibo?: boolean;
@@ -181,7 +182,7 @@ function FretesContent() {
                           href={`/vendas/${r.venda.id}`}
                           className="text-blue-600 hover:underline"
                         >
-                          #{r.venda.id}
+                          #{vendaNumeroPublico(r.venda)}
                         </Link>
                       ) : (
                         <span className="text-gray-400">—</span>
