@@ -134,13 +134,8 @@ main()
     console.error("Erro no seed:", e);
     if (e && e.code === "P2021") {
       console.error(
-        "\n[Dica] O banco ainda não tem as tabelas do Prisma. Aplique as migrações e rode o seed de novo:\n" +
-          "  npm run db:deploy\n" +
-          "  npm run seed\n" +
-          "Ou em um único comando: npm run seed:deploy\n" +
-          "Se `migrate deploy` acusar P3009 (migração falhou antes), use: npm run db:recover\n" +
-          "Se após isso aparecer P3018 (tabela já existe / migração pela metade), veja npm run db:reset-public-schema\n" +
-          "(variável CONFIRM_RESET_PUBLIC_SCHEMA=YES; apaga o schema public inteiro).\n",
+        "\n[Dica] Migrações em falta ou banco vazio. Tente: npm run seed:deploy\n" +
+          "P3009: npm run db:recover  |  P3018 (schema pela metade): npm run db:reset-public-schema (apaga dados).\n",
       );
     }
     process.exit(1);

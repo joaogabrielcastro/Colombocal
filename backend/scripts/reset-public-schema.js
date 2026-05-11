@@ -11,7 +11,7 @@
  *
  * Depois:
  *   npx prisma migrate deploy
- *   npm run seed
+ *   npm run db:seed
  */
 const path = require("path");
 
@@ -56,7 +56,7 @@ async function main() {
   await prisma.$executeRawUnsafe(`GRANT ALL ON SCHEMA public TO CURRENT_USER`);
   await prisma.$executeRawUnsafe(`GRANT ALL ON SCHEMA public TO public`);
 
-  console.log("\nSchema public recriado. Próximos passos:\n  npx prisma migrate deploy\n  npm run seed\n");
+  console.log("\nSchema public recriado. Próximos passos:\n  npx prisma migrate deploy\n  npm run db:seed\n");
 }
 
 main()

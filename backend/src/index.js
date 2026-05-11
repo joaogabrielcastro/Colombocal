@@ -49,16 +49,21 @@ app.use(
 );
 app.use(express.json());
 
+function skipGlobalApiLimiter(req) {
+  const url = req.originalUrl || "";
+  if (url.includes("/api/cnpj")) return true;
+  if (url.startsWith("/api/setup")) return true;
+  // /register-status e /register têm limiter próprio em auth.js
+  if (url.startsWith("/api/auth/register")) return true;
+  return false;
+}
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env.RATE_LIMIT_MAX_PER_WINDOW ?? 600),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) =>
-    req.originalUrl.includes("/api/cnpj") ||
-    req.originalUrl.startsWith("/api/setup") ||
-    (req.method === "POST" && req.originalUrl.startsWith("/api/auth/register")) ||
-    (req.method === "GET" && req.originalUrl.startsWith("/api/auth/register-status")),
+  skip: skipGlobalApiLimiter,
 });
 
 const cnpjLimiter = rateLimit({
@@ -182,6 +187,14 @@ async function startServer() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("❌ Falha em RUN_PRISMA_MIGRATE_ON_START (prisma migrate deploy):", msg);
+      console.error(
+        "\nSe os logs do Prisma acima indicarem P3009 (migração inicial falhou):\n" +
+          "  1) Garanta que este deploy inclui o ficheiro atualizado `src/startup/migrateOnStart.js`.\n" +
+          "  2) No Coolify, defina **uma vez** PRISMA_AUTO_RESOLVE_ROLLED_BACK_FAILED_INIT=true e redeploy;\n" +
+          "     depois remova essa variável.\n" +
+          "  3) Sem auto-resolve: RUN_PRISMA_MIGRATE_ON_START=false, abra o Terminal do backend e rode: npm run db:recover\n" +
+          "  4) npm warn config production — aviso do npm; não é a causa do P3009.\n",
+      );
       process.exit(1);
     }
     if (shouldRunStartupDbCompat()) {

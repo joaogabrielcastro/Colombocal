@@ -15,7 +15,6 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "node scripts/seed.js",
-    "seed": "node scripts/seed.js",
     "seed:deploy": "prisma migrate deploy && node scripts/seed.js",
     "db:reset": "prisma migrate reset --force",
     "legacy:reset-financeiro": "node scripts/reset-financeiro-legacy.js",

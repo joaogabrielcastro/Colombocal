@@ -11,7 +11,6 @@ type SetupStatus = {
   setupEnabled: boolean;
   needsBootstrap: boolean;
   databaseReady: boolean;
-  migrateOnStart: boolean;
 };
 
 export default function SetupPage() {
@@ -90,9 +89,9 @@ export default function SetupPage() {
         {status && status.setupEnabled && !status.databaseReady ? (
           <div className="rounded-lg bg-red-50 border border-red-200 text-red-900 text-sm p-4 mb-4">
             O banco não está pronto (sem tabelas ou indisponível). No Coolify ative{' '}
-            <strong>RUN_PRISMA_MIGRATE_ON_START=true</strong> no backend para aplicar migrações ao subir o
-            container, ou rode <code className="text-xs">prisma migrate deploy</code> uma vez.{' '}
-            {status.migrateOnStart ? ' Esta instância já está com migrate-on-start ligado; verifique os logs do deploy.' : ''}
+            <strong>RUN_PRISMA_MIGRATE_ON_START=true</strong> no backend (Coolify) ou rode{' '}
+            <code className="text-xs">prisma migrate deploy</code> no container. Em Docker local o compose já corre
+            migrate antes do <code className="text-xs">npm run dev</code>.
           </div>
         ) : null}
 

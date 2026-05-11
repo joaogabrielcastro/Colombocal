@@ -8,9 +8,10 @@
 # O backend roda `prisma migrate deploy` antes do `npm run dev` (banco vazio ganha schema).
 # Dados de exemplo (se existir seed nesta versão): docker compose exec backend npm run db:seed
 #
-# Coolify (depois): variáveis próprias (DATABASE_URL, JWT_SECRET, NEXT_PUBLIC_API_ORIGIN, etc.)
-# no painel; este ficheiro é só para desenvolvimento local.
-# Cadastro público: OPEN_REGISTRATION=true (+ opcional REGISTRATION_KEY para exigir chave no /cadastro).
+# Coolify: secrets no painel, não copie valores deste ficheiro para produção.
+# Fluxos: /setup = 1.º admin (SETUP_SECRET) | /cadastro = membros (OPEN_REGISTRATION) | /usuarios = admin convida.
+# Se migrate no deploy falhar com P3009: RUN_PRISMA_MIGRATE_ON_START=false temporariamente, ou no Coolify
+# defina **uma vez** PRISMA_AUTO_RESOLVE_ROLLED_BACK_FAILED_INIT=true (ver backend/src/startup/migrateOnStart.js).
 
 services:
   db:
@@ -42,10 +43,10 @@ services:
       DATABASE_URL: postgresql://postgres:colombocal_dev@db:5432/colombocal_dev?schema=public
       PRISMA_CLIENT_ENGINE_TYPE: library
       JWT_SECRET: dev_jwt_secret_change_me
-      # Primeiro admin em /setup (mín. 8 caracteres). Só Docker local — troque ou remova após criar o admin.
+      # /setup — mín. 8 caracteres; remova após o 1.º admin (dev local só).
       SETUP_SECRET: "colombocal-dev-setup-change-me"
-      # Cadastro em /cadastro — novos utilizadores como "member" no tenant default (requer organização já criada)
-      OPEN_REGISTRATION: "true"
+      # /cadastro — desligado por omissão (ligue só para testar convites abertos em dev).
+      OPEN_REGISTRATION: "false"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules

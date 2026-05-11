@@ -38,7 +38,6 @@ router.get("/status", async (req, res) => {
       setupEnabled,
       needsBootstrap,
       databaseReady,
-      migrateOnStart: process.env.RUN_PRISMA_MIGRATE_ON_START === "true",
     });
   } catch (e) {
     handleRouteError(res, e);
