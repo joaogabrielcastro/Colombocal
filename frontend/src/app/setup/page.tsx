@@ -11,6 +11,7 @@ type SetupStatus = {
   setupEnabled: boolean;
   needsBootstrap: boolean;
   databaseReady: boolean;
+  databaseIssue?: 'connection' | 'missing_tables' | 'other' | null;
 };
 
 export default function SetupPage() {
@@ -87,11 +88,26 @@ export default function SetupPage() {
         ) : null}
 
         {status && status.setupEnabled && !status.databaseReady ? (
-          <div className="rounded-lg bg-red-50 border border-red-200 text-red-900 text-sm p-4 mb-4">
-            O banco não está pronto (sem tabelas ou indisponível). No Coolify ative{' '}
-            <strong>RUN_PRISMA_MIGRATE_ON_START=true</strong> no backend (Coolify) ou rode{' '}
-            <code className="text-xs">prisma migrate deploy</code> no container. Em Docker local o compose já corre
-            migrate antes do <code className="text-xs">npm run dev</code>.
+          <div className="rounded-lg bg-red-50 border border-red-200 text-red-900 text-sm p-4 mb-4 space-y-2">
+            <p>
+              {status.databaseIssue === 'connection'
+                ? 'Não foi possível ligar ao PostgreSQL (URL, rede ou serviço da base). Confira DATABASE_URL no backend.'
+                : status.databaseIssue === 'missing_tables'
+                  ? 'A base responde, mas faltam tabelas do schema atual (ex. User). É preciso aplicar as migrações Prisma nesta base.'
+                  : 'A base não está utilizável para o setup (tabelas em falta, schema desalinhado ou erro ao consultar).'}
+            </p>
+            <p>
+              <strong>Coolify / produção:</strong> com migrações normais, ative{' '}
+              <strong>RUN_PRISMA_MIGRATE_ON_START=true</strong> e redeploy. Se o arranque falhar com{' '}
+              <strong>P3009</strong> ou <strong>P3018</strong> (tabelas já existem), não fique em loop: defina{' '}
+              <strong>RUN_PRISMA_MIGRATE_ON_START=false</strong>, no terminal do container rode{' '}
+              <code className="text-xs">npm run db:recover</code> ou{' '}
+              <code className="text-xs">{`npm run db:resolve-init-applied && npm run db:deploy`}</code>, volte a
+              ativar migrate no arranque e redeploy.
+            </p>
+            <p className="text-xs text-red-800">
+              Docker local: o compose pode correr migrate antes do dev; confira os logs do serviço da base.
+            </p>
           </div>
         ) : null}
 

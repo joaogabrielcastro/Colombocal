@@ -12,6 +12,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:recover": "prisma migrate resolve --rolled-back 20240101000000_init_schema && prisma migrate deploy",
     "db:resolve-init-applied": "prisma migrate resolve --applied 20240101000000_init_schema",
+    "db:ensure-tenant-user": "prisma db execute --file prisma/manual/ensure-tenant-user-tables.sql --schema prisma/schema.prisma",
     "db:reset-public-schema": "node scripts/reset-public-schema.js",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",

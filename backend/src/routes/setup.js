@@ -19,25 +19,36 @@ function timingSafeEqualString(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
+function classifyDatabaseCheckError(err) {
+  const code = err && err.code;
+  if (code === "P1001" || code === "P1000" || code === "P1017") return "connection";
+  if (code === "P2021") return "missing_tables";
+  return "other";
+}
+
 // GET /api/setup/status — público; não expõe o segredo
 router.get("/status", async (req, res) => {
   try {
     const setupEnabled = getSetupSecret() != null;
     let databaseReady = false;
     let needsBootstrap = false;
+    /** @type {null | "connection" | "missing_tables" | "other"} */
+    let databaseIssue = null;
     try {
       await prisma.$queryRaw`SELECT 1`;
       databaseReady = true;
       const n = await prisma.user.count();
       needsBootstrap = n === 0;
-    } catch {
+    } catch (e) {
       databaseReady = false;
       needsBootstrap = false;
+      databaseIssue = classifyDatabaseCheckError(e);
     }
     res.json({
       setupEnabled,
       needsBootstrap,
       databaseReady,
+      databaseIssue,
     });
   } catch (e) {
     handleRouteError(res, e);
