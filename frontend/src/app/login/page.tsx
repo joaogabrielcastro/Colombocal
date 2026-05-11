@@ -69,11 +69,6 @@ export default function LoginPage() {
             {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-        <p className="text-xs text-gray-500 mt-6 text-center">
-          Ambiente de desenvolvimento sem login obrigatório? Defina{' '}
-          <code className="bg-gray-100 px-1 rounded">NEXT_PUBLIC_REQUIRE_LOGIN=false</code> e use{' '}
-          <code className="bg-gray-100 px-1 rounded">AUTH_DISABLED=true</code> no backend.
-        </p>
         <p className="text-center mt-4">
           <Link href="/" className="text-sm text-blue-600 hover:underline">
             Voltar ao sistema

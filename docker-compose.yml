@@ -4,7 +4,8 @@
 # Auth / multi-tenant (dev): backend AUTH_DISABLED=true + DEFAULT_TENANT_ID=1 aceita API sem JWT.
 # Frontend: NEXT_PUBLIC_REQUIRE_LOGIN=false evita redirecionar para /login sem token.
 # Produção: AUTH_DISABLED não vale em NODE_ENV=production; defina JWT_SECRET; NEXT_PUBLIC_REQUIRE_LOGIN=true.
-# Seed (`npm run db:seed` no backend): tenants `default` (admin@local) e `demo` (demo@local); variáveis SEED_ADMIN_PASSWORD e SEED_DEMO_PASSWORD opcionais.
+# Seed (`npm run seed` no backend): só depois das migrações. Em banco vazio: `npm run seed:deploy`.
+# Se `migrate deploy` falhar com P3009 (migração inicial marcada como falha): `npm run db:recover` no backend, depois seed.
 #
 # Serviços:
 # - frontend: http://localhost:3010

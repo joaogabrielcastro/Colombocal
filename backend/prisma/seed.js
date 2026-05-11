@@ -132,6 +132,15 @@ async function main() {
 main()
   .catch((e) => {
     console.error("Erro no seed:", e);
+    if (e && e.code === "P2021") {
+      console.error(
+        "\n[Dica] O banco ainda não tem as tabelas do Prisma. Aplique as migrações e rode o seed de novo:\n" +
+          "  npm run db:deploy\n" +
+          "  npm run seed\n" +
+          "Ou em um único comando: npm run seed:deploy\n" +
+          "Se `migrate deploy` acusar P3009 (migração falhou antes), use: npm run db:recover\n",
+      );
+    }
     process.exit(1);
   })
   .finally(async () => {
