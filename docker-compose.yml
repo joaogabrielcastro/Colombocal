@@ -1,20 +1,15 @@
-# Stack de desenvolvimento local
-# Uso: na raiz do projeto -> docker compose up --build
+# Stack local (Docker) — base alinhada à main em ab5bde6; use para validar antes do Coolify.
 #
-# Auth / multi-tenant (dev): backend AUTH_DISABLED=true + DEFAULT_TENANT_ID=1 aceita API sem JWT.
-# Frontend: NEXT_PUBLIC_REQUIRE_LOGIN=false evita redirecionar para /login sem token.
-# Produção: AUTH_DISABLED não vale em NODE_ENV=production; defina JWT_SECRET; NEXT_PUBLIC_REQUIRE_LOGIN=true.
-# Seed (`npm run seed` no backend): só depois das migrações. Em banco vazio: `npm run seed:deploy`.
-# Se `migrate deploy` falhar com P3009: `npm run db:recover` no backend, depois seed.
-# Se após recover falhar com P3018 (tabela já existe): banco pela metade — `CONFIRM_RESET_PUBLIC_SCHEMA=YES npm run db:reset-public-schema`, depois migrate deploy + seed (só se puder apagar dados).
-#
-# Serviços:
+# Uso na raiz: docker compose up --build
 # - frontend: http://localhost:3010
-# - backend:  http://localhost:3011
+# - backend:  http://localhost:3011  (health: /health, DB: /ready)
 # - postgres: localhost:5432
 #
-# O frontend só sobe depois do backend passar no healthcheck (evita ENOTFOUND/EAI_AGAIN em
-# http://backend:3011 enquanto migrate/npm ainda rodam).
+# O backend roda `prisma migrate deploy` antes do `npm run dev` (banco vazio ganha schema).
+# Dados de exemplo (se existir seed nesta versão): docker compose exec backend npm run db:seed
+#
+# Coolify (depois): variáveis próprias (DATABASE_URL, JWT_SECRET, NEXT_PUBLIC_API_ORIGIN, etc.)
+# no painel; este ficheiro é só para desenvolvimento local.
 
 services:
   db:
@@ -39,21 +34,12 @@ services:
     image: node:20
     container_name: colombocal-backend-dev
     working_dir: /app
-    # postinstall roda prisma generate; generate explícito evita client Prisma velho no volume node_modules
     command: sh -c "npm install && npx prisma migrate deploy && npx prisma generate && npm run dev"
     environment:
       NODE_ENV: development
       PORT: 3011
       DATABASE_URL: postgresql://postgres:colombocal_dev@db:5432/colombocal_dev?schema=public
       PRISMA_CLIENT_ENGINE_TYPE: library
-      JWT_SECRET: dev_jwt_secret_change_in_production
-      JWT_EXPIRES_IN: 7d
-      AUTH_DISABLED: "true"
-      DEFAULT_TENANT_ID: "1"
-      # Opcional: migrações ao subir o container (Coolify sem job de migrate)
-      # RUN_PRISMA_MIGRATE_ON_START: "true"
-      # Opcional: tela /setup no frontend — chave forte; remover após criar o primeiro admin
-      # SETUP_SECRET: "troque-por-uma-chave-longa"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
@@ -70,7 +56,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
-      start_period: 300s
+      start_period: 120s
     depends_on:
       db:
         condition: service_healthy
@@ -83,12 +69,7 @@ services:
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_ORIGIN: http://backend:3011
-      # "true" força /login sem token (alinhar com backend sem AUTH_DISABLED).
-      NEXT_PUBLIC_REQUIRE_LOGIN: "false"
-      # Menu lateral reduzido (piloto). Para ver todos os atalhos no menu: "false"
       NEXT_PUBLIC_UI_HIDE_ADVANCED: "true"
-      # Docker Desktop (Windows/macOS): o watcher nem sempre enxerga mudanças no bind mount;
-      # polling evita precisar reiniciar o container para ver alterações no código.
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
     volumes:
