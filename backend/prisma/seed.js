@@ -138,7 +138,9 @@ main()
           "  npm run db:deploy\n" +
           "  npm run seed\n" +
           "Ou em um único comando: npm run seed:deploy\n" +
-          "Se `migrate deploy` acusar P3009 (migração falhou antes), use: npm run db:recover\n",
+          "Se `migrate deploy` acusar P3009 (migração falhou antes), use: npm run db:recover\n" +
+          "Se após isso aparecer P3018 (tabela já existe / migração pela metade), veja npm run db:reset-public-schema\n" +
+          "(variável CONFIRM_RESET_PUBLIC_SCHEMA=YES; apaga o schema public inteiro).\n",
       );
     }
     process.exit(1);

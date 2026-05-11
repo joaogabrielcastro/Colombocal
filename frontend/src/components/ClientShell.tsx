@@ -15,18 +15,23 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === '/login';
+  const isSetup = pathname === '/setup';
+  const isPublicShell = isLogin || isSetup;
 
   useEffect(() => {
     if (!requireLogin) return;
-    if (!isLogin && !getAuthToken()) {
+    if (!isPublicShell && !getAuthToken()) {
       router.replace('/login');
     }
     if (isLogin && getAuthToken()) {
       router.replace('/');
     }
-  }, [isLogin, pathname, router]);
+    if (isSetup && getAuthToken()) {
+      router.replace('/');
+    }
+  }, [isLogin, isSetup, isPublicShell, pathname, router]);
 
-  if (isLogin) {
+  if (isPublicShell) {
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 

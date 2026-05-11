@@ -9,6 +9,7 @@ const {
   sendErrorAlert,
 } = require("./shared/http/observability");
 const { requireTenantUser, requireAdmin } = require("./middleware/auth");
+const { runPrismaMigrateOnStart } = require("./startup/migrateOnStart");
 
 // Garante uso do engine local no ambiente de desenvolvimento
 process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
@@ -53,12 +54,21 @@ const apiLimiter = rateLimit({
   max: Number(process.env.RATE_LIMIT_MAX_PER_WINDOW ?? 600),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.originalUrl.includes("/api/cnpj"),
+  skip: (req) =>
+    req.originalUrl.includes("/api/cnpj") ||
+    req.originalUrl.startsWith("/api/setup"),
 });
 
 const cnpjLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: Number(process.env.RATE_LIMIT_CNPJ_PER_MIN ?? 25),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const setupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_SETUP_PER_HOUR ?? 40),
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -102,6 +112,9 @@ app.get("/ready", async (req, res) => {
     });
   }
 });
+
+// Setup web (primeiro admin) — público, limitado; exige SETUP_SECRET no servidor
+app.use("/api/setup", setupLimiter, require("./routes/setup"));
 
 // Rotas públicas de autenticação (sem JWT)
 app.use("/api/auth", require("./routes/auth"));
@@ -162,6 +175,13 @@ function shouldRunStartupDbCompat() {
 
 async function startServer() {
   try {
+    try {
+      runPrismaMigrateOnStart();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("❌ Falha em RUN_PRISMA_MIGRATE_ON_START (prisma migrate deploy):", msg);
+      process.exit(1);
+    }
     if (shouldRunStartupDbCompat()) {
       await ensureDatabaseCompat();
     } else {

@@ -69,8 +69,11 @@ export default function LoginPage() {
             {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-        <p className="text-center mt-4">
-          <Link href="/" className="text-sm text-blue-600 hover:underline">
+        <p className="text-center mt-4 space-y-2">
+          <Link href="/setup" className="block text-sm text-gray-600 hover:text-gray-900 hover:underline">
+            Primeiro acesso ao servidor (sem terminal)
+          </Link>
+          <Link href="/" className="block text-sm text-blue-600 hover:underline">
             Voltar ao sistema
           </Link>
         </p>

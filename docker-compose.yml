@@ -5,7 +5,8 @@
 # Frontend: NEXT_PUBLIC_REQUIRE_LOGIN=false evita redirecionar para /login sem token.
 # Produção: AUTH_DISABLED não vale em NODE_ENV=production; defina JWT_SECRET; NEXT_PUBLIC_REQUIRE_LOGIN=true.
 # Seed (`npm run seed` no backend): só depois das migrações. Em banco vazio: `npm run seed:deploy`.
-# Se `migrate deploy` falhar com P3009 (migração inicial marcada como falha): `npm run db:recover` no backend, depois seed.
+# Se `migrate deploy` falhar com P3009: `npm run db:recover` no backend, depois seed.
+# Se após recover falhar com P3018 (tabela já existe): banco pela metade — `CONFIRM_RESET_PUBLIC_SCHEMA=YES npm run db:reset-public-schema`, depois migrate deploy + seed (só se puder apagar dados).
 #
 # Serviços:
 # - frontend: http://localhost:3010
@@ -49,6 +50,10 @@ services:
       JWT_EXPIRES_IN: 7d
       AUTH_DISABLED: "true"
       DEFAULT_TENANT_ID: "1"
+      # Opcional: migrações ao subir o container (Coolify sem job de migrate)
+      # RUN_PRISMA_MIGRATE_ON_START: "true"
+      # Opcional: tela /setup no frontend — chave forte; remover após criar o primeiro admin
+      # SETUP_SECRET: "troque-por-uma-chave-longa"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
