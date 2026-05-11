@@ -40,6 +40,9 @@ services:
       PORT: 3011
       DATABASE_URL: postgresql://postgres:colombocal_dev@db:5432/colombocal_dev?schema=public
       PRISMA_CLIENT_ENGINE_TYPE: library
+      JWT_SECRET: dev_jwt_secret_change_me
+      # Primeiro admin em /setup (mín. 8 caracteres). Só Docker local — troque ou remova após criar o admin.
+      SETUP_SECRET: "colombocal-dev-setup-change-me"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
