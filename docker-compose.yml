@@ -77,6 +77,7 @@ services:
       NODE_ENV: development
       NEXT_PUBLIC_API_ORIGIN: http://backend:3011
       NEXT_PUBLIC_UI_HIDE_ADVANCED: "true"
+      NEXT_PUBLIC_REQUIRE_LOGIN: "false"
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
     volumes:

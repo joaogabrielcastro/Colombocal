@@ -1,15 +1,24 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { getAuthToken } from '@/lib/auth-token';
 
 /**
- * Quando true, exige JWT (alinhado ao backend sem AUTH_DISABLED).
- * Em desenvolvimento com backend em AUTH_DISABLED, deixe false.
+ * Por omissão exige JWT: rotas internas redirecionam para /login sem token.
+ * Para desligar (ex.: dev com backend em AUTH_DISABLED): NEXT_PUBLIC_REQUIRE_LOGIN=false
  */
-const requireLogin = process.env.NEXT_PUBLIC_REQUIRE_LOGIN === 'true';
+const requireLogin = process.env.NEXT_PUBLIC_REQUIRE_LOGIN !== 'false';
+
+function initialAllowBody(pathname: string): boolean {
+  const isPublic =
+    pathname === '/login' ||
+    pathname === '/setup' ||
+    pathname === '/cadastro';
+  if (isPublic || !requireLogin) return true;
+  return false;
+}
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -19,21 +28,36 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isCadastro = pathname === '/cadastro';
   const isPublicShell = isLogin || isSetup || isCadastro;
 
+  const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
+
   useEffect(() => {
-    if (!requireLogin) return;
-    if (!isPublicShell && !getAuthToken()) {
+    if (isPublicShell) {
+      if (isLogin && getAuthToken()) router.replace('/');
+      else if (isSetup && getAuthToken()) router.replace('/');
+      else if (isCadastro && getAuthToken()) router.replace('/');
+      setAllowBody(true);
+      return;
+    }
+
+    if (!requireLogin) {
+      setAllowBody(true);
+      return;
+    }
+
+    if (!getAuthToken()) {
       router.replace('/login');
+      return;
     }
-    if (isLogin && getAuthToken()) {
-      router.replace('/');
-    }
-    if (isSetup && getAuthToken()) {
-      router.replace('/');
-    }
-    if (isCadastro && getAuthToken()) {
-      router.replace('/');
-    }
+    setAllowBody(true);
   }, [isLogin, isSetup, isCadastro, isPublicShell, pathname, router]);
+
+  if (!allowBody) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500 text-sm">
+        A carregar…
+      </div>
+    );
+  }
 
   if (isPublicShell) {
     return <div className="min-h-screen bg-gray-50">{children}</div>;
