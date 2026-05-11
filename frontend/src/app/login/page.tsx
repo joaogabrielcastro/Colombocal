@@ -70,8 +70,11 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="text-center mt-4 space-y-2">
+          <Link href="/cadastro" className="block text-sm font-medium text-blue-600 hover:underline">
+            Criar conta para usar o sistema
+          </Link>
           <Link href="/setup" className="block text-sm text-gray-600 hover:text-gray-900 hover:underline">
-            Primeiro acesso ao servidor (sem terminal)
+            Primeiro acesso ao servidor (criar 1.º administrador)
           </Link>
           <Link href="/" className="block text-sm text-blue-600 hover:underline">
             Voltar ao sistema

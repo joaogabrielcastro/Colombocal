@@ -16,7 +16,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const router = useRouter();
   const isLogin = pathname === '/login';
   const isSetup = pathname === '/setup';
-  const isPublicShell = isLogin || isSetup;
+  const isCadastro = pathname === '/cadastro';
+  const isPublicShell = isLogin || isSetup || isCadastro;
 
   useEffect(() => {
     if (!requireLogin) return;
@@ -29,7 +30,10 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     if (isSetup && getAuthToken()) {
       router.replace('/');
     }
-  }, [isLogin, isSetup, isPublicShell, pathname, router]);
+    if (isCadastro && getAuthToken()) {
+      router.replace('/');
+    }
+  }, [isLogin, isSetup, isCadastro, isPublicShell, pathname, router]);
 
   if (isPublicShell) {
     return <div className="min-h-screen bg-gray-50">{children}</div>;

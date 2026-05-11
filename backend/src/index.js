@@ -56,7 +56,9 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) =>
     req.originalUrl.includes("/api/cnpj") ||
-    req.originalUrl.startsWith("/api/setup"),
+    req.originalUrl.startsWith("/api/setup") ||
+    (req.method === "POST" && req.originalUrl.startsWith("/api/auth/register")) ||
+    (req.method === "GET" && req.originalUrl.startsWith("/api/auth/register-status")),
 });
 
 const cnpjLimiter = rateLimit({
