@@ -2,6 +2,9 @@
   "name": "colombocal-frontend",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "next dev -p 3010",
     "dev:clean": "node -e \"try { require('fs').rmSync('.next', { recursive: true, force: true }) } catch (e) {}\" && next dev -p 3010",

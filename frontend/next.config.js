@@ -2,6 +2,7 @@ const path = require("path");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   // Evita aviso "multiple lockfiles" quando existe package-lock.json acima (ex.: pasta do usuário).
   turbopack: {
     root: path.resolve(__dirname),
