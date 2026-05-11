@@ -16,6 +16,8 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Next.js espera `public/`; o COPY do runner falha se a pasta não existir no builder.
+RUN mkdir -p public
 
 ARG NEXT_PUBLIC_API_ORIGIN
 ARG NEXT_PUBLIC_REQUIRE_LOGIN
