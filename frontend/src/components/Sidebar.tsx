@@ -192,12 +192,6 @@ export default function Sidebar() {
         >
           Sair
         </button>
-        {UI_HIDE_ADVANCED && (
-          <p className="text-gray-500 text-[10px] text-center leading-snug">
-            Modo piloto: cadastros extras e títulos em Avançado. Frete na venda; histórico em Vendas.
-          </p>
-        )}
-        <p className="text-gray-500 text-xs text-center">v1.0</p>
       </div>
     </aside>
   );
