@@ -76,7 +76,8 @@ export function exportarRelatorioVendasPdf(data: RelVendas, dataInicio: string, 
         <td>${(v.cliente.nomeFantasia || v.cliente.razaoSocial).replace(/</g, "&lt;")}</td>
         <td>${v.vendedor.nome}</td>
         <td>${formatMoney(v.valorTotal)}</td>
-        <td>${formatMoney(v.frete)}</td>
+        <td>${formatMoney(v.freteTarifaSaco ?? 0)}</td>
+        <td>${formatMoney(v.freteTarifaTonelada ?? 0)}</td>
         <td>${formatFreteReciboLinha(v).replace(/</g, "&lt;")}</td>
       </tr>`,
     )
@@ -92,7 +93,8 @@ export function exportarRelatorioVendasPdf(data: RelVendas, dataInicio: string, 
       </style></head><body>
       <h1>Relatório de Vendas</h1>
       <p style="color:#6b7280;font-size:12px">Período: ${dataInicio} a ${dataFim} · Gerado em ${new Date().toLocaleString("pt-BR")}</p>
-      <table><thead><tr><th>#</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Total</th><th>Frete</th><th>Frete pago</th></tr></thead>
+      <p style="color:#6b7280;font-size:11px;margin-top:4px">Frete: apenas tarifas por saco e por tonelada (o total do frete não consta; calcule no destino).</p>
+      <table><thead><tr><th>#</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Total</th><th>Tarifa / saco</th><th>Tarifa / t</th><th>Recibo frete</th></tr></thead>
       <tbody>${rows}</tbody></table>
       </body></html>`);
   w.document.close();

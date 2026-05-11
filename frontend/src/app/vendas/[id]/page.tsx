@@ -174,7 +174,8 @@ export default function VendaDetailPage() {
     ]
       .filter(Boolean)
       .join(" - ");
-    const freteVenda = parseFloat(String(venda.frete ?? 0));
+    const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0));
+    const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0));
     const itensRows = venda.itens
       .map((item) => {
         const preco = parseFloat(String(item.precoUnitario ?? 0));
@@ -258,7 +259,14 @@ export default function VendaDetailPage() {
     <div class="label">Totais</div>
     <div class="value" style="margin-top:6px;">
       Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>
-      &nbsp;•&nbsp; Frete (cobrado à parte): <strong>${escapeHtml(formatMoney(freteVenda))}</strong>
+    </div>
+    <div class="value" style="margin-top:10px;font-size:13px;">
+      <div class="label" style="text-transform:none;letter-spacing:0;font-weight:600;color:#374151;">Tarifas de frete (por unidade)</div>
+      <div style="margin-top:4px;">Por saco: <strong>${escapeHtml(formatMoney(tarifaSaco))}</strong> / saco</div>
+      <div style="margin-top:4px;">Por tonelada: <strong>${escapeHtml(formatMoney(tarifaTon))}</strong> / t</div>
+      <div style="margin-top:8px;color:#6b7280;font-size:11px;line-height:1.4;">
+        O valor total do frete não consta neste documento — calcule no destino conforme a quantidade entregue e estas tarifas.
+      </div>
     </div>
   </div>
 
