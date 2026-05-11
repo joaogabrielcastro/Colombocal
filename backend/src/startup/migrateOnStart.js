@@ -11,6 +11,14 @@ function outputLooksLikeP3009(text) {
   );
 }
 
+function outputLooksLikeP3018Duplicate(text) {
+  return (
+    text.includes("P3018") ||
+    text.includes("42P07") ||
+    text.includes("already exists")
+  );
+}
+
 /**
  * Executa `prisma migrate deploy`. Com stdio capturado para detetar P3009.
  * @returns {void}
@@ -33,6 +41,7 @@ function execMigrateDeploy(backendRoot) {
     const err = new Error(`prisma migrate deploy exit ${e.status ?? "?"}`);
     err.migrateCombinedOutput = combined;
     err.isP3009 = outputLooksLikeP3009(combined);
+    err.isP3018Duplicate = outputLooksLikeP3018Duplicate(combined);
     throw err;
   }
 }
@@ -49,7 +58,8 @@ function execMigrateDeploy(backendRoot) {
  *   Se já existirem tabelas/objetos, costuma falhar com P3018 em vez de sobrescrever dados.
  *
  * O que **destrói** dados é outro fluxo (ex. `db:reset-public-schema` / DROP SCHEMA), não esta opção A.
- * Se após o resolve aparecer P3018, o schema está inconsistente — aí é preciso análise manual ou backup/restore, não “apagar clientes” por esta rotina.
+ * Se após `rolled-back` o deploy falhar com P3018 (“relation already exists”), o schema já está
+ * parcialmente criado: marcamos a migração como **aplicada** sem reexecutar o SQL e voltamos a correr deploy.
  */
 function runPrismaMigrateOnStart() {
   if (process.env.RUN_PRISMA_MIGRATE_ON_START !== "true") {
@@ -87,10 +97,35 @@ function runPrismaMigrateOnStart() {
       cwd: backendRoot,
       env: process.env,
     });
-    execMigrateDeploy(backendRoot);
-    console.log("[startup] prisma migrate deploy concluído após resolve --rolled-back.");
+    try {
+      execMigrateDeploy(backendRoot);
+      console.log("[startup] prisma migrate deploy concluído após resolve --rolled-back.");
+    } catch (second) {
+      const combined = second.migrateCombinedOutput || "";
+      if (second.isP3018Duplicate || outputLooksLikeP3018Duplicate(combined)) {
+        console.warn(
+          "[startup] P3018 (objeto já existe): marcar migração como aplicada sem SQL e sincronizar …",
+        );
+        execSync(`npx prisma migrate resolve --applied ${INIT_MIGRATION}`, {
+          stdio: "inherit",
+          cwd: backendRoot,
+          env: process.env,
+        });
+        try {
+          execMigrateDeploy(backendRoot);
+          console.log("[startup] prisma migrate deploy concluído após resolve --applied.");
+        } catch (third) {
+          console.error(
+            "[startup] Após resolve --applied o deploy ainda falhou. Verifique o schema ou use: npm run db:resolve-init-applied manualmente.",
+          );
+          throw third;
+        }
+      } else {
+        throw second;
+      }
+    }
     console.warn(
-      "[startup] Remova PRISMA_AUTO_RESOLVE_ROLLED_BACK_FAILED_INIT do ambiente após este deploy com sucesso.",
+      "[startup] Remova PRISMA_AUTO_RESOLVE_ROLLED_BACK_FAILED_INIT do ambiente após sucesso.",
     );
   }
 }
