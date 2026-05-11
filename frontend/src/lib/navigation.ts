@@ -7,6 +7,7 @@ import {
   UserIcon,
   ShoppingCartIcon,
   BanknotesIcon,
+  UserPlusIcon,
 } from '@heroicons/react/24/outline';
 
 type NavIcon = ComponentType<{ className?: string }>;
@@ -17,6 +18,8 @@ type MainNavItem = {
   icon: NavIcon;
   /** No modo piloto (`UI_HIDE_ADVANCED`), aparece só no bloco "Avançado". */
   advancedOnly?: boolean;
+  /** Só aparece para usuários com papel `admin`. */
+  adminOnly?: boolean;
 };
 
 type ReportNavItem = {
@@ -35,6 +38,7 @@ export const MAIN_NAV: MainNavItem[] = [
   { href: '/fretes', label: 'Fretes', icon: TruckIcon, advancedOnly: true },
   { href: '/motoristas', label: 'Motoristas', icon: TruckIcon, advancedOnly: true },
   { href: '/vendedores', label: 'Vendedores', icon: UserIcon, advancedOnly: true },
+  { href: '/usuarios', label: 'Usuários', icon: UserPlusIcon, adminOnly: true },
 ];
 
 export const REPORT_NAV: ReportNavItem[] = [
@@ -47,9 +51,12 @@ export const REPORT_NAV: ReportNavItem[] = [
 export function filterMainNavForSidebar(
   items: MainNavItem[],
   hideAdvanced: boolean,
+  options?: { isAdmin?: boolean },
 ): MainNavItem[] {
-  if (!hideAdvanced) return items;
-  return items.filter((i) => !i.advancedOnly);
+  let out = items;
+  if (hideAdvanced) out = out.filter((i) => !i.advancedOnly);
+  if (options?.isAdmin !== true) out = out.filter((i) => !i.adminOnly);
+  return out;
 }
 
 export function advancedMainNavItems(items: MainNavItem[]): MainNavItem[] {

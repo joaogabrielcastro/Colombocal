@@ -73,9 +73,17 @@ function requireTenantUser(req, res, next) {
   }
 }
 
+function requireAdmin(req, res, next) {
+  if (!req.authUser || req.authUser.role !== "admin") {
+    return res.status(403).json({ error: "Apenas administradores podem fazer isso" });
+  }
+  next();
+}
+
 module.exports = {
   getJwtSecret,
   signAuthToken,
   isAuthDisabled,
   requireTenantUser,
+  requireAdmin,
 };

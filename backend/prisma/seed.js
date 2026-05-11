@@ -1,3 +1,10 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+require("dotenv").config({
+  path: path.join(__dirname, "..", ".env.local"),
+  override: false,
+});
+
 const { prisma } = require("../src/lib/prisma");
 const bcrypt = require("bcrypt");
 
@@ -92,16 +99,18 @@ async function main() {
   const defaultPassword = process.env.SEED_ADMIN_PASSWORD || "admin123";
   const demoPassword =
     process.env.SEED_DEMO_PASSWORD || process.env.SEED_ADMIN_PASSWORD || "admin123";
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL || "admin@local").trim().toLowerCase();
+  const adminName = (process.env.SEED_ADMIN_NAME || "Administrador").trim() || "Administrador";
 
   const r1 = await seedOneTenant(prisma, {
     slug: "default",
     name: "Organização padrão",
-    adminEmail: "admin@local",
-    adminName: "Administrador",
+    adminEmail,
+    adminName,
     passwordPlain: defaultPassword,
   });
   console.log(
-    `✅ Tenant #${r1.tenant.id} (default): admin@local — defina SEED_ADMIN_PASSWORD em produção`,
+    `✅ Tenant #${r1.tenant.id} (default): ${adminEmail} (${adminName}) — use SEED_ADMIN_PASSWORD em produção`,
   );
   console.log(`   ${r1.produtosCount} produtos, vendedor interno id=${r1.vendedorId}`);
 

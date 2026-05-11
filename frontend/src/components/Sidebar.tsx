@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChartBarIcon,
   ChevronDownIcon,
@@ -17,12 +17,30 @@ import {
   filterMainNavForSidebar,
   filterReportsForSidebar,
 } from '@/lib/navigation';
-import { clearAuthToken } from '@/lib/auth-token';
+import { clearAuthToken, getAuthToken } from '@/lib/auth-token';
+import api from '@/lib/api';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED);
-  const advancedMain = advancedMainNavItems(MAIN_NAV);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!getAuthToken()) {
+      setIsAdmin(false);
+      return;
+    }
+    api
+      .get<{ user: { role: string } }>('/auth/me')
+      .then((r) => setIsAdmin(r.user.role === 'admin'))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
+  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED, {
+    isAdmin,
+  });
+  const advancedMain = advancedMainNavItems(MAIN_NAV).filter(
+    (i) => !i.adminOnly || isAdmin,
+  );
   const reportsVisible = filterReportsForSidebar(REPORT_NAV, UI_HIDE_ADVANCED);
   const reportsAdvancedOnly = advancedReportItems(REPORT_NAV);
 

@@ -8,7 +8,7 @@ const {
   requestIdMiddleware,
   sendErrorAlert,
 } = require("./shared/http/observability");
-const { requireTenantUser } = require("./middleware/auth");
+const { requireTenantUser, requireAdmin } = require("./middleware/auth");
 
 // Garante uso do engine local no ambiente de desenvolvimento
 process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
@@ -114,6 +114,7 @@ app.use("/api/vendedores", requireTenantUser, require("./routes/vendedores"));
 app.use("/api/vendas", requireTenantUser, require("./routes/vendas"));
 app.use("/api/fretes", requireTenantUser, require("./routes/fretes"));
 app.use("/api/config", requireTenantUser, require("./routes/config"));
+app.use("/api/users", requireTenantUser, requireAdmin, require("./routes/users"));
 app.use("/api/cheques", requireTenantUser, require("./routes/cheques"));
 app.use("/api/pagamentos", requireTenantUser, require("./routes/pagamentos"));
 app.use("/api/relatorios", requireTenantUser, require("./routes/relatorios"));
