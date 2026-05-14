@@ -15,6 +15,7 @@ const {
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
+const { getDateRange } = require("../utils/dateRangeQuery");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -69,13 +70,8 @@ router.get("/", async (req, res) => {
       if (!Number.isNaN(mid)) where.motoristaId = mid;
     }
     if (dataInicio || dataFim) {
-      where.dataVenda = {};
-      if (dataInicio) where.dataVenda.gte = new Date(dataInicio);
-      if (dataFim) {
-        const fim = new Date(dataFim);
-        fim.setHours(23, 59, 59, 999);
-        where.dataVenda.lte = fim;
-      }
+      const dr = getDateRange(dataInicio, dataFim);
+      if (Object.keys(dr).length) where.dataVenda = dr;
     }
     const range = {};
     if (valorMin !== undefined && valorMin !== "") {

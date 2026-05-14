@@ -5,7 +5,7 @@ import {
   ArrowDownTrayIcon,
   PrinterIcon,
 } from "@heroicons/react/24/outline";
-import { formatMoney, formatDate, vendaNumeroPublico } from "@/lib/utils";
+import { formatMoney, formatDate, vendaNumeroPublico, localDateInputValue } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
@@ -44,10 +44,10 @@ export default function ComissoesPage() {
 
   useEffect(() => {
     const hoje = new Date();
-    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-      .toISOString()
-      .split("T")[0];
-    const fim = hoje.toISOString().split("T")[0];
+    const ini = localDateInputValue(
+      new Date(hoje.getFullYear(), hoje.getMonth(), 1),
+    );
+    const fim = localDateInputValue(hoje);
     setDataInicio(ini);
     setDataFim(fim);
     let cancelled = false;

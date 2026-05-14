@@ -11,6 +11,7 @@ import {
   formatMoney,
   formatCNPJ,
   formatDate,
+  localDateInputValue,
   STATUS_CHEQUE_LABEL,
   STATUS_CHEQUE_COLOR,
   type Cliente,
@@ -87,7 +88,7 @@ export default function ClienteDetailPage() {
   const [fretesPendentes, setFretesPendentes] = useState<FreteMovimento[]>([]);
   const [pagandoFreteId, setPagandoFreteId] = useState<number | null>(null);
   const [pgFreteTipo, setPgFreteTipo] = useState<"dinheiro" | "transferencia">("dinheiro");
-  const [pgFreteData, setPgFreteData] = useState(new Date().toISOString().split("T")[0]);
+  const [pgFreteData, setPgFreteData] = useState(localDateInputValue());
 
   useEffect(() => {
     const abaUrl = searchParams.get("aba");

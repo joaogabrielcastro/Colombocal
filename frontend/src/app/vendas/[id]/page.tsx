@@ -11,6 +11,7 @@ import {
   formatMoney,
   formatDate,
   formatQuantidade,
+  localDateInputValue,
   toInputDate,
   type Venda,
   type Pagamento,
@@ -32,9 +33,7 @@ export default function VendaDetailPage() {
     "dinheiro",
   );
   const [valorBaixa, setValorBaixa] = useState("");
-  const [dataBaixa, setDataBaixa] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [dataBaixa, setDataBaixa] = useState(localDateInputValue());
   const [obsBaixa, setObsBaixa] = useState("");
   const [trocoTipo, setTrocoTipo] = useState<"dinheiro" | "transferencia">(
     "dinheiro",

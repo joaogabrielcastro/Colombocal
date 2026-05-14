@@ -5,7 +5,7 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, localDateInputValue } from "@/lib/utils";
 import { reportApiError } from "@/lib/report-api-error";
 import SearchableSelect from "@/components/SearchableSelect";
 
@@ -28,12 +28,14 @@ export default function NovoFretePage() {
     precoSaco: "",
     precoTonelada: "",
     valorTotal: "",
-    dataMovimento: new Date().toISOString().split("T")[0],
-    vencimento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    dataMovimento: localDateInputValue(),
+    vencimento: localDateInputValue(
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    ),
     observacao: "",
     pagoNoAto: false,
     pagamentoTipo: "dinheiro" as "dinheiro" | "transferencia",
-    pagamentoData: new Date().toISOString().split("T")[0],
+    pagamentoData: localDateInputValue(),
   });
   const [itens, setItens] = useState<FreteItemForm[]>([{ produtoId: "", quantidade: "" }]);
 

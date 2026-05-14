@@ -68,7 +68,7 @@ test("parseNumberField: retorna null quando não obrigatório e vazio", () => {
 test("parseDateField: retorna Date para string válida", () => {
   const d = parseDateField("2024-01-15", "data");
   assert.ok(d instanceof Date);
-  assert.ok(!Number.isNaN(d.getTime()));
+  assert.equal(d.toISOString(), "2024-01-15T12:00:00.000Z");
 });
 
 test("parseDateField: lança 400 para data inválida", () => {

@@ -9,6 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   formatMoney,
+  localDateInputValue,
   type Cliente,
   type Produto,
   type Vendedor,
@@ -53,18 +54,14 @@ function NovaVendaForm() {
   const [frete, setFrete] = useState("");
   const [fretePorSaco, setFretePorSaco] = useState("");
   const [fretePorTonelada, setFretePorTonelada] = useState("");
-  const [dataVenda, setDataVenda] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [dataVenda, setDataVenda] = useState(localDateInputValue());
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<ItemForm[]>([
     { produtoId: "", quantidade: "", precoUnitario: "", unidade: "" },
   ]);
 
   const [freteRecibo, setFreteRecibo] = useState(false);
-  const [freteReciboData, setFreteReciboData] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [freteReciboData, setFreteReciboData] = useState(localDateInputValue());
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");

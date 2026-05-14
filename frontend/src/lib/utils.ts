@@ -11,6 +11,14 @@ export function formatDate(date: string | Date | null | undefined): string {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(date));
 }
 
+/** Valor para input type="date" no calendário local (não usar toISOString(), que é UTC). */
+export function localDateInputValue(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function formatCNPJ(cnpj: string): string {
   const d = cnpj.replace(/\D/g, "");
   if (d.length !== 14) return cnpj;
@@ -47,7 +55,8 @@ export const STATUS_CHEQUE_COLOR: Record<StatusCheque, string> = {
 export function toInputDate(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
-  return d.toISOString().split("T")[0];
+  if (Number.isNaN(d.getTime())) return "";
+  return localDateInputValue(d);
 }
 
 // Tipos principais

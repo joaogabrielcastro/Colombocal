@@ -17,6 +17,7 @@ import { useResumoRepresentantesSort } from "@/features/relatorios-vendas/hooks/
 import { RelatorioVendasFiltros } from "@/features/relatorios-vendas/components/RelatorioVendasFiltros";
 import { RelatorioVendasResumo } from "@/features/relatorios-vendas/components/RelatorioVendasResumo";
 import { RelatorioVendasDetalhes } from "@/features/relatorios-vendas/components/RelatorioVendasDetalhes";
+import { localDateInputValue } from "@/lib/utils";
 
 export default function RelatorioVendasPage() {
   const [dataInicio, setDataInicio] = useState("");
@@ -57,10 +58,10 @@ export default function RelatorioVendasPage() {
   // Default: mês corrente
   useEffect(() => {
     const hoje = new Date();
-    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-      .toISOString()
-      .split("T")[0];
-    const fim = hoje.toISOString().split("T")[0];
+    const ini = localDateInputValue(
+      new Date(hoje.getFullYear(), hoje.getMonth(), 1),
+    );
+    const fim = localDateInputValue(hoje);
     setDataInicio(ini);
     setDataFim(fim);
     setFiltrosAplicados((prev) => ({ ...prev, dataInicio: ini, dataFim: fim }));

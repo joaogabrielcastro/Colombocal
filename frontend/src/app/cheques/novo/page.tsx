@@ -3,7 +3,13 @@ import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
-import { formatMoney, type Cliente, type Venda, vendaNumeroPublico } from "@/lib/utils";
+import {
+  formatMoney,
+  localDateInputValue,
+  type Cliente,
+  type Venda,
+  vendaNumeroPublico,
+} from "@/lib/utils";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -34,7 +40,7 @@ function NovoChequeForm() {
     numero: "",
     agencia: "",
     conta: "",
-    dataRecebimento: new Date().toISOString().split("T")[0],
+    dataRecebimento: localDateInputValue(),
     observacoes: "",
   });
   const { vendas } = useVendasEmAberto(form.clienteId);
@@ -56,7 +62,7 @@ function NovoChequeForm() {
       numero: "",
       agencia: "",
       conta: "",
-      dataRecebimento: new Date().toISOString().split("T")[0],
+      dataRecebimento: localDateInputValue(),
       observacoes: "",
     },
   ]);
@@ -112,7 +118,7 @@ function NovoChequeForm() {
         numero: "",
         agencia: "",
         conta: "",
-        dataRecebimento: new Date().toISOString().split("T")[0],
+        dataRecebimento: localDateInputValue(),
         observacoes: "",
       },
     ]);

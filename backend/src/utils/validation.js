@@ -43,7 +43,17 @@ function parseDateField(value, fieldName, { required = false } = {}) {
     if (required) throw validationError(`${fieldName} é obrigatório`);
     return null;
   }
-  const date = new Date(value);
+  const raw = String(value).trim();
+  // Apenas data (YYYY-MM-DD): evitar new Date("...") = meia-noite UTC, que no Brasil vira o dia anterior.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split("-").map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0));
+    if (Number.isNaN(date.getTime())) {
+      throw validationError(`${fieldName} inválida`);
+    }
+    return date;
+  }
+  const date = new Date(raw);
   if (Number.isNaN(date.getTime())) {
     throw validationError(`${fieldName} inválida`);
   }
