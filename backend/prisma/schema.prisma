@@ -33,13 +33,15 @@ model Tenant {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  tenantId     Int
-  email        String   @unique
-  passwordHash String
-  name         String?
-  role         String   @default("member")
-  createdAt    DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  email           String   @unique
+  passwordHash    String
+  name            String?
+  role            String   @default("member")
+  /// Chaves de menu permitidas (JSON array). null = todas as abas do papel.
+  navPermissions  Json?
+  createdAt       DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -330,10 +332,12 @@ model ComissaoAjusteVenda {
   venda  Venda  @relation(fields: [vendaId], references: [id], onDelete: Cascade)
 }
 
-/// Eventos de auditoria financeira (append-only). Ver política de retenção em `services/financeiroEventos.js`.
+/// Eventos de auditoria (append-only). Ver política de retenção em `services/financeiroEventos.js`.
 model FinanceiroEvento {
   id          Int      @id @default(autoincrement())
   tenantId    Int
+  userId      Int?
+  userLabel   String?
   tipo        String
   entidade    String
   entidadeId  Int?
@@ -352,4 +356,5 @@ model FinanceiroEvento {
   @@index([tenantId, clienteId, createdAt])
   @@index([tenantId, vendaId, createdAt])
   @@index([tenantId, chequeId, createdAt])
+  @@index([tenantId, userId, createdAt])
 }

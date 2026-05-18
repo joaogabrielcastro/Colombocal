@@ -19,4 +19,36 @@ const vendaFretePatchSchema = z
   })
   .strict();
 
-module.exports = { vendaFretePatchSchema };
+const vendaItemSchema = z.object({
+  produtoId: z.coerce.number().int().positive(),
+  quantidade: z.coerce.number().positive(),
+  precoUnitario: z.coerce.number().nonnegative(),
+});
+
+/** PUT /vendas/:id — edição completa (mesmos campos do POST). */
+const vendaPutSchema = z
+  .object({
+    clienteId: z.coerce.number().int().positive(),
+    vendedorId: z.coerce.number().int().positive(),
+    motoristaId: z
+      .preprocess(
+        (v) => (v === "" || v === null || v === undefined ? null : v),
+        z.coerce.number().int().positive().nullable(),
+      )
+      .optional(),
+    fretePorSaco: z.coerce.number().nonnegative().optional(),
+    fretePorTonelada: z.coerce.number().nonnegative().optional(),
+    freteRecibo: z.boolean().optional(),
+    freteReciboNum: z.union([z.string(), z.null()]).optional(),
+    freteReciboData: z.preprocess((v) => {
+      if (v === undefined) return undefined;
+      if (v === null || v === "") return null;
+      return v;
+    }, z.union([z.null(), z.coerce.date(), z.string()]).optional()),
+    dataVenda: z.union([z.coerce.date(), z.string()]).optional(),
+    observacoes: z.union([z.string(), z.null()]).optional(),
+    itens: z.array(vendaItemSchema).min(1),
+  })
+  .strict();
+
+module.exports = { vendaFretePatchSchema, vendaPutSchema };

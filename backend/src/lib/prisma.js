@@ -28,6 +28,22 @@ async function ensureDatabaseCompat() {
     ALTER TABLE "Cheque"
     ADD COLUMN IF NOT EXISTS "emitenteNome" TEXT
   `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "User"
+    ADD COLUMN IF NOT EXISTS "navPermissions" JSONB
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "FinanceiroEvento"
+    ADD COLUMN IF NOT EXISTS "userId" INTEGER,
+    ADD COLUMN IF NOT EXISTS "userLabel" TEXT
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "FinanceiroEvento_tenantId_userId_createdAt_idx"
+      ON "FinanceiroEvento"("tenantId", "userId", "createdAt")
+  `);
 }
 
 module.exports = { prisma, ensureDatabaseCompat };

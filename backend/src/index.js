@@ -135,6 +135,7 @@ app.use("/api/vendas", requireTenantUser, require("./routes/vendas"));
 app.use("/api/fretes", requireTenantUser, require("./routes/fretes"));
 app.use("/api/config", requireTenantUser, require("./routes/config"));
 app.use("/api/users", requireTenantUser, requireAdmin, require("./routes/users"));
+app.use("/api/auditoria", requireTenantUser, require("./routes/auditoria"));
 app.use("/api/cheques", requireTenantUser, require("./routes/cheques"));
 app.use("/api/pagamentos", requireTenantUser, require("./routes/pagamentos"));
 app.use("/api/relatorios", requireTenantUser, require("./routes/relatorios"));

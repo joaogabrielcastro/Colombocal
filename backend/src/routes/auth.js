@@ -6,6 +6,7 @@ const router = express.Router();
 const { prisma } = require("../lib/prisma");
 const { signAuthToken, requireTenantUser } = require("../middleware/auth");
 const { handleRouteError } = require("../utils/api");
+const { normalizeNavPermissions } = require("../constants/navPermissions");
 
 function timingSafeEqualString(a, b) {
   const ba = Buffer.from(a, "utf8");
@@ -195,6 +196,7 @@ router.get("/me", requireTenantUser, async (req, res) => {
         name: user.name,
         role: user.role,
         tenantId: user.tenantId,
+        navPermissions: normalizeNavPermissions(user.navPermissions),
       },
       tenant: {
         id: user.tenant.id,

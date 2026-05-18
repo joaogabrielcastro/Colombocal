@@ -3,6 +3,11 @@ const bcrypt = require("bcrypt");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
 const { handleRouteError } = require("../utils/api");
+const {
+  NAV_PERMISSION_KEYS,
+  normalizeNavPermissions,
+} = require("../constants/navPermissions");
+const { registrarAuditoria } = require("../services/financeiroEventos");
 
 const ROLES = new Set(["admin", "member"]);
 
@@ -17,10 +22,16 @@ router.get("/", async (req, res) => {
         email: true,
         name: true,
         role: true,
+        navPermissions: true,
         createdAt: true,
       },
     });
-    res.json(users);
+    res.json(
+      users.map((u) => ({
+        ...u,
+        navPermissions: normalizeNavPermissions(u.navPermissions),
+      })),
+    );
   } catch (e) {
     handleRouteError(res, e);
   }
@@ -94,6 +105,77 @@ router.delete("/:id", async (req, res) => {
 
     await prisma.user.delete({ where: { id } });
     res.json({ ok: true });
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+// PATCH /api/users/:id/nav-permissions — abas visíveis (admin)
+router.patch("/:id/nav-permissions", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id < 1) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { id, tenantId: req.tenantId },
+    });
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+    if (user.role === "admin") {
+      return res.status(400).json({
+        error: "Administradores têm acesso a todas as abas",
+      });
+    }
+
+    let navPermissions = null;
+    if (req.body?.navPermissions != null) {
+      if (!Array.isArray(req.body.navPermissions)) {
+        return res.status(400).json({ error: "navPermissions deve ser uma lista" });
+      }
+      const invalid = req.body.navPermissions.filter(
+        (k) => !NAV_PERMISSION_KEYS.includes(String(k)),
+      );
+      if (invalid.length) {
+        return res.status(400).json({
+          error: `Chaves inválidas: ${invalid.join(", ")}`,
+        });
+      }
+      navPermissions = normalizeNavPermissions(req.body.navPermissions);
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id },
+        data: { navPermissions },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          navPermissions: true,
+          createdAt: true,
+        },
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "USER_NAV_PERMISSOES",
+        entidade: "User",
+        entidadeId: id,
+        payload: {
+          alvoEmail: user.email,
+          navPermissions,
+        },
+      });
+      return u;
+    });
+
+    res.json({
+      ...updated,
+      navPermissions: normalizeNavPermissions(updated.navPermissions),
+    });
   } catch (e) {
     handleRouteError(res, e);
   }

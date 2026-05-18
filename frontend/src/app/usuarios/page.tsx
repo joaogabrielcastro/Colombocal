@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Cog6ToothIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { NAV_PERMISSION_OPTIONS, type NavPermissionKey } from '@/lib/navigation';
 import api from '@/lib/api';
 import { ListScaffold } from '@/components/ui/list-scaffold';
 import { TableListSkeleton } from '@/components/ui/skeletons';
@@ -14,6 +15,7 @@ type TenantUser = {
   email: string;
   name: string | null;
   role: string;
+  navPermissions: string[] | null;
   createdAt: string;
 };
 
@@ -30,6 +32,44 @@ export default function UsuariosPage() {
   const [erro, setErro] = useState('');
   const [userToDelete, setUserToDelete] = useState<TenantUser | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [permUser, setPermUser] = useState<TenantUser | null>(null);
+  const [permKeys, setPermKeys] = useState<NavPermissionKey[]>([]);
+  const [salvandoPerm, setSalvandoPerm] = useState(false);
+
+  const allNavKeys = NAV_PERMISSION_OPTIONS.map((o) => o.key);
+
+  const abrirPermissoes = (u: TenantUser) => {
+    setPermUser(u);
+    const keys =
+      u.navPermissions && u.navPermissions.length > 0
+        ? (u.navPermissions as NavPermissionKey[])
+        : [...allNavKeys];
+    setPermKeys(keys);
+  };
+
+  const togglePermKey = (key: NavPermissionKey) => {
+    setPermKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  };
+
+  const salvarPermissoes = async () => {
+    if (!permUser) return;
+    setSalvandoPerm(true);
+    try {
+      const navPermissions =
+        permKeys.length === allNavKeys.length ? null : permKeys;
+      await api.patch<TenantUser>(`/users/${permUser.id}/nav-permissions`, {
+        navPermissions,
+      });
+      setPermUser(null);
+      carregarUsuarios();
+    } catch (err) {
+      reportApiError(err, { title: 'Não foi possível salvar as abas' });
+    } finally {
+      setSalvandoPerm(false);
+    }
+  };
 
   const carregarUsuarios = useCallback(() => {
     setLoadingUsers(true);
@@ -151,7 +191,8 @@ export default function UsuariosPage() {
                     <th className="table-header">Nome</th>
                     <th className="table-header">E-mail</th>
                     <th className="table-header">Papel</th>
-                    <th className="table-header w-24" />
+                    <th className="table-header">Abas</th>
+                    <th className="table-header w-28" />
                   </tr>
                 </thead>
                 <tbody>
@@ -160,19 +201,38 @@ export default function UsuariosPage() {
                       <td className="table-cell">{u.name || '—'}</td>
                       <td className="table-cell">{u.email}</td>
                       <td className="table-cell capitalize">{u.role === 'admin' ? 'Admin' : 'Membro'}</td>
+                      <td className="table-cell text-xs text-gray-600">
+                        {u.role === 'admin'
+                          ? 'Todas'
+                          : u.navPermissions?.length
+                            ? `${u.navPermissions.length} aba(s)`
+                            : 'Todas (padrão)'}
+                      </td>
                       <td className="table-cell text-right">
-                        {u.id !== me.id ? (
-                          <button
-                            type="button"
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                            title="Remover acesso"
-                            onClick={() => setUserToDelete(u)}
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 text-xs pr-2">Você</span>
-                        )}
+                        <div className="flex justify-end gap-1">
+                          {u.role === 'member' && (
+                            <button
+                              type="button"
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                              title="Configurar abas visíveis"
+                              onClick={() => abrirPermissoes(u)}
+                            >
+                              <Cog6ToothIcon className="w-4 h-4" />
+                            </button>
+                          )}
+                          {u.id !== me.id ? (
+                            <button
+                              type="button"
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                              title="Remover acesso"
+                              onClick={() => setUserToDelete(u)}
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <span className="text-gray-400 text-xs px-2 py-2">Você</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -246,6 +306,60 @@ export default function UsuariosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {permUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Abas visíveis</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              {permUser.name || permUser.email} — marque o que esta pessoa pode acessar no menu.
+            </p>
+            <div className="space-y-4">
+              {['Principal', 'Avançado', 'Relatórios', 'Sistema'].map((group) => {
+                const opts = NAV_PERMISSION_OPTIONS.filter((o) => o.group === group);
+                if (!opts.length) return null;
+                return (
+                  <div key={group}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{group}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {opts.map((o) => (
+                        <label
+                          key={o.key}
+                          className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={permKeys.includes(o.key)}
+                            onChange={() => togglePermKey(o.key)}
+                            className="rounded"
+                          />
+                          {o.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-500 mt-4">
+              Com todas marcadas, o membro vê o menu completo (exceto Usuários, só admin).
+            </p>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                disabled={salvandoPerm || permKeys.length === 0}
+                className="btn-primary flex-1"
+                onClick={() => void salvarPermissoes()}
+              >
+                {salvandoPerm ? 'Salvando…' : 'Salvar'}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setPermUser(null)}>
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

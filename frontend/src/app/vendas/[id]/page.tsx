@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
+  PencilIcon,
   PrinterIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
@@ -331,6 +332,19 @@ export default function VendaDetailPage() {
           <PrinterIcon className="w-4 h-4" />
           Imprimir O.S.
         </button>
+        {venda.podeEditar ? (
+          <Link href={`/vendas/${id}/editar`} className="btn-secondary">
+            <PencilIcon className="w-4 h-4" />
+            Editar
+          </Link>
+        ) : (
+          <span
+            className="text-xs text-gray-500 max-w-[10rem] leading-tight"
+            title="Não é possível editar com baixas ou cheques vinculados"
+          >
+            Edição bloqueada (baixas/cheques)
+          </span>
+        )}
         <button
           onClick={() => setConfirmCancelOpen(true)}
           disabled={cancelando}

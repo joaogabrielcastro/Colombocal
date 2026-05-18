@@ -10,13 +10,17 @@ import {
 import {
   formatMoney,
   localDateInputValue,
+  toInputDate,
+  vendaNumeroPublico,
   type Cliente,
   type Produto,
   type Vendedor,
   type Motorista,
+  type Venda,
 } from "@/lib/utils";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
+import { reportApiError } from "@/lib/report-api-error";
 import SearchableSelect from "@/components/SearchableSelect";
 
 interface ItemForm {
@@ -39,10 +43,13 @@ export default function NovaVendaPage() {
   );
 }
 
-function NovaVendaForm() {
+export function NovaVendaForm({ editId }: { editId?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clienteIdFromQuery = searchParams.get("clienteId");
+  const isEdit = !!editId;
+  const [carregandoVenda, setCarregandoVenda] = useState(!!editId);
+  const [numeroVenda, setNumeroVenda] = useState<number | null>(null);
 
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
 
@@ -75,8 +82,56 @@ function NovaVendaForm() {
   }, []);
 
   useEffect(() => {
-    if (clienteIdFromQuery) setClienteId(clienteIdFromQuery);
-  }, [clienteIdFromQuery]);
+    if (!isEdit && clienteIdFromQuery) setClienteId(clienteIdFromQuery);
+  }, [clienteIdFromQuery, isEdit]);
+
+  useEffect(() => {
+    if (!editId) return;
+    let alive = true;
+    setCarregandoVenda(true);
+    api
+      .get<Venda & { podeEditar?: boolean }>(`/vendas/${editId}`)
+      .then((v) => {
+        if (!alive) return;
+        if (!v.podeEditar) {
+          router.replace(`/vendas/${editId}`);
+          return;
+        }
+        setNumeroVenda(vendaNumeroPublico(v));
+        setClienteId(String(v.clienteId));
+        setVendedorId(String(v.vendedorId));
+        setMotoristaId(v.motoristaId ? String(v.motoristaId) : "");
+        setFretePorSaco(String(v.freteTarifaSaco ?? 0));
+        setFretePorTonelada(String(v.freteTarifaTonelada ?? 0));
+        setFrete(String(parseFloat(String(v.frete))));
+        setDataVenda(toInputDate(v.dataVenda));
+        setObservacoes(v.observacoes || "");
+        setFreteRecibo(v.freteRecibo);
+        const rd = v.fretes?.[0]?.reciboData;
+        setFreteReciboData(rd ? toInputDate(rd) : localDateInputValue());
+        setSelectedCliente(v.cliente);
+        setItens(
+          v.itens.map((item) => ({
+            produtoId: String(item.produtoId),
+            quantidade: String(item.quantidade),
+            precoUnitario: String(item.precoUnitario),
+            unidade: String(item.produto.unidade || ""),
+          })),
+        );
+      })
+      .catch((e) => {
+        if (alive) {
+          reportApiError(e, { title: "Não foi possível carregar a venda" });
+          router.push("/vendas");
+        }
+      })
+      .finally(() => {
+        if (alive) setCarregandoVenda(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [editId, router]);
 
   useEffect(() => {
     if (!clienteId) {
@@ -292,21 +347,37 @@ function NovaVendaForm() {
     setSalvando(true);
     setErro("");
     try {
-      const venda = await api.post<{ id: number }>("/vendas", {
-        clienteId,
-        vendedorId,
-        motoristaId: motoristaId || undefined,
-        frete: freteVal,
+      const payload = {
+        clienteId: parseInt(clienteId, 10),
+        vendedorId: parseInt(vendedorId, 10),
+        motoristaId: motoristaId ? parseInt(motoristaId, 10) : null,
         freteRecibo,
         freteReciboNum: null,
         freteReciboData: freteRecibo ? freteReciboData : null,
         fretePorSaco: Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0,
         fretePorTonelada: Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0,
         dataVenda,
-        observacoes,
-        itens: itensValidos,
-      });
-      router.push(`/vendas/${venda.id}`);
+        observacoes: observacoes || null,
+        itens: itensValidos.map((i) => ({
+          produtoId: parseInt(i.produtoId, 10),
+          quantidade: parseFloat(i.quantidade),
+          precoUnitario: parseFloat(i.precoUnitario),
+        })),
+      };
+      if (isEdit && editId) {
+        const venda = await api.put<Venda>(`/vendas/${editId}`, payload);
+        router.push(`/vendas/${venda.id}`);
+      } else {
+        const venda = await api.post<{ id: number }>("/vendas", {
+          ...payload,
+          frete: freteVal,
+          clienteId,
+          vendedorId,
+          motoristaId: motoristaId || undefined,
+          itens: itensValidos,
+        });
+        router.push(`/vendas/${venda.id}`);
+      }
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : "Erro ao registrar");
       setSalvando(false);
@@ -319,13 +390,20 @@ function NovaVendaForm() {
       ? cli.comissaoFixaPercentual
       : cli?.vendedor?.comissaoPercentual;
 
+  if (carregandoVenda) return <FormPageSkeleton />;
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/vendas" className="btn-secondary py-1.5 px-2.5">
+        <Link
+          href={isEdit && editId ? `/vendas/${editId}` : "/vendas"}
+          className="btn-secondary py-1.5 px-2.5"
+        >
           <ArrowLeftIcon className="w-4 h-4" />
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Nova Venda</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isEdit ? `Editar Venda #${numeroVenda ?? editId}` : "Nova Venda"}
+        </h1>
       </div>
 
       {erro && (
@@ -598,9 +676,18 @@ function NovaVendaForm() {
 
         <div className="flex gap-3">
           <button type="submit" disabled={salvando} className="btn-primary">
-            {salvando ? "Registrando..." : "Registrar Venda"}
+            {salvando
+              ? isEdit
+                ? "Salvando..."
+                : "Registrando..."
+              : isEdit
+                ? "Salvar alterações"
+                : "Registrar Venda"}
           </button>
-          <Link href="/vendas" className="btn-secondary">
+          <Link
+            href={isEdit && editId ? `/vendas/${editId}` : "/vendas"}
+            className="btn-secondary"
+          >
             Cancelar
           </Link>
         </div>

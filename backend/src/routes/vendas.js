@@ -8,8 +8,11 @@ const {
   ensureArray,
 } = require("../utils/validation");
 const { parseBody } = require("../utils/zodParse");
-const { vendaFretePatchSchema } = require("../schemas/venda");
-const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
+const { vendaFretePatchSchema, vendaPutSchema } = require("../schemas/venda");
+const {
+  registrarEventoFinanceiro,
+  registrarAuditoria,
+} = require("../services/financeiroEventos");
 const {
   parsePagination,
   setPaginationHeaders,
@@ -156,10 +159,18 @@ router.get("/:id", async (req, res) => {
         pagamentos: { orderBy: { data: "desc" } },
         titulos: { orderBy: { vencimento: "asc" } },
         fretes: { orderBy: { data: "desc" } },
+        cheques: { select: { id: true } },
       },
     });
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
-    res.json(venda);
+    const tituloComPagamento = (venda.titulos || []).some(
+      (t) => parseFloat(String(t.valorPago ?? 0)) > 0,
+    );
+    const podeEditar =
+      venda.pagamentos.length === 0 &&
+      venda.cheques.length === 0 &&
+      !tituloComPagamento;
+    res.json({ ...venda, podeEditar });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -243,7 +254,7 @@ router.patch("/:id", async (req, res) => {
         }
       }
 
-      await registrarEventoFinanceiro(tx, {
+      await registrarAuditoria(tx, req, {
         tenantId,
         tipo: "VENDA_FRETE_ATUALIZADO",
         entidade: "Venda",
@@ -442,7 +453,7 @@ router.post("/", async (req, res) => {
         });
       }
 
-      await registrarEventoFinanceiro(tx, {
+      await registrarAuditoria(tx, req, {
         tenantId,
         tipo: "VENDA_CRIADA",
         entidade: "Venda",
@@ -495,6 +506,279 @@ router.post("/", async (req, res) => {
   }
 });
 
+// PUT /api/vendas/:id — editar venda (sem pagamentos nem cheques vinculados)
+router.put("/:id", async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    const id = parseIntField(req.params.id, "id", { min: 1 });
+    const body = parseBody(vendaPutSchema, req.body);
+
+    const existente = await prisma.venda.findFirst({
+      where: { id, ...tw(req) },
+      include: {
+        pagamentos: true,
+        cheques: { select: { id: true } },
+        titulos: true,
+        itens: true,
+      },
+    });
+    if (!existente) return res.status(404).json({ error: "Venda não encontrada" });
+
+    if (existente.pagamentos.length > 0) {
+      return res.status(400).json({
+        error:
+          "Venda com baixas registradas não pode ser editada. Estorne as baixas primeiro.",
+      });
+    }
+    if (existente.cheques.length > 0) {
+      return res.status(400).json({
+        error:
+          "Venda com cheques vinculados não pode ser editada. Ajuste os cheques primeiro.",
+      });
+    }
+
+    const clienteIdNum = body.clienteId;
+    const vendedorIdNum = body.vendedorId;
+    const motoristaIdNum = body.motoristaId ?? null;
+    const fretePorSacoNum = body.fretePorSaco ?? null;
+    const fretePorTonNum = body.fretePorTonelada ?? null;
+    const dataVendaDate = body.dataVenda
+      ? parseDateField(body.dataVenda, "dataVenda")
+      : existente.dataVenda;
+    const itensValidos = body.itens.map((item) => ({
+      produtoId: item.produtoId,
+      quantidade: item.quantidade,
+      precoUnitario: item.precoUnitario,
+    }));
+
+    const valorTotal = itensValidos.reduce(
+      (acc, item) => acc + item.quantidade * item.precoUnitario,
+      0,
+    );
+
+    const produtos = await Promise.all(
+      itensValidos.map((item) =>
+        prisma.produto.findFirst({
+          where: { id: item.produtoId, tenantId },
+          select: { id: true, unidade: true },
+        }),
+      ),
+    );
+    const produtosPorId = new Map();
+    for (let i = 0; i < itensValidos.length; i += 1) {
+      const item = itensValidos[i];
+      const produto = produtos[i];
+      if (!produto) {
+        return res
+          .status(400)
+          .json({ error: `Produto ID ${item.produtoId} não encontrado` });
+      }
+      produtosPorId.set(produto.id, produto);
+    }
+
+    const snapshotAntes = {
+      clienteId: existente.clienteId,
+      vendedorId: existente.vendedorId,
+      motoristaId: existente.motoristaId,
+      valorTotal: parseFloat(String(existente.valorTotal)),
+      dataVenda: existente.dataVenda,
+      itens: existente.itens.length,
+    };
+
+    await prisma.$transaction(async (tx) => {
+      const cliente = await tx.cliente.findFirst({
+        where: { id: clienteIdNum, tenantId },
+      });
+      if (!cliente) throw new Error("Cliente não encontrado");
+
+      const vendedor = await tx.vendedor.findFirst({
+        where: { id: vendedorIdNum, tenantId },
+      });
+      if (!vendedor) throw new Error("Vendedor não encontrado");
+
+      if (motoristaIdNum != null) {
+        const mot = await tx.motorista.findFirst({
+          where: { id: motoristaIdNum, tenantId },
+        });
+        if (!mot) throw new Error("Motorista não encontrado");
+      }
+
+      const comissaoPercentualAplicado =
+        cliente.comissaoFixaPercentual != null
+          ? parseFloat(cliente.comissaoFixaPercentual)
+          : parseFloat(vendedor.comissaoPercentual || 0);
+      const comissaoValor = (valorTotal * comissaoPercentualAplicado) / 100;
+      const dataEfetivaVenda = dataVendaDate || existente.dataVenda;
+
+      const fretePorSacoAplicado =
+        fretePorSacoNum != null
+          ? fretePorSacoNum
+          : parseFloat(String(cliente.fretePadraoSaco ?? cliente.fretePadrao ?? 0));
+      const fretePorTonAplicado =
+        fretePorTonNum != null
+          ? fretePorTonNum
+          : parseFloat(String(cliente.fretePadraoTonelada ?? 0));
+      const freteFinal = calcularFreteAutomatico(
+        itensValidos,
+        produtosPorId,
+        fretePorSacoAplicado,
+        fretePorTonAplicado,
+      );
+
+      const freteRecibo =
+        body.freteRecibo !== undefined ? !!body.freteRecibo : existente.freteRecibo;
+      const freteReciboNum =
+        body.freteReciboNum !== undefined
+          ? body.freteReciboNum || null
+          : existente.freteReciboNum;
+
+      await tx.itemVenda.deleteMany({ where: { vendaId: id } });
+      await tx.movimentacaoEstoque.deleteMany({
+        where: { vendaId: id, tenantId },
+      });
+
+      const vendaAtualizada = await tx.venda.update({
+        where: { id },
+        data: {
+          clienteId: clienteIdNum,
+          vendedorId: vendedorIdNum,
+          motoristaId: motoristaIdNum,
+          frete: freteFinal,
+          freteTarifaSaco: fretePorSacoAplicado,
+          freteTarifaTonelada: fretePorTonAplicado,
+          freteRecibo,
+          freteReciboNum,
+          comissaoPercentualAplicado,
+          comissaoValor,
+          valorTotal,
+          dataVenda: dataEfetivaVenda,
+          observacoes:
+            body.observacoes !== undefined
+              ? body.observacoes
+              : existente.observacoes,
+          itens: {
+            create: itensValidos.map((item) => ({
+              produtoId: item.produtoId,
+              quantidade: item.quantidade,
+              precoUnitario: item.precoUnitario,
+              subtotal: item.quantidade * item.precoUnitario,
+            })),
+          },
+        },
+      });
+
+      const numeroVenda = existente.numeroVenda;
+      for (const item of itensValidos) {
+        await tx.movimentacaoEstoque.create({
+          data: {
+            tenantId,
+            produtoId: item.produtoId,
+            tipo: "saida",
+            quantidade: item.quantidade,
+            vendaId: id,
+            observacao: `Venda #${numeroVenda} (edição)`,
+          },
+        });
+      }
+
+      for (const titulo of existente.titulos) {
+        const vp = parseFloat(String(titulo.valorPago ?? 0));
+        if (vp > 0) {
+          throw new Error(
+            "Título com pagamento parcial impede edição da venda",
+          );
+        }
+        await tx.tituloReceber.update({
+          where: { id: titulo.id },
+          data: {
+            clienteId: clienteIdNum,
+            valorOriginal: valorTotal,
+            vencimento: addDays(dataEfetivaVenda, 30),
+          },
+        });
+      }
+
+      const fretes = await tx.freteMovimento.findMany({
+        where: { vendaId: id, tenantId },
+        orderBy: { id: "asc" },
+      });
+      const rd =
+        body.freteReciboData !== undefined
+          ? body.freteReciboData != null && String(body.freteReciboData).trim() !== ""
+            ? parseDateField(body.freteReciboData, "freteReciboData")
+            : null
+          : undefined;
+
+      if (freteFinal > 0) {
+        const fmData = {
+          clienteId: clienteIdNum,
+          valor: freteFinal,
+          reciboEmitido: freteRecibo,
+          reciboNumero: freteReciboNum,
+          data: dataEfetivaVenda,
+        };
+        if (rd !== undefined) fmData.reciboData = rd;
+        if (fretes.length > 0) {
+          await tx.freteMovimento.update({
+            where: { id: fretes[0].id },
+            data: fmData,
+          });
+        } else {
+          await tx.freteMovimento.create({
+            data: {
+              tenantId,
+              vendaId: id,
+              observacao: `Frete da venda #${numeroVenda}`,
+              ...fmData,
+            },
+          });
+        }
+      } else if (fretes.length > 0) {
+        await tx.freteMovimento.deleteMany({ where: { vendaId: id, tenantId } });
+      }
+
+      await registrarAuditoria(tx, req, {
+        tenantId,
+        tipo: "VENDA_ATUALIZADA",
+        entidade: "Venda",
+        entidadeId: id,
+        clienteId: clienteIdNum,
+        vendaId: id,
+        valor: valorTotal,
+        payload: {
+          antes: snapshotAntes,
+          depois: {
+            clienteId: clienteIdNum,
+            vendedorId: vendedorIdNum,
+            motoristaId: motoristaIdNum,
+            valorTotal,
+            dataVenda: dataEfetivaVenda,
+            itens: itensValidos.length,
+          },
+        },
+      });
+
+      return vendaAtualizada;
+    });
+
+    const vendaCompleta = await prisma.venda.findFirst({
+      where: { id, ...tw(req) },
+      include: {
+        cliente: true,
+        vendedor: true,
+        motorista: true,
+        itens: { include: { produto: true } },
+        pagamentos: true,
+        titulos: true,
+        fretes: true,
+      },
+    });
+    res.json(vendaCompleta);
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
 // DELETE /api/vendas/:id - cancelar venda
 router.delete("/:id", async (req, res) => {
   try {
@@ -536,7 +820,7 @@ router.delete("/:id", async (req, res) => {
       await tx.freteMovimento.deleteMany({ where: { vendaId: id, tenantId } });
       await tx.tituloReceber.deleteMany({ where: { vendaId: id, tenantId } });
       await tx.venda.delete({ where: { id } });
-      await registrarEventoFinanceiro(tx, {
+      await registrarAuditoria(tx, req, {
         tenantId,
         tipo: "VENDA_CANCELADA",
         entidade: "Venda",

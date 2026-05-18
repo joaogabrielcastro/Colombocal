@@ -16,33 +16,48 @@ import {
   advancedReportItems,
   filterMainNavForSidebar,
   filterReportsForSidebar,
+  hasVisibleReports,
 } from '@/lib/navigation';
 import { clearAuthToken, getAuthToken } from '@/lib/auth-token';
 import api from '@/lib/api';
 
+type MeUser = {
+  role: string;
+  navPermissions?: string[] | null;
+};
+
 export default function Sidebar() {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [me, setMe] = useState<MeUser | null>(null);
 
   useEffect(() => {
     if (!getAuthToken()) {
-      setIsAdmin(false);
+      setMe(null);
       return;
     }
     api
-      .get<{ user: { role: string } }>('/auth/me')
-      .then((r) => setIsAdmin(r.user.role === 'admin'))
-      .catch(() => setIsAdmin(false));
+      .get<{ user: MeUser }>('/auth/me')
+      .then((r) => setMe(r.user))
+      .catch(() => setMe(null));
   }, []);
 
-  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED, {
-    isAdmin,
-  });
+  const isAdmin = me?.role === 'admin';
+  const navOpts = { isAdmin, navPermissions: me?.navPermissions ?? null };
+
+  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED, navOpts);
   const advancedMain = advancedMainNavItems(MAIN_NAV).filter(
-    (i) => !i.adminOnly || isAdmin,
+    (i) =>
+      (!i.adminOnly || isAdmin) &&
+      !mainVisible.some((v) => v.href === i.href) &&
+      filterMainNavForSidebar([i], false, navOpts).length > 0,
   );
-  const reportsVisible = filterReportsForSidebar(REPORT_NAV, UI_HIDE_ADVANCED);
-  const reportsAdvancedOnly = advancedReportItems(REPORT_NAV);
+  const reportsVisible = filterReportsForSidebar(REPORT_NAV, UI_HIDE_ADVANCED, navOpts);
+  const reportsAdvancedOnly = advancedReportItems(REPORT_NAV).filter(
+    (i) =>
+      !reportsVisible.some((v) => v.href === i.href) &&
+      filterReportsForSidebar([i], false, navOpts).length > 0,
+  );
+  const showReportsSection = hasVisibleReports(UI_HIDE_ADVANCED, navOpts);
 
   const [relOpen, setRelOpen] = useState(pathname.startsWith('/relatorios'));
   const [advOpen, setAdvOpen] = useState(
@@ -69,7 +84,6 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
-
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         {mainVisible.map(({ href, label, icon: Icon }) => (
           <Link
@@ -86,7 +100,7 @@ export default function Sidebar() {
           </Link>
         ))}
 
-        {UI_HIDE_ADVANCED && (
+        {UI_HIDE_ADVANCED && advancedMain.length > 0 && (
           <div className="mt-1">
             <button
               type="button"
@@ -122,14 +136,57 @@ export default function Sidebar() {
                     {label}
                   </Link>
                 ))}
-                <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500">
-                  Relatórios — análise
-                </p>
-                {reportsAdvancedOnly.map(({ href, label }) => (
+                {reportsAdvancedOnly.length > 0 && (
+                  <>
+                    <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500">
+                      Relatórios — análise
+                    </p>
+                    {reportsAdvancedOnly.map(({ href, label }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                          pathname === href
+                            ? 'bg-blue-600 text-white font-medium'
+                            : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {showReportsSection && (
+          <div className="mt-1">
+            <button
+              type="button"
+              onClick={() => setRelOpen(!relOpen)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm transition-colors ${
+                pathname.startsWith('/relatorios')
+                  ? 'bg-blue-600 text-white font-medium'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <ChartBarIcon className="w-5 h-5 flex-shrink-0" />
+              <span className="flex-1 text-left">Relatórios</span>
+              {relOpen ? (
+                <ChevronDownIcon className="w-4 h-4" />
+              ) : (
+                <ChevronRightIcon className="w-4 h-4" />
+              )}
+            </button>
+            {relOpen && (
+              <div className="ml-4 pl-3 border-l border-gray-700 mb-1">
+                {reportsVisible.map(({ href, label }) => (
                   <Link
                     key={href}
                     href={href}
-                    className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                    className={`flex items-center px-3 py-2 rounded-lg mb-0.5 text-sm transition-colors ${
                       pathname === href
                         ? 'bg-blue-600 text-white font-medium'
                         : 'text-gray-400 hover:bg-gray-800 hover:text-white'
@@ -142,43 +199,6 @@ export default function Sidebar() {
             )}
           </div>
         )}
-
-        <div className="mt-1">
-          <button
-            type="button"
-            onClick={() => setRelOpen(!relOpen)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm transition-colors ${
-              pathname.startsWith('/relatorios')
-                ? 'bg-blue-600 text-white font-medium'
-                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-            }`}
-          >
-            <ChartBarIcon className="w-5 h-5 flex-shrink-0" />
-            <span className="flex-1 text-left">Relatórios</span>
-            {relOpen ? (
-              <ChevronDownIcon className="w-4 h-4" />
-            ) : (
-              <ChevronRightIcon className="w-4 h-4" />
-            )}
-          </button>
-          {relOpen && (
-            <div className="ml-4 pl-3 border-l border-gray-700 mb-1">
-              {reportsVisible.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`flex items-center px-3 py-2 rounded-lg mb-0.5 text-sm transition-colors ${
-                    pathname === href
-                      ? 'bg-blue-600 text-white font-medium'
-                      : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                  }`}
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
       </nav>
 
       <div className="px-4 py-3 border-t border-gray-700 space-y-1">
@@ -196,3 +216,4 @@ export default function Sidebar() {
     </aside>
   );
 }
+

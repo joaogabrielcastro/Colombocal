@@ -141,6 +141,8 @@ export interface Venda {
   fretes?: FreteMovimento[];
   /** Soma do saldo em aberto nos títulos desta venda (API GET /vendas). */
   saldoEmAbertoTitulos?: number;
+  podeEditar?: boolean;
+  cheques?: { id: number }[];
 }
 
 export interface TituloReceber {
