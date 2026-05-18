@@ -15,6 +15,7 @@
     "db:ensure-tenant-user": "prisma db execute --file prisma/manual/ensure-tenant-user-tables.sql --schema prisma/schema.prisma",
     "db:ensure-tenant-id-columns": "prisma db execute --file prisma/manual/ensure-tenant-id-columns.sql --schema prisma/schema.prisma",
     "db:ensure-venda-legacy-columns": "prisma db execute --file prisma/manual/ensure-venda-legacy-columns.sql --schema prisma/schema.prisma",
+    "db:ensure-nav-auditoria": "prisma db execute --file prisma/manual/ensure-nav-permissions-auditoria.sql --schema prisma/schema.prisma",
     "db:reset-public-schema": "node scripts/reset-public-schema.js",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
