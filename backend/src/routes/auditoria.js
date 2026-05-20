@@ -8,6 +8,8 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { getDateRange } = require("../utils/dateRangeQuery");
+const { resolveUsuarioExibicao } = require("../services/financeiroEventos");
+const { labelTipoAuditoria } = require("../constants/auditoriaTipos");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -66,8 +68,29 @@ router.get("/", async (req, res) => {
       prisma.financeiroEvento.count({ where }),
     ]);
 
+    const userIds = [
+      ...new Set(eventos.map((e) => e.userId).filter((id) => id != null)),
+    ];
+    const users =
+      userIds.length > 0
+        ? await prisma.user.findMany({
+            where: { tenantId: req.tenantId, id: { in: userIds } },
+            select: { id: true, name: true, email: true },
+          })
+        : [];
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const comUsuario = eventos.map((ev) => {
+      const usuario = resolveUsuarioExibicao(ev, userById);
+      return {
+        ...ev,
+        tipoLabel: labelTipoAuditoria(ev.tipo),
+        usuario: usuario || "—",
+      };
+    });
+
     setPaginationHeaders(res, { total, take, skip });
-    res.json(eventos);
+    res.json(comUsuario);
   } catch (e) {
     handleRouteError(res, e);
   }
@@ -85,7 +108,13 @@ router.get("/tipos", async (req, res) => {
       select: { tipo: true },
       orderBy: { tipo: "asc" },
     });
-    res.json(rows.map((r) => r.tipo));
+    const tipos = rows
+      .map((r) => ({
+        key: r.tipo,
+        label: labelTipoAuditoria(r.tipo),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    res.json(tipos);
   } catch (e) {
     handleRouteError(res, e);
   }

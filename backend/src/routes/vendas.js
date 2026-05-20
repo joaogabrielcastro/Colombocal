@@ -9,10 +9,7 @@ const {
 } = require("../utils/validation");
 const { parseBody } = require("../utils/zodParse");
 const { vendaFretePatchSchema, vendaPutSchema } = require("../schemas/venda");
-const {
-  registrarEventoFinanceiro,
-  registrarAuditoria,
-} = require("../services/financeiroEventos");
+const { registrarAuditoria } = require("../services/financeiroEventos");
 const {
   parsePagination,
   setPaginationHeaders,

@@ -11,7 +11,7 @@ const {
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
-const { registrarEventoFinanceiro } = require("../services/financeiroEventos");
+const { registrarAuditoria } = require("../services/financeiroEventos");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -189,7 +189,7 @@ router.post("/avulso", async (req, res) => {
         });
       }
 
-      await registrarEventoFinanceiro(tx, {
+      await registrarAuditoria(tx, req, {
         tenantId,
         tipo: "FRETE_AVULSO_CRIADO",
         entidade: "FreteMovimento",
@@ -350,7 +350,7 @@ router.patch("/:id", async (req, res) => {
         }
       }
 
-      await registrarEventoFinanceiro(tx, {
+      await registrarAuditoria(tx, req, {
         tenantId,
         tipo: "FRETE_ALTERADO",
         entidade: "FreteMovimento",
@@ -455,7 +455,7 @@ router.post("/vale-avulso", async (req, res) => {
         },
       });
 
-      await registrarEventoFinanceiro(tx, {
+      await registrarAuditoria(tx, req, {
         tenantId,
         tipo: "FRETE_VALE_AVULSO_CRIADO",
         entidade: "FreteMovimento",
@@ -531,7 +531,7 @@ router.post("/:id/vale", async (req, res) => {
         },
       });
 
-      await registrarEventoFinanceiro(tx, {
+      await registrarAuditoria(tx, req, {
         tenantId,
         tipo: "FRETE_VALE_CRIADO",
         entidade: "TituloReceber",

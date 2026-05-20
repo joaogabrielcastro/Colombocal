@@ -71,6 +71,7 @@ async function registrarPagamento(prisma, payload) {
     await recalcularTodosTitulosCliente(tx, payload.clienteId);
     await registrarEventoFinanceiro(tx, {
       tenantId,
+      auditActor: payload.auditActor,
       tipo: "PAGAMENTO_CRIADO",
       entidade: "Pagamento",
       entidadeId: novoPagamento.id,

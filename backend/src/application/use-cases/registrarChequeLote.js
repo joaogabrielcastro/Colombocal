@@ -81,6 +81,7 @@ async function registrarChequeLote(prisma, payload) {
 
       await registrarEventoFinanceiro(tx, {
         tenantId,
+        auditActor: payload.auditActor,
         tipo: "CHEQUE_CRIADO_LOTE",
         entidade: "Cheque",
         entidadeId: novoCheque.id,

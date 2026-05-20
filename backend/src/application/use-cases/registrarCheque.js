@@ -93,6 +93,7 @@ async function registrarCheque(prisma, payload) {
     await recalcularTodosTitulosCliente(tx, payload.clienteId);
     await registrarEventoFinanceiro(tx, {
       tenantId,
+      auditActor: payload.auditActor,
       tipo: "CHEQUE_CRIADO",
       entidade: "Cheque",
       entidadeId: novoCheque.id,

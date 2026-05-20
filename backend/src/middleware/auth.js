@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { prisma } = require("../lib/prisma");
 
 function getJwtSecret() {
   const s = process.env.JWT_SECRET;
@@ -31,7 +32,7 @@ function isAuthDisabled() {
   return process.env.AUTH_DISABLED === "true";
 }
 
-function requireTenantUser(req, res, next) {
+async function requireTenantUser(req, res, next) {
   try {
     if (isAuthDisabled()) {
       const tid = Number(process.env.DEFAULT_TENANT_ID ?? 1);
@@ -40,6 +41,7 @@ function requireTenantUser(req, res, next) {
         id: 0,
         tenantId: req.tenantId,
         email: "dev@local",
+        name: "Desenvolvimento",
         role: "admin",
       };
       return next();
@@ -60,13 +62,17 @@ function requireTenantUser(req, res, next) {
     if (!Number.isFinite(tid) || tid < 1 || !Number.isFinite(uid) || uid < 1) {
       return res.status(401).json({ error: "Token inválido" });
     }
+
+    const user = await prisma.user.findFirst({
+      where: { id: uid, tenantId: tid },
+      select: { id: true, tenantId: true, email: true, name: true, role: true },
+    });
+    if (!user) {
+      return res.status(401).json({ error: "Usuário não encontrado" });
+    }
+
     req.tenantId = tid;
-    req.authUser = {
-      id: uid,
-      tenantId: tid,
-      email: String(payload.email || ""),
-      role: String(payload.role || "member"),
-    };
+    req.authUser = user;
     return next();
   } catch {
     return res.status(401).json({ error: "Sessão inválida ou expirada" });

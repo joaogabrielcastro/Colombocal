@@ -9,7 +9,7 @@ const {
   deleteChequeById,
 } = require("../../infra/prisma/repositories/chequeRepository");
 
-async function excluirCheque(prisma, chequeId, tenantId) {
+async function excluirCheque(prisma, chequeId, tenantId, auditActor) {
   if (tenantId == null) {
     throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
   }
@@ -26,6 +26,7 @@ async function excluirCheque(prisma, chequeId, tenantId) {
     await deleteChequeById(tx, chequeId, tenantId);
     await registrarEventoFinanceiro(tx, {
       tenantId,
+      auditActor,
       tipo: "CHEQUE_EXCLUIDO",
       entidade: "Cheque",
       entidadeId: cheque.id,

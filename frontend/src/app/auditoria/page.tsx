@@ -8,6 +8,7 @@ import { ListScaffold } from "@/components/ui/list-scaffold";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { localDateInputValue } from "@/lib/utils";
+import { labelTipoAuditoria } from "@/lib/auditoria-labels";
 
 type AuditoriaEvento = {
   id: number;
@@ -15,6 +16,8 @@ type AuditoriaEvento = {
   entidade: string;
   entidadeId: number | null;
   userLabel: string | null;
+  usuario?: string | null;
+  tipoLabel?: string | null;
   valor: string | number | null;
   vendaId: number | null;
   clienteId: number | null;
@@ -22,19 +25,7 @@ type AuditoriaEvento = {
   createdAt: string;
 };
 
-const TIPO_LABEL: Record<string, string> = {
-  VENDA_CRIADA: "Venda criada",
-  VENDA_ATUALIZADA: "Venda editada",
-  VENDA_CANCELADA: "Venda cancelada",
-  VENDA_FRETE_ATUALIZADO: "Frete da venda",
-  PAGAMENTO_CRIADO: "Pagamento",
-  PAGAMENTO_EXCLUIDO: "Pagamento excluído",
-  CHEQUE_CRIADO: "Cheque",
-  CHEQUE_CRIADO_LOTE: "Cheques em lote",
-  CHEQUE_EXCLUIDO: "Cheque excluído",
-  CHEQUE_STATUS_ALTERADO: "Status do cheque",
-  USER_NAV_PERMISSOES: "Permissões de menu",
-};
+type TipoFiltro = { key: string; label: string };
 
 export default function AuditoriaPage() {
   const hoje = localDateInputValue();
@@ -42,7 +33,7 @@ export default function AuditoriaPage() {
   const [dataFim, setDataFim] = useState(hoje);
   const [tipo, setTipo] = useState("");
   const [eventos, setEventos] = useState<AuditoriaEvento[]>([]);
-  const [tipos, setTipos] = useState<string[]>([]);
+  const [tipos, setTipos] = useState<TipoFiltro[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
 
@@ -67,7 +58,7 @@ export default function AuditoriaPage() {
 
   useEffect(() => {
     api
-      .get<string[]>("/auditoria/tipos")
+      .get<TipoFiltro[]>("/auditoria/tipos")
       .then(setTipos)
       .catch(() => setTipos([]));
   }, []);
@@ -115,8 +106,8 @@ export default function AuditoriaPage() {
               >
                 <option value="">Todos</option>
                 {tipos.map((t) => (
-                  <option key={t} value={t}>
-                    {TIPO_LABEL[t] || t}
+                  <option key={t.key} value={t.key}>
+                    {t.label}
                   </option>
                 ))}
               </select>
@@ -153,10 +144,10 @@ export default function AuditoriaPage() {
                       <td className="table-cell whitespace-nowrap">
                         {new Date(ev.createdAt).toLocaleString("pt-BR")}
                       </td>
-                      <td className="table-cell">{ev.userLabel || "—"}</td>
+                      <td className="table-cell">{ev.usuario ?? ev.userLabel ?? "—"}</td>
                       <td className="table-cell">
                         <span className="font-medium text-gray-900">
-                          {TIPO_LABEL[ev.tipo] || ev.tipo}
+                          {ev.tipoLabel ?? labelTipoAuditoria(ev.tipo)}
                         </span>
                       </td>
                       <td className="table-cell">

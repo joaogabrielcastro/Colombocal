@@ -11,6 +11,7 @@ const {
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
+const { actorFromReq } = require("../services/financeiroEventos");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -51,6 +52,7 @@ router.post("/", async (req, res) => {
     const pagamento = await registrarPagamento(prisma, {
       ...b,
       tenantId: req.tenantId,
+      auditActor: actorFromReq(req),
     });
     res.status(201).json(pagamento);
   } catch (error) {
@@ -62,7 +64,7 @@ router.post("/", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
-    await excluirPagamento(prisma, id, req.tenantId);
+    await excluirPagamento(prisma, id, req.tenantId, actorFromReq(req));
     res.json({ success: true });
   } catch (error) {
     handleRouteError(res, error);

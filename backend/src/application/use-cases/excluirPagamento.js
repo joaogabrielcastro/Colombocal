@@ -6,7 +6,7 @@ const {
   deletePagamentoById,
 } = require("../../infra/prisma/repositories/pagamentoRepository");
 
-async function excluirPagamento(prisma, pagamentoId, tenantId) {
+async function excluirPagamento(prisma, pagamentoId, tenantId, auditActor) {
   if (tenantId == null) {
     throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
   }
@@ -22,6 +22,7 @@ async function excluirPagamento(prisma, pagamentoId, tenantId) {
     await deletePagamentoById(tx, pagamentoId, tenantId);
     await registrarEventoFinanceiro(tx, {
       tenantId,
+      auditActor,
       tipo: "PAGAMENTO_EXCLUIDO",
       entidade: "Pagamento",
       entidadeId: pagamento.id,
