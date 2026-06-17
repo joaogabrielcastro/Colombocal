@@ -196,88 +196,91 @@ export default function VendaDetailPage() {
   <meta charset="utf-8" />
   <title>Ordem de Serviço - Venda #${numPub}</title>
   <style>
-    body { font-family: Arial, sans-serif; color:#111827; margin: 24px; }
-    h1 { margin:0; font-size:20px; }
-    .meta { margin-top:6px; color:#4b5563; font-size:12px; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top: 18px; }
-    .box { border:1px solid #e5e7eb; border-radius:8px; padding:10px; }
-    .label { color:#6b7280; font-size:11px; text-transform: uppercase; font-weight: 700; }
-    .value { margin-top:3px; font-size:14px; }
-    table { width:100%; border-collapse: collapse; margin-top: 16px; }
-    th, td { border:1px solid #e5e7eb; padding:8px; font-size:12px; }
+    * { box-sizing: border-box; }
+    @page { size: A4; margin: 6mm; }
+    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 6px 8px; font-size: 10px; }
+    .sheet { max-height: 14.8cm; overflow: hidden; }
+    h1 { margin:0; font-size: 13px; font-weight: 700; line-height: 1.2; }
+    .meta { margin-top: 2px; color:#4b5563; font-size: 9px; }
+    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px; }
+    .box { border:1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; }
+    .box-full { grid-column: 1 / -1; }
+    .label { color:#6b7280; font-size: 8px; text-transform: uppercase; font-weight: 700; line-height: 1.2; }
+    .value { margin-top: 1px; font-size: 10px; line-height: 1.25; }
+    table { width:100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { border:1px solid #e5e7eb; padding: 3px 5px; font-size: 9px; }
     th { background:#f9fafb; text-align:left; }
-    .obs { margin-top: 16px; border:1px dashed #d1d5db; border-radius:8px; padding:10px; min-height:56px; font-size:12px; }
-    .assinatura { margin-top: 36px; display:grid; grid-template-columns: 1fr 1fr; gap:32px; }
-    .linha { border-top:1px solid #9ca3af; padding-top:6px; text-align:center; font-size:12px; color:#374151; }
+    .totais { margin-top: 6px; padding: 4px 6px; border:1px solid #e5e7eb; border-radius: 4px; font-size: 9px; line-height: 1.35; }
+    .totais strong { font-weight: 700; }
+    .frete-hint { color:#6b7280; font-size: 8px; margin-top: 2px; }
+    .obs { margin-top: 6px; border:1px dashed #d1d5db; border-radius: 4px; padding: 4px 6px; min-height: 24px; font-size: 9px; }
+    .assinatura { margin-top: 8px; }
+    .linha { border-top:1px solid #9ca3af; padding-top: 4px; text-align:center; font-size: 9px; color:#374151; max-width: 220px; margin: 0 auto; }
+    @media print {
+      body { padding: 0; }
+      .sheet { max-height: 14.8cm; page-break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
-  <h1>Ordem de Serviço - Entrega</h1>
-  <div class="meta">Venda #${numPub} • Data ${formatDate(venda.dataVenda)}</div>
+  <div class="sheet">
+    <h1>Ordem de Serviço - Entrega</h1>
+    <div class="meta">Venda #${numPub} • Data ${formatDate(venda.dataVenda)}</div>
 
-  <div class="grid">
-    <div class="box">
-      <div class="label">Cliente</div>
-      <div class="value">${escapeHtml(clienteNome)}</div>
-    </div>
-    <div class="box">
-      <div class="label">Motorista</div>
-      <div class="value">${escapeHtml(venda.motorista?.nome || "-")}</div>
-    </div>
-    <div class="box">
-      <div class="label">Telefone</div>
-      <div class="value">${escapeHtml(venda.cliente.telefone || "-")}</div>
-    </div>
-    <div class="box">
-      <div class="label">Veículo / Placa</div>
-      <div class="value">${escapeHtml(
-        [venda.motorista?.veiculo, venda.motorista?.placa].filter(Boolean).join(" - ") || "-",
-      )}</div>
-    </div>
-  </div>
-
-  <div class="box" style="margin-top:10px;">
-    <div class="label">Endereço / Local</div>
-    <div class="value">${escapeHtml(enderecoCliente || "-")}</div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Produto</th>
-        <th style="text-align:right">Quantidade</th>
-        <th style="text-align:right">Preço unit.</th>
-        <th style="text-align:right">Subtotal</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itensRows}
-    </tbody>
-  </table>
-
-  <div class="box" style="margin-top:12px;">
-    <div class="label">Totais</div>
-    <div class="value" style="margin-top:6px;">
-      Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>
-    </div>
-    <div class="value" style="margin-top:10px;font-size:13px;">
-      <div class="label" style="text-transform:none;letter-spacing:0;font-weight:600;color:#374151;">Tarifas de frete (por unidade)</div>
-      <div style="margin-top:4px;">Por saco: <strong>${escapeHtml(formatMoney(tarifaSaco))}</strong> / saco</div>
-      <div style="margin-top:4px;">Por tonelada: <strong>${escapeHtml(formatMoney(tarifaTon))}</strong> / t</div>
-      <div style="margin-top:8px;color:#6b7280;font-size:11px;line-height:1.4;">
-        O valor total do frete não consta neste documento — calcule no destino conforme a quantidade entregue e estas tarifas.
+    <div class="grid">
+      <div class="box">
+        <div class="label">Cliente</div>
+        <div class="value">${escapeHtml(clienteNome)}</div>
+      </div>
+      <div class="box">
+        <div class="label">Motorista</div>
+        <div class="value">${escapeHtml(venda.motorista?.nome || "-")}</div>
+      </div>
+      <div class="box">
+        <div class="label">Telefone</div>
+        <div class="value">${escapeHtml(venda.cliente.telefone || "-")}</div>
+      </div>
+      <div class="box">
+        <div class="label">Veículo / Placa</div>
+        <div class="value">${escapeHtml(
+          [venda.motorista?.veiculo, venda.motorista?.placa].filter(Boolean).join(" - ") || "-",
+        )}</div>
+      </div>
+      <div class="box box-full">
+        <div class="label">Endereço / Local</div>
+        <div class="value">${escapeHtml(enderecoCliente || "-")}</div>
       </div>
     </div>
-  </div>
 
-  <div class="obs">
-    <div class="label">Observações</div>
-    <div style="margin-top:6px;">${escapeHtml(venda.observacoes || "Sem observações.")}</div>
-  </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th style="text-align:right">Qtd</th>
+          <th style="text-align:right">Preço</th>
+          <th style="text-align:right">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itensRows}
+      </tbody>
+    </table>
 
-  <div class="assinatura">
-    <div class="linha" style="grid-column: 1 / -1; max-width: 320px; margin: 0 auto;">
-      Assinatura do Recebedor
+    <div class="totais">
+      <div>Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>
+        · Frete/saco: <strong>${escapeHtml(formatMoney(tarifaSaco))}</strong>
+        · Frete/t: <strong>${escapeHtml(formatMoney(tarifaTon))}</strong>
+      </div>
+      <div class="frete-hint">Frete total calculado no destino conforme quantidade entregue.</div>
+    </div>
+
+    <div class="obs">
+      <div class="label">Observações</div>
+      <div style="margin-top:2px;">${escapeHtml(venda.observacoes || "Sem observações.")}</div>
+    </div>
+
+    <div class="assinatura">
+      <div class="linha">Assinatura do Recebedor</div>
     </div>
   </div>
 </body>
