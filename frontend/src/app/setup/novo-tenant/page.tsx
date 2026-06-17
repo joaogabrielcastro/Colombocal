@@ -11,14 +11,14 @@ type SetupStatus = {
   setupEnabled: boolean;
   needsBootstrap: boolean;
   databaseReady: boolean;
-  databaseIssue?: 'connection' | 'missing_tables' | 'other' | null;
 };
 
-export default function SetupPage() {
+export default function NovoTenantPage() {
   const router = useRouter();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [statusError, setStatusError] = useState(false);
-  const [tenantName, setTenantName] = useState('Minha organização');
+  const [tenantName, setTenantName] = useState('');
+  const [tenantSlug, setTenantSlug] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -40,25 +40,33 @@ export default function SetupPage() {
     setLoading(true);
     try {
       const res = await api.post<{
-        token: string;
+        token?: string;
         user: { email: string };
-        tenant: { name: string };
-      }>('/setup/first-admin', {
+        tenant: { name: string; slug: string | null };
+      }>('/setup/tenant', {
         setupSecret,
-        tenantName: tenantName.trim() || 'Minha organização',
+        tenantName: tenantName.trim(),
+        tenantSlug: tenantSlug.trim() || undefined,
         email: email.trim().toLowerCase(),
         password,
         name: name.trim() || null,
       });
-      setAuthToken(res.token);
-      router.replace('/');
-      router.refresh();
+      if (res.token) {
+        setAuthToken(res.token);
+        router.replace('/');
+        router.refresh();
+      } else {
+        router.replace('/login');
+      }
     } catch (err) {
-      reportApiError(err, { title: 'Não foi possível concluir o primeiro acesso' });
+      reportApiError(err, { title: 'Não foi possível criar a organização' });
     } finally {
       setLoading(false);
     }
   };
+
+  const canCreate =
+    status?.setupEnabled && status.databaseReady && !status.needsBootstrap;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
@@ -67,70 +75,37 @@ export default function SetupPage() {
           <div className="inline-flex w-12 h-12 bg-blue-600 rounded-xl items-center justify-center text-white font-bold text-lg mb-3">
             C
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Primeiro acesso</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Nova organização</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Crie o administrador sem usar o terminal (apenas enquanto não existir nenhum usuário).
+            Cria um tenant isolado no mesmo banco, com administrador próprio. Requer a chave de setup do
+            servidor.
           </p>
         </div>
 
         {statusError ? (
           <p className="text-sm text-red-600 mb-4">
-            Não foi possível falar com a API. Confira <code className="text-xs">NEXT_PUBLIC_API_ORIGIN</code> e se o
-            backend está no ar.
+            Não foi possível falar com a API. Confira se o backend está no ar.
           </p>
         ) : null}
 
         {status && !status.setupEnabled ? (
           <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm p-4 mb-4">
-            No servidor, defina <strong>SETUP_SECRET</strong> (mínimo 8 caracteres), salve o deploy e
-            recarregue esta página. Depois do primeiro admin criado, remova o segredo do ambiente.
+            Defina <strong>SETUP_SECRET</strong> no servidor (mínimo 8 caracteres) para habilitar esta
+            operação.
           </div>
         ) : null}
 
-        {status && status.setupEnabled && !status.databaseReady ? (
-          <div className="rounded-lg bg-red-50 border border-red-200 text-red-900 text-sm p-4 mb-4 space-y-2">
-            <p>
-              {status.databaseIssue === 'connection'
-                ? 'Não foi possível ligar ao PostgreSQL (URL, rede ou serviço da base). Confira DATABASE_URL no backend.'
-                : status.databaseIssue === 'missing_tables'
-                  ? 'A base responde, mas faltam tabelas do schema atual (ex. User). É preciso aplicar as migrações Prisma nesta base.'
-                  : 'A base não está utilizável para o setup (tabelas em falta, schema desalinhado ou erro ao consultar).'}
-            </p>
-            <p>
-              <strong>Coolify / produção:</strong> com migrações normais, ative{' '}
-              <strong>RUN_PRISMA_MIGRATE_ON_START=true</strong> e redeploy. Se o arranque falhar com{' '}
-              <strong>P3009</strong> ou <strong>P3018</strong> (tabelas já existem), não fique em loop: defina{' '}
-              <strong>RUN_PRISMA_MIGRATE_ON_START=false</strong>, no terminal do container rode{' '}
-              <code className="text-xs">npm run db:recover</code> ou{' '}
-              <code className="text-xs">{`npm run db:resolve-init-applied && npm run db:deploy`}</code>, volte a
-              ativar migrate no arranque e redeploy.
-            </p>
-            <p className="text-xs text-red-800">
-              Docker local: o compose pode correr migrate antes do dev; confira os logs do serviço da base.
-            </p>
+        {status && status.needsBootstrap ? (
+          <div className="rounded-lg bg-gray-100 border border-gray-200 text-gray-800 text-sm p-4 mb-4">
+            Ainda não há usuários. Use a{' '}
+            <Link href="/setup" className="text-blue-600 font-medium hover:underline">
+              tela de primeiro acesso
+            </Link>
+            .
           </div>
         ) : null}
 
-        {status && status.setupEnabled && status.databaseReady && !status.needsBootstrap ? (
-          <div className="rounded-lg bg-gray-100 border border-gray-200 text-gray-800 text-sm p-4 mb-4 space-y-2">
-            <p>
-              Já existe usuário no sistema. Use a{' '}
-              <Link href="/login" className="text-blue-600 font-medium hover:underline">
-                tela de login
-              </Link>
-              .
-            </p>
-            <p>
-              Para adicionar outra organização (tenant) no mesmo banco:{' '}
-              <Link href="/setup/novo-tenant" className="text-blue-600 font-medium hover:underline">
-                nova organização
-              </Link>
-              .
-            </p>
-          </div>
-        ) : null}
-
-        {status && status.setupEnabled && status.databaseReady && status.needsBootstrap ? (
+        {canCreate ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Chave de setup</label>
@@ -140,10 +115,8 @@ export default function SetupPage() {
                 className="input-field w-full"
                 value={setupSecret}
                 onChange={(e) => setSetupSecret(e.target.value)}
-                placeholder="A mesma definida em SETUP_SECRET no servidor"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">Definida só no servidor (Coolify), não no código.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nome da organização</label>
@@ -156,7 +129,21 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Seu nome (opcional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Identificador (slug, opcional)
+              </label>
+              <input
+                type="text"
+                className="input-field w-full"
+                value={tenantSlug}
+                onChange={(e) => setTenantSlug(e.target.value)}
+                placeholder="ex.: distribuidora-sul"
+                pattern="[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?"
+              />
+              <p className="text-xs text-gray-500 mt-1">Letras minúsculas, números e hífens. Não use &quot;default&quot;.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome do administrador (opcional)</label>
               <input type="text" className="input-field w-full" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
@@ -169,6 +156,7 @@ export default function SetupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Deve ser diferente dos e-mails já cadastrados.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
@@ -183,7 +171,7 @@ export default function SetupPage() {
               />
             </div>
             <button type="submit" className="btn-primary w-full py-2.5" disabled={loading}>
-              {loading ? 'Criando…' : 'Criar administrador e entrar'}
+              {loading ? 'Criando…' : 'Criar organização e entrar'}
             </button>
           </form>
         ) : null}

@@ -1,29 +1,51 @@
 const express = require("express");
-const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
 const { signAuthToken } = require("../middleware/auth");
 const { handleRouteError } = require("../utils/api");
-
-function getSetupSecret() {
-  const s = process.env.SETUP_SECRET;
-  if (!s || String(s).trim().length < 8) return null;
-  return String(s).trim();
-}
-
-function timingSafeEqualString(a, b) {
-  const ba = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ba.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ba, bb);
-}
+const { getSetupSecret, verifySetupSecret } = require("../utils/setupSecret");
+const { createTenantWithAdmin } = require("../services/createTenant");
 
 function classifyDatabaseCheckError(err) {
   const code = err && err.code;
   if (code === "P1001" || code === "P1000" || code === "P1017") return "connection";
   if (code === "P2021") return "missing_tables";
   return "other";
+}
+
+
+function assertSetupSecret(req, res) {
+  if (!getSetupSecret()) {
+    res
+      .status(503)
+      .json({ error: "SETUP_SECRET não configurado no servidor (mín. 8 caracteres)." });
+    return false;
+  }
+  if (!verifySetupSecret(req.body?.setupSecret)) {
+    res.status(401).json({ error: "Chave de setup inválida" });
+    return false;
+  }
+  return true;
+}
+
+function formatTenantUserResponse(user, tenant, token) {
+  const body = {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      tenantId: user.tenantId,
+    },
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+    },
+  };
+  if (token) body.token = token;
+  return body;
 }
 
 // GET /api/setup/status — público; não expõe o segredo
@@ -58,22 +80,12 @@ router.get("/status", async (req, res) => {
 // POST /api/setup/first-admin — primeiro admin (só com usuários = 0 e SETUP_SECRET correto)
 router.post("/first-admin", async (req, res) => {
   try {
-    const setupSecret = getSetupSecret();
-    if (!setupSecret) {
-      return res
-        .status(503)
-        .json({ error: "SETUP_SECRET não configurado no servidor (mín. 8 caracteres)." });
-    }
-
-    const provided = String(req.body?.setupSecret ?? "");
-    if (!timingSafeEqualString(provided, setupSecret)) {
-      return res.status(401).json({ error: "Chave de setup inválida" });
-    }
+    if (!assertSetupSecret(req, res)) return;
 
     const userCount = await prisma.user.count();
     if (userCount > 0) {
       return res.status(410).json({
-        error: "Sistema já tem usuários. Use o login ou um admin em Usuários.",
+        error: "Sistema já tem usuários. Use o login ou crie outra organização em /setup/novo-tenant.",
       });
     }
 
@@ -122,22 +134,42 @@ router.post("/first-admin", async (req, res) => {
     });
 
     const token = signAuthToken(user);
-    res.status(201).json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        tenantId: user.tenantId,
-      },
-      tenant: {
-        id: user.tenant.id,
-        name: user.tenant.name,
-        slug: user.tenant.slug,
-      },
-    });
+    res.status(201).json(formatTenantUserResponse(user, user.tenant, token));
   } catch (e) {
+    if (e && e.code === "P2002") {
+      return res.status(409).json({ error: "Organização ou e-mail já existem" });
+    }
+    handleRouteError(res, e);
+  }
+});
+
+// POST /api/setup/tenant — nova organização + admin (SETUP_SECRET; funciona com usuários existentes)
+router.post("/tenant", async (req, res) => {
+  try {
+    if (!assertSetupSecret(req, res)) return;
+
+    const tenantName = req.body?.tenantName;
+    const tenantSlug = req.body?.tenantSlug;
+    const email = req.body?.email;
+    const password = req.body?.password;
+    const name = req.body?.name;
+
+    const { tenant, user } = await createTenantWithAdmin({
+      tenantName,
+      tenantSlug,
+      email,
+      password,
+      name,
+    });
+
+    const signIn = req.body?.signIn !== false;
+    const token = signIn ? signAuthToken(user) : undefined;
+
+    res.status(201).json(formatTenantUserResponse(user, tenant, token));
+  } catch (e) {
+    if (e && e.statusCode) {
+      return res.status(e.statusCode).json({ error: e.message });
+    }
     if (e && e.code === "P2002") {
       return res.status(409).json({ error: "Organização ou e-mail já existem" });
     }
