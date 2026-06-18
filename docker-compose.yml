@@ -47,6 +47,8 @@ services:
       SETUP_SECRET: "colombocal-dev-setup-change-me"
       # /cadastro — desligado por omissão (ligue só para testar convites abertos em dev).
       OPEN_REGISTRATION: "false"
+      # Com cadastro aberto, liste as orgs permitidas (slugs no banco), ex.: default,requinte
+      # REGISTRATION_TENANT_SLUGS: "default,requinte"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules

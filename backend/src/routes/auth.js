@@ -7,6 +7,10 @@ const { prisma } = require("../lib/prisma");
 const { signAuthToken, requireTenantUser } = require("../middleware/auth");
 const { handleRouteError } = require("../utils/api");
 const { normalizeNavPermissions } = require("../constants/navPermissions");
+const {
+  loadRegistrationTenants,
+  resolveRegistrationTenantSlug,
+} = require("../utils/registrationTenants");
 
 function timingSafeEqualString(a, b) {
   const ba = Buffer.from(a, "utf8");
@@ -25,11 +29,6 @@ function getRegistrationKey() {
   return String(k).trim();
 }
 
-function getRegistrationTenantSlug() {
-  const s = process.env.REGISTRATION_TENANT_SLUG;
-  return (s && String(s).trim()) || "default";
-}
-
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: Number(process.env.RATE_LIMIT_REGISTER_PER_HOUR ?? 20),
@@ -40,34 +39,43 @@ const registerLimiter = rateLimit({
 // GET /api/auth/register-status — saber se o cadastro público está ligado
 router.get("/register-status", async (req, res) => {
   try {
+    const tenants = await loadRegistrationTenants(prisma);
     if (!isOpenRegistration()) {
       return res.json({
         registrationOpen: false,
         registrationRequiresKey: false,
-        tenantSlug: getRegistrationTenantSlug(),
+        tenants: tenants.map((t) => ({ slug: t.slug, name: t.name })),
       });
     }
-    const slug = getRegistrationTenantSlug();
-    const tenant = await prisma.tenant.findUnique({ where: { slug } });
     res.json({
-      registrationOpen: !!tenant,
+      registrationOpen: tenants.length > 0,
       registrationRequiresKey: getRegistrationKey() != null,
-      tenantSlug: slug,
+      tenants: tenants.map((t) => ({ slug: t.slug, name: t.name })),
     });
   } catch (e) {
     handleRouteError(res, e);
   }
 });
 
-// POST /api/auth/register — novo membro (papel member) no tenant configurado; exige OPEN_REGISTRATION=true
+// POST /api/auth/register — novo membro (papel member); exige OPEN_REGISTRATION=true
 router.post("/register", registerLimiter, async (req, res) => {
   try {
     if (!isOpenRegistration()) {
       return res.status(403).json({ error: "Cadastro público desativado neste servidor" });
     }
 
-    const slug = getRegistrationTenantSlug();
-    const tenant = await prisma.tenant.findUnique({ where: { slug } });
+    const tenants = await loadRegistrationTenants(prisma);
+    let tenantSlug;
+    try {
+      tenantSlug = resolveRegistrationTenantSlug(req.body, tenants);
+    } catch (e) {
+      if (e && e.statusCode) {
+        return res.status(e.statusCode).json({ error: e.message });
+      }
+      throw e;
+    }
+
+    const tenant = tenants.find((t) => t.slug === tenantSlug);
     if (!tenant) {
       return res.status(503).json({
         error:

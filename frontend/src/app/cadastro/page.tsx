@@ -7,10 +7,15 @@ import api from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
 import { reportApiError } from '@/lib/report-api-error';
 
+type RegistrationTenant = {
+  slug: string;
+  name: string;
+};
+
 type RegisterStatus = {
   registrationOpen: boolean;
   registrationRequiresKey: boolean;
-  tenantSlug: string;
+  tenants: RegistrationTenant[];
 };
 
 export default function CadastroPage() {
@@ -20,13 +25,19 @@ export default function CadastroPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [tenantSlug, setTenantSlug] = useState('');
   const [registrationKey, setRegistrationKey] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     api
       .get<RegisterStatus>('/auth/register-status')
-      .then(setStatus)
+      .then((data) => {
+        setStatus(data);
+        if (data.tenants.length === 1) {
+          setTenantSlug(data.tenants[0].slug);
+        }
+      })
       .catch(() => {
         setLoadErr(true);
         setStatus(null);
@@ -45,6 +56,7 @@ export default function CadastroPage() {
         email: email.trim().toLowerCase(),
         password,
         name: name.trim() || null,
+        tenantSlug: tenantSlug || undefined,
         ...(status?.registrationRequiresKey ? { registrationKey } : {}),
       });
       setAuthToken(res.token);
@@ -56,6 +68,8 @@ export default function CadastroPage() {
       setLoading(false);
     }
   };
+
+  const multipleTenants = (status?.tenants.length ?? 0) > 1;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
@@ -79,19 +93,41 @@ export default function CadastroPage() {
 
         {status && !status.registrationOpen ? (
           <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm p-4 mb-4 space-y-2">
-            <p>O cadastro público está <strong>desligado</strong> neste servidor.</p>
             <p>
-              Peça a um <strong>administrador</strong> para criar o seu utilizador em <strong>Usuários</strong>, ou use o
-              primeiro acesso ao servidor se ainda não existir ninguém.
+              O cadastro público está <strong>desligado</strong> neste servidor.
+            </p>
+            <p>
+              Peça a um <strong>administrador</strong> para criar o seu utilizador em <strong>Usuários</strong>, ou
+              use o primeiro acesso ao servidor se ainda não existir ninguém.
             </p>
           </div>
         ) : null}
 
         {status?.registrationOpen ? (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-xs text-gray-500">
-              Organização: <code className="bg-gray-100 px-1 rounded">{status.tenantSlug}</code>
-            </p>
+            {multipleTenants ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Organização</label>
+                <select
+                  className="input-field w-full"
+                  value={tenantSlug}
+                  onChange={(e) => setTenantSlug(e.target.value)}
+                  required
+                >
+                  <option value="">Selecione a empresa</option>
+                  {status.tenants.map((t) => (
+                    <option key={t.slug} value={t.slug}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : status.tenants[0] ? (
+              <p className="text-sm text-gray-600">
+                Organização: <strong>{status.tenants[0].name}</strong>
+              </p>
+            ) : null}
+
             {status.registrationRequiresKey ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Chave de convite</label>
@@ -103,7 +139,9 @@ export default function CadastroPage() {
                   onChange={(e) => setRegistrationKey(e.target.value)}
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">Fornecida pelo administrador (REGISTRATION_KEY no servidor).</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Fornecida pelo administrador (REGISTRATION_KEY no servidor).
+                </p>
               </div>
             ) : null}
             <div>
