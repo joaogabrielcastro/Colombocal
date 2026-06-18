@@ -69,12 +69,21 @@ function buildVendasWhere(query, tenantId) {
   }
   if (busca && String(busca).trim()) {
     const term = String(busca).trim();
-    where.OR = [
+    const ordemRaw = term.replace(/^#/, "").trim();
+    const ordemNum = parseInt(ordemRaw, 10);
+    const orConditions = [
       { cliente: { nomeFantasia: { contains: term, mode: "insensitive" } } },
       { cliente: { razaoSocial: { contains: term, mode: "insensitive" } } },
       { vendedor: { nome: { contains: term, mode: "insensitive" } } },
       { observacoes: { contains: term, mode: "insensitive" } },
     ];
+    if (!Number.isNaN(ordemNum) && ordemNum > 0) {
+      orConditions.push({ numeroVenda: ordemNum });
+      if (String(ordemNum) === ordemRaw) {
+        orConditions.push({ id: ordemNum });
+      }
+    }
+    where.OR = orConditions;
   }
   return where;
 }
@@ -261,10 +270,12 @@ router.post("/vendas/export-async", async (req, res) => {
           take: 50000,
         });
 
-        const header = "Data,Cliente,Vendedor,Valor Total,Frete\n";
+        const header = "Ordem,Data,Cliente,Vendedor,Valor Total,Frete\n";
         const rows = vendas
-          .map((v) =>
-            [
+          .map((v) => {
+            const ordem = v.numeroVenda != null && v.numeroVenda > 0 ? v.numeroVenda : v.id;
+            return [
+              ordem,
               new Date(v.dataVenda).toLocaleDateString("pt-BR"),
               String(v.cliente.nomeFantasia || v.cliente.razaoSocial || "").replaceAll('"', '""'),
               String(v.vendedor.nome || "").replaceAll('"', '""'),
@@ -272,8 +283,8 @@ router.post("/vendas/export-async", async (req, res) => {
               parseFloat(String(v.frete || 0)).toFixed(2),
             ]
               .map((x) => `"${x}"`)
-              .join(","),
-          )
+              .join(",");
+          })
           .join("\n");
 
         const periodoIni = payload.dataInicio || "inicio";

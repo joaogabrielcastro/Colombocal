@@ -1,6 +1,13 @@
 "use client";
 
-import { formatDate, formatFreteReciboLinha, formatMoney, type Venda, vendaNumeroPublico } from "@/lib/utils";
+import Link from "next/link";
+import {
+  formatDate,
+  formatFreteReciboLinha,
+  formatMoney,
+  type Venda,
+  vendaNumeroPublico,
+} from "@/lib/utils";
 import type { RelatorioVendasPdfSecao } from "../services/exports";
 import { RelatorioPdfSecaoButton } from "./RelatorioPdfSecaoButton";
 
@@ -20,7 +27,7 @@ export function RelatorioVendasDetalhes({ vendas, onExportPdfSecao }: Props) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200">
-              <th className="table-header">#</th>
+              <th className="table-header w-24 bg-slate-50">Ordem</th>
               <th className="table-header">Data</th>
               <th className="table-header">Cliente</th>
               <th className="table-header">Vendedor</th>
@@ -32,13 +39,27 @@ export function RelatorioVendasDetalhes({ vendas, onExportPdfSecao }: Props) {
           <tbody>
             {vendas.map((v) => (
               <tr key={v.id} className="table-row">
-                <td className="table-cell text-gray-400">#{vendaNumeroPublico(v)}</td>
+                <td className="table-cell bg-slate-50/80">
+                  <Link
+                    href={`/vendas/${v.id}`}
+                    className="inline-flex items-center font-mono text-base font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                    title="Abrir venda"
+                  >
+                    #{vendaNumeroPublico(v)}
+                  </Link>
+                </td>
                 <td className="table-cell">{formatDate(v.dataVenda)}</td>
-                <td className="table-cell font-medium">{v.cliente.nomeFantasia || v.cliente.razaoSocial}</td>
+                <td className="table-cell font-medium">
+                  {v.cliente.nomeFantasia || v.cliente.razaoSocial}
+                </td>
                 <td className="table-cell">{v.vendedor.nome}</td>
                 <td className="table-cell text-right">{formatMoney(v.frete)}</td>
-                <td className="table-cell text-xs text-gray-600 max-w-[11rem]">{formatFreteReciboLinha(v)}</td>
-                <td className="table-cell text-right font-semibold">{formatMoney(v.valorTotal)}</td>
+                <td className="table-cell text-xs text-gray-600 max-w-[11rem]">
+                  {formatFreteReciboLinha(v)}
+                </td>
+                <td className="table-cell text-right font-semibold">
+                  {formatMoney(v.valorTotal)}
+                </td>
               </tr>
             ))}
           </tbody>

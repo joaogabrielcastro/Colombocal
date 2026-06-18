@@ -59,6 +59,7 @@ const PDF_STYLES = `
   th, td { border: 1px solid #e5e7eb; padding: 8px; font-size: 12px; text-align: left; }
   th { background: #f3f4f6; }
   td.num, th.num { text-align: right; white-space: nowrap; }
+  td.ordem, th.ordem { font-weight: 700; color: #1d4ed8; font-family: ui-monospace, monospace; white-space: nowrap; }
   .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
   .kpi { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
   .kpi label { display: block; font-size: 11px; color: #6b7280; }
@@ -189,7 +190,7 @@ export function exportarRelatorioVendasPdfSecao(
       const rows = data.vendas
         .map(
           (v) => `<tr>
-          <td>#${vendaNumeroPublico(v)}</td>
+          <td class="ordem">#${vendaNumeroPublico(v)}</td>
           <td>${escapeHtml(formatDate(v.dataVenda))}</td>
           <td>${escapeHtml(v.cliente.nomeFantasia || v.cliente.razaoSocial)}</td>
           <td>${escapeHtml(v.vendedor.nome)}</td>
@@ -204,7 +205,7 @@ export function exportarRelatorioVendasPdfSecao(
         `${cabecalhoSecao("Detalhamento das vendas", dataInicio, dataFim)}
         <table>
           <thead><tr>
-            <th>#</th><th>Data</th><th>Cliente</th><th>Vendedor</th>
+            <th class="ordem">Ordem</th><th>Data</th><th>Cliente</th><th>Vendedor</th>
             <th class="num">Total</th><th class="num">Frete</th><th>Frete pago</th>
           </tr></thead>
           <tbody>${rows || `<tr><td colspan="7" style="text-align:center;color:#666">Sem vendas no período.</td></tr>`}</tbody>
@@ -232,10 +233,11 @@ export function exportarRelatorioVendasPdf(
 }
 
 export function exportarRelatorioVendasCSV(data: RelVendas, dataInicio: string, dataFim: string) {
-  const header = "Data,Cliente,Vendedor,Valor Total,Frete,Frete pago\n";
+  const header = "Ordem,Data,Cliente,Vendedor,Valor Total,Frete,Frete pago\n";
   const rows = data.vendas
     .map((v) =>
       [
+        vendaNumeroPublico(v),
         formatDate(v.dataVenda),
         (v.cliente.nomeFantasia || v.cliente.razaoSocial).replace(/[,;"]/g, " "),
         v.vendedor.nome.replace(/[,;"]/g, " "),
@@ -258,13 +260,13 @@ export function exportarRelatorioVendasCSV(data: RelVendas, dataInicio: string, 
 
 export function exportarRelatorioVendasExcel(data: RelVendas, dataInicio: string, dataFim: string) {
   const detalhes = data.vendas.map((v) => ({
-    numero: vendaNumeroPublico(v),
-    data: formatDate(v.dataVenda),
-    cliente: v.cliente.nomeFantasia || v.cliente.razaoSocial,
-    vendedor: v.vendedor.nome,
-    valorTotal: parseFloat(String(v.valorTotal)),
-    frete: parseFloat(String(v.frete)),
-    reciboFrete: formatFreteReciboLinha(v),
+    Ordem: vendaNumeroPublico(v),
+    Data: formatDate(v.dataVenda),
+    Cliente: v.cliente.nomeFantasia || v.cliente.razaoSocial,
+    Vendedor: v.vendedor.nome,
+    "Valor Total": parseFloat(String(v.valorTotal)),
+    Frete: parseFloat(String(v.frete)),
+    "Frete pago": formatFreteReciboLinha(v),
   }));
   const aggV: Record<number, { nome: string; total: number; quantidade: number }> = {};
   const aggC: Record<number, { nome: string; total: number; quantidade: number }> = {};

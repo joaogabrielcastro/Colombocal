@@ -111,7 +111,7 @@ export function RelatorioVendasFiltros(props: Props) {
             type="text"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Cliente, representante ou observação"
+            placeholder="Cliente, representante, ordem (#278) ou observação"
             className="input-field"
           />
         </div>
