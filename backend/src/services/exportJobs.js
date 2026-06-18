@@ -3,11 +3,16 @@ const { randomUUID } = require("node:crypto");
 const jobs = new Map();
 const TTL_MS = 30 * 60 * 1000;
 
-function createExportJob(type, payload = {}) {
+function createExportJob(type, tenantId, payload = {}) {
+  const tid = Number(tenantId);
+  if (!Number.isFinite(tid) || tid < 1) {
+    throw new Error("tenantId inválido ao criar export job");
+  }
   const id = randomUUID();
   jobs.set(id, {
     id,
     type,
+    tenantId: tid,
     status: "pending",
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -16,6 +21,11 @@ function createExportJob(type, payload = {}) {
     error: null,
   });
   return id;
+}
+
+function exportJobBelongsToTenant(job, tenantId) {
+  if (!job) return false;
+  return job.tenantId === Number(tenantId);
 }
 
 function getExportJob(id) {
@@ -56,6 +66,7 @@ function cleanupExpiredJobs() {
 module.exports = {
   createExportJob,
   getExportJob,
+  exportJobBelongsToTenant,
   markRunning,
   markCompleted,
   markFailed,

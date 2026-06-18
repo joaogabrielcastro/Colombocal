@@ -5,6 +5,10 @@ const { registrarEventoFinanceiro } = require("../../services/financeiroEventos"
 const { findVendaFinanceiraById } = require("../../infra/prisma/repositories/vendaRepository");
 const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRepository");
 const { createCheque, findChequeById } = require("../../infra/prisma/repositories/chequeRepository");
+const {
+  assertClienteDoTenant,
+  assertVendaDoTenant,
+} = require("../../utils/tenantOwnership");
 
 async function registrarCheque(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -27,6 +31,11 @@ async function registrarCheque(prisma, payload) {
         : null;
 
   const result = await prisma.$transaction(async (tx) => {
+    await assertClienteDoTenant(tx, payload.clienteId, tenantId);
+    await assertVendaDoTenant(tx, payload.vendaId, tenantId, {
+      clienteId: payload.clienteId,
+    });
+
     let valorPrincipal = payload.valor;
     let trocoValor = 0;
 

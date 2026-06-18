@@ -26,6 +26,12 @@ function makeFakePrisma() {
   let chequeIdSeq = 1;
 
   const tx = {
+    cliente: {
+      findFirst: async ({ where }) => {
+        if (where.id === 10 && where.tenantId === TENANT_ID) return { id: 10 };
+        return null;
+      },
+    },
     venda: {
       findFirst: async ({ where }) => {
         const v = state.vendas.find((x) => x.id === where.id && x.tenantId === where.tenantId);
@@ -181,4 +187,18 @@ test("registrarChequeLote cria troco quando total excede saldo", async () => {
   assert.equal(state.pagamentos.length, 3);
   assert.equal(state.pagamentos[2].tipo, "troco_transferencia");
   assert.equal(state.pagamentos[2].valor, -20);
+});
+
+test("registrarPagamento rejeita cliente de outro tenant", async () => {
+  const { prisma } = makeFakePrisma();
+  await assert.rejects(
+    () =>
+      registrarPagamento(prisma, {
+        tenantId: TENANT_ID,
+        clienteId: 99,
+        tipo: "dinheiro",
+        valor: 50,
+      }),
+    (err) => err instanceof AppError && err.code === "CLIENTE_NAO_ENCONTRADO",
+  );
 });

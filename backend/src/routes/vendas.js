@@ -488,6 +488,7 @@ router.post("/", async (req, res) => {
       const atualizarCliente = parseAtualizarCliente(req.body);
       if (atualizarCliente) {
         await syncClienteFromVenda(tx, {
+          tenantId: req.tenantId,
           clienteId: clienteIdNum,
           ...atualizarCliente,
         });
@@ -770,6 +771,7 @@ router.put("/:id", async (req, res) => {
       const atualizarCliente = parseAtualizarCliente(req.body);
       if (atualizarCliente) {
         await syncClienteFromVenda(tx, {
+          tenantId: req.tenantId,
           clienteId: clienteIdNum,
           ...atualizarCliente,
         });

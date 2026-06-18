@@ -4,6 +4,10 @@ const { recalcularTodosTitulosCliente } = require("../../services/recebiveis");
 const { registrarEventoFinanceiro } = require("../../services/financeiroEventos");
 const { findVendaFinanceiraById } = require("../../infra/prisma/repositories/vendaRepository");
 const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRepository");
+const {
+  assertClienteDoTenant,
+  assertVendaDoTenant,
+} = require("../../utils/tenantOwnership");
 
 async function registrarPagamento(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -26,6 +30,11 @@ async function registrarPagamento(prisma, payload) {
         : new Date();
 
   return prisma.$transaction(async (tx) => {
+    await assertClienteDoTenant(tx, payload.clienteId, tenantId);
+    await assertVendaDoTenant(tx, payload.vendaId, tenantId, {
+      clienteId: payload.clienteId,
+    });
+
     let valorPrincipal = payload.valor;
     let trocoValor = 0;
 

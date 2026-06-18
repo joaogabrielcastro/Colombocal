@@ -6,15 +6,33 @@ const { getConfig } = require("../services/configSistema");
 const {
   createExportJob,
   getExportJob,
+  exportJobBelongsToTenant,
   markRunning,
   markCompleted,
   markFailed,
 } = require("../services/exportJobs");
+const { requireNavKey } = require("../middleware/navPermission");
 const {
   comissaoPorEmissao,
   comissaoPorCaixa,
 } = require("../services/comissao");
 const { getDateRange } = require("../utils/dateRangeQuery");
+
+const relatorioNavByPrefix = [
+  ["/vendas", "rel_vendas"],
+  ["/comissoes", "rel_comissoes"],
+  ["/financeiro", "rel_financeiro"],
+  ["/titulos", "rel_titulos"],
+];
+
+router.use((req, res, next) => {
+  if (req.path.startsWith("/exports/")) return next();
+  const match = relatorioNavByPrefix.find(
+    ([prefix]) => req.path === prefix || req.path.startsWith(`${prefix}/`),
+  );
+  if (!match) return next();
+  return requireNavKey(match[1])(req, res, next);
+});
 
 function buildTitulosWhere(query, tenantId) {
   const {
@@ -226,7 +244,7 @@ router.post("/vendas/export-async", async (req, res) => {
       clienteId: req.body?.clienteId ? String(req.body.clienteId) : "",
       produtoId: req.body?.produtoId ? String(req.body.produtoId) : "",
     };
-    const jobId = createExportJob("vendas_csv", payload);
+    const jobId = createExportJob("vendas_csv", req.tenantId, payload);
     res.status(202).json({ jobId, status: "pending" });
 
     setImmediate(async () => {
@@ -603,7 +621,7 @@ router.post("/financeiro/export-async", async (req, res) => {
   try {
     const aba = req.body?.aba === "pendentes" ? "pendentes" : "devedores";
     const tenantSnap = req.tenantId;
-    const jobId = createExportJob("financeiro_csv", {
+    const jobId = createExportJob("financeiro_csv", tenantSnap, {
       aba,
       tenantId: String(tenantSnap),
     });
@@ -795,7 +813,7 @@ router.post("/titulos/export-async", async (req, res) => {
       somenteEmAberto: raw.somenteEmAberto ? "true" : "false",
     };
 
-    const jobId = createExportJob("titulos_csv", payload);
+    const jobId = createExportJob("titulos_csv", req.tenantId, payload);
     res.status(202).json({ jobId, status: "pending" });
 
     setImmediate(async () => {
@@ -851,7 +869,9 @@ router.post("/titulos/export-async", async (req, res) => {
 router.get("/exports/:jobId", async (req, res) => {
   try {
     const job = getExportJob(req.params.jobId);
-    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    if (!job || !exportJobBelongsToTenant(job, req.tenantId)) {
+      return res.status(404).json({ error: "Job não encontrado" });
+    }
     res.json({
       jobId: job.id,
       type: job.type,
@@ -872,7 +892,9 @@ router.get("/exports/:jobId", async (req, res) => {
 router.get("/exports/:jobId/download", async (req, res) => {
   try {
     const job = getExportJob(req.params.jobId);
-    if (!job) return res.status(404).json({ error: "Job não encontrado" });
+    if (!job || !exportJobBelongsToTenant(job, req.tenantId)) {
+      return res.status(404).json({ error: "Job não encontrado" });
+    }
     if (job.status !== "completed" || !job.result?.content) {
       return res.status(409).json({ error: "Exportação ainda não concluída" });
     }

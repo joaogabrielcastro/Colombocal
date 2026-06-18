@@ -37,6 +37,14 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_LOGIN_PER_WINDOW ?? 30),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Muitas tentativas de login. Tente novamente em alguns minutos." },
+});
+
 // GET /api/auth/register-status — saber se o cadastro público está ligado
 router.get("/register-status", async (req, res) => {
   try {
@@ -144,7 +152,7 @@ router.post("/register", registerLimiter, async (req, res) => {
 });
 
 // POST /api/auth/login { email, password }
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "")
       .trim()

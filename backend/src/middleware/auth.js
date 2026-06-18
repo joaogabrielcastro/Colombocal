@@ -43,6 +43,7 @@ async function requireTenantUser(req, res, next) {
         email: "dev@local",
         name: "Desenvolvimento",
         role: "admin",
+        navPermissions: null,
       };
       return next();
     }
@@ -65,7 +66,14 @@ async function requireTenantUser(req, res, next) {
 
     const user = await prisma.user.findFirst({
       where: { id: uid, tenantId: tid },
-      select: { id: true, tenantId: true, email: true, name: true, role: true },
+      select: {
+        id: true,
+        tenantId: true,
+        email: true,
+        name: true,
+        role: true,
+        navPermissions: true,
+      },
     });
     if (!user) {
       return res.status(401).json({ error: "Usuário não encontrado" });

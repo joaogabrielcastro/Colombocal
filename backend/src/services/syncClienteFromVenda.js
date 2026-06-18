@@ -1,4 +1,6 @@
 const EPS = 0.009;
+const { AppError } = require("../shared/errors/appError");
+const { assertClienteDoTenant, assertProdutosDoTenant } = require("../utils/tenantOwnership");
 
 function moneyDiffers(a, b) {
   const na = parseFloat(String(a ?? 0));
@@ -13,12 +15,23 @@ function moneyDiffers(a, b) {
 async function syncClienteFromVenda(
   tx,
   {
+    tenantId,
     clienteId,
     precos = [],
     fretePadraoSaco,
     fretePadraoTonelada,
   },
 ) {
+  if (tenantId == null) {
+    throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
+  }
+  await assertClienteDoTenant(tx, clienteId, tenantId);
+  await assertProdutosDoTenant(
+    tx,
+    precos.map((row) => Number(row.produtoId)),
+    tenantId,
+  );
+
   for (const row of precos) {
     const produtoId = Number(row.produtoId);
     const preco = parseFloat(String(row.preco));

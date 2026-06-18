@@ -1,4 +1,4 @@
-import { getAuthToken } from './auth-token';
+import { getAuthToken, clearAuthToken } from './auth-token';
 
 export const API_BASE = '/api';
 
@@ -68,6 +68,15 @@ function messageFromErrorBody(body: unknown, status: number): string {
   return `Erro ${status}`;
 }
 
+function handleUnauthorized() {
+  if (typeof window === 'undefined') return;
+  const path = window.location.pathname;
+  if (path === '/login' || path === '/cadastro') return;
+  clearAuthToken();
+  const next = encodeURIComponent(path + window.location.search);
+  window.location.assign(`/login?next=${next}`);
+}
+
 /**
  * GET/POST etc. com retentativas em falhas transitórias (rede, 502/503/504, 429).
  * Erros 4xx definitivos (exceto 408/429) não repetem a chamada.
@@ -92,7 +101,10 @@ export async function apiFetch<T>(path: string, options?: FetchOptions): Promise
         );
         const canRetry =
           attempt < maxRetries && isRetryableStatus(res.status);
-        if (!canRetry) throw err;
+        if (!canRetry) {
+          if (res.status === 401) handleUnauthorized();
+          throw err;
+        }
         await sleep(320 * (attempt + 1));
         continue;
       }
@@ -145,7 +157,10 @@ export async function apiFetchWithMeta<T>(
         );
         const canRetry =
           attempt < maxRetries && isRetryableStatus(res.status);
-        if (!canRetry) throw err;
+        if (!canRetry) {
+          if (res.status === 401) handleUnauthorized();
+          throw err;
+        }
         await sleep(320 * (attempt + 1));
         continue;
       }

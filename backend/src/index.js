@@ -9,6 +9,7 @@ const {
   sendErrorAlert,
 } = require("./shared/http/observability");
 const { requireTenantUser, requireAdmin } = require("./middleware/auth");
+const { requireNavKey } = require("./middleware/navPermission");
 const { runPrismaMigrateOnStart } = require("./startup/migrateOnStart");
 
 // Garante uso do engine local no ambiente de desenvolvimento
@@ -55,6 +56,7 @@ function skipGlobalApiLimiter(req) {
   if (url.startsWith("/api/setup")) return true;
   // /register-status e /register têm limiter próprio em auth.js
   if (url.startsWith("/api/auth/register")) return true;
+  if (url.startsWith("/api/auth/login")) return true;
   return false;
 }
 
@@ -127,19 +129,19 @@ app.use("/api/setup", setupLimiter, require("./routes/setup"));
 app.use("/api/auth", require("./routes/auth"));
 
 // API protegida: multi-tenant + JWT (ou AUTH_DISABLED=true em desenvolvimento)
-app.use("/api/clientes", requireTenantUser, require("./routes/clientes"));
-app.use("/api/produtos", requireTenantUser, require("./routes/produtos"));
-app.use("/api/motoristas", requireTenantUser, require("./routes/motoristas"));
-app.use("/api/vendedores", requireTenantUser, require("./routes/vendedores"));
-app.use("/api/vendas", requireTenantUser, require("./routes/vendas"));
-app.use("/api/fretes", requireTenantUser, require("./routes/fretes"));
+app.use("/api/clientes", requireTenantUser, requireNavKey("clientes"), require("./routes/clientes"));
+app.use("/api/produtos", requireTenantUser, requireNavKey("produtos"), require("./routes/produtos"));
+app.use("/api/motoristas", requireTenantUser, requireNavKey("motoristas"), require("./routes/motoristas"));
+app.use("/api/vendedores", requireTenantUser, requireNavKey("vendedores"), require("./routes/vendedores"));
+app.use("/api/vendas", requireTenantUser, requireNavKey("vendas"), require("./routes/vendas"));
+app.use("/api/fretes", requireTenantUser, requireNavKey("fretes"), require("./routes/fretes"));
 app.use("/api/config", requireTenantUser, require("./routes/config"));
 app.use("/api/users", requireTenantUser, requireAdmin, require("./routes/users"));
 app.use("/api/auditoria", requireTenantUser, require("./routes/auditoria"));
-app.use("/api/cheques", requireTenantUser, require("./routes/cheques"));
-app.use("/api/pagamentos", requireTenantUser, require("./routes/pagamentos"));
+app.use("/api/cheques", requireTenantUser, requireNavKey("cheques"), require("./routes/cheques"));
+app.use("/api/pagamentos", requireTenantUser, requireNavKey("cheques"), require("./routes/pagamentos"));
 app.use("/api/relatorios", requireTenantUser, require("./routes/relatorios"));
-app.use("/api/dashboard", requireTenantUser, require("./routes/dashboard"));
+app.use("/api/dashboard", requireTenantUser, requireNavKey("dashboard"), require("./routes/dashboard"));
 app.use("/api/cnpj", requireTenantUser, require("./routes/cnpj"));
 
 // Global error handler

@@ -5,6 +5,10 @@ const { registrarEventoFinanceiro } = require("../../services/financeiroEventos"
 const { findVendaFinanceiraById } = require("../../infra/prisma/repositories/vendaRepository");
 const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRepository");
 const { createCheque } = require("../../infra/prisma/repositories/chequeRepository");
+const {
+  assertClienteDoTenant,
+  assertVendaDoTenant,
+} = require("../../utils/tenantOwnership");
 
 async function registrarChequeLote(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -16,15 +20,12 @@ async function registrarChequeLote(prisma, payload) {
   const vendaId = payload.vendaId;
 
   return prisma.$transaction(async (tx) => {
+    await assertClienteDoTenant(tx, clienteId, tenantId);
+    await assertVendaDoTenant(tx, vendaId, tenantId, { clienteId });
+
     const venda = await findVendaFinanceiraById(tx, vendaId, tenantId);
     if (!venda) {
       throw new AppError("Venda não encontrada", { code: "VENDA_NAO_ENCONTRADA", httpStatus: 404 });
-    }
-    if (venda.clienteId !== clienteId) {
-      throw new AppError("A venda informada não pertence ao cliente selecionado", {
-        code: "VENDA_CLIENTE_INVALIDO",
-        httpStatus: 400,
-      });
     }
 
     const totalLote = payload.itens.reduce((acc, item) => acc + Number(item.valor), 0);

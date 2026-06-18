@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
+const { requireAdmin } = require("../middleware/auth");
 const { getConfig, setConfig, DEFAULTS } = require("../services/configSistema");
 const { executarResetFinanceiroLegacy } = require("../services/resetFinanceiroLegacy");
 const { handleRouteError } = require("../utils/api");
@@ -13,7 +14,7 @@ const { handleRouteError } = require("../utils/api");
  * Protegido por ADMIN_RESET_SECRET ou RESET_FINANCE_SECRET no .env.
  * Alternativa sem API: npm run legacy:reset-financeiro (na pasta backend). Ver docs/migracao-legado.md.
  */
-router.post("/reset-financeiro-legacy", async (req, res) => {
+router.post("/reset-financeiro-legacy", requireAdmin, async (req, res) => {
   try {
     if (
       process.env.NODE_ENV === "production" &&
@@ -75,7 +76,7 @@ router.get("/", async (req, res) => {
 });
 
 // PUT /api/config — ajuste de regras (protegido por JWT + tenant)
-router.put("/", async (req, res) => {
+router.put("/", requireAdmin, async (req, res) => {
   try {
     const { comissaoModo } = req.body;
     if (comissaoModo && !["emissao", "caixa"].includes(comissaoModo)) {
