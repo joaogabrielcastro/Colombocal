@@ -136,11 +136,16 @@ router.get("/", async (req, res) => {
         parseFloat(String(r.total || 0)),
       ]),
     );
+    const mesesCurto = [
+      "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+      "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+    ];
     const faturamentoMeses = [5, 4, 3, 2, 1, 0].map((i) => {
       const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
       const chave = d.toISOString().slice(0, 7);
+      const ano2 = String(d.getFullYear()).slice(-2);
       return {
-        mes: d.toLocaleString("pt-BR", { month: "short", year: "2-digit" }),
+        mes: `${mesesCurto[d.getMonth()]}/${ano2}`,
         total: totalPorMes.get(chave) ?? 0,
       };
     });
