@@ -74,7 +74,12 @@ router.get("/", async (req, res) => {
         where: tw,
         take: 5,
         orderBy: { dataVenda: "desc" },
-        include: { cliente: true, vendedor: true },
+        include: {
+          cliente: true,
+          vendedor: true,
+          pagamentos: { select: { valor: true } },
+          titulos: { select: { valorOriginal: true } },
+        },
       }),
       getConfig(prisma, tenantId, "COMISSAO_MODO"),
     ]);
@@ -140,6 +145,28 @@ router.get("/", async (req, res) => {
       };
     });
 
+    const ultimasVendasResumo = ultimasVendas.map((v) => {
+      const totalRecebido = (v.pagamentos || []).reduce(
+        (acc, p) => acc + parseFloat(String(p.valor || 0)),
+        0,
+      );
+      const totalTitulo =
+        (v.titulos || []).length > 0
+          ? (v.titulos || []).reduce(
+              (acc, t) => acc + parseFloat(String(t.valorOriginal || 0)),
+              0,
+            )
+          : parseFloat(String(v.valorTotal || 0));
+      const saldoOrdem = totalRecebido - totalTitulo;
+      const { pagamentos, titulos, ...rest } = v;
+      return {
+        ...rest,
+        totalRecebido,
+        saldoOrdem,
+        quitada: saldoOrdem >= -0.009,
+      };
+    });
+
     res.json({
       vendasHoje: vendasHoje.length,
       faturamentoHoje,
@@ -147,10 +174,15 @@ router.get("/", async (req, res) => {
       quantidadeVendasMes: aggMes._count.id,
       clientesDevendo: clientesDevendo.length,
       totalEmAberto,
+      topClientesDevendo: clientesDevendo.slice(0, 5).map((c) => ({
+        id: c.id,
+        nome: (c.nomeFantasia && String(c.nomeFantasia).trim()) || c.razaoSocial,
+        aberto: c.aberto,
+      })),
       chequesRegistrados: chequesEmMaosAgg._count?.id ?? 0,
       totalChequesRegistrados: totalChequesEmMaos,
       totalProdutosAtivos,
-      ultimasVendas,
+      ultimasVendas: ultimasVendasResumo,
       faturamentoPorMes: faturamentoMeses,
       regras: {
         comissaoModo: comissaoModo === "caixa" ? "caixa" : "emissao",

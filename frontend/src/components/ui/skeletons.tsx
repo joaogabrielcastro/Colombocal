@@ -40,17 +40,17 @@ export function DashboardSkeleton() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <PageHeaderSkeleton />
-      <DashboardStatGridSkeleton cards={4} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-5 space-y-3">
-          <SkeletonBox className="h-5 w-40" />
-          <SkeletonBox className="h-40 w-full rounded-lg" />
-        </div>
-        <div className="card p-5 space-y-3">
-          <SkeletonBox className="h-5 w-36" />
-          <SkeletonBox className="h-40 w-full rounded-lg" />
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonBox key={i} className="h-20 w-full rounded-xl" />
+        ))}
       </div>
+      <DashboardStatGridSkeleton cards={5} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 mt-6">
+        <SkeletonBox className="h-52 lg:col-span-2 rounded-xl" />
+        <SkeletonBox className="h-52 rounded-xl" />
+      </div>
+      <SkeletonBox className="h-64 w-full rounded-xl" />
     </div>
   );
 }
