@@ -18,7 +18,7 @@ export default function SetupPage() {
   const router = useRouter();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [statusError, setStatusError] = useState(false);
-  const [tenantName, setTenantName] = useState('Minha organização');
+  const [tenantName, setTenantName] = useState('Colombocal');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -45,7 +45,7 @@ export default function SetupPage() {
         tenant: { name: string };
       }>('/setup/first-admin', {
         setupSecret,
-        tenantName: tenantName.trim() || 'Minha organização',
+        tenantName: tenantName.trim() || 'Colombocal',
         email: email.trim().toLowerCase(),
         password,
         name: name.trim() || null,

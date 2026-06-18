@@ -39,5 +39,5 @@ EXCEPTION
 END $$;
 
 INSERT INTO "Tenant" ("name", "slug")
-SELECT 'Organização padrão', 'default'
+SELECT 'Colombocal', 'default'
 WHERE NOT EXISTS (SELECT 1 FROM "Tenant" WHERE "slug" = 'default');

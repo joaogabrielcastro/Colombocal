@@ -104,7 +104,7 @@ async function main() {
 
   const r1 = await seedOneTenant(prisma, {
     slug: "default",
-    name: "Organização padrão",
+    name: "Colombocal",
     adminEmail,
     adminName,
     passwordPlain: defaultPassword,

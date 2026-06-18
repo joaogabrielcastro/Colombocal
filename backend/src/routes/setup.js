@@ -95,7 +95,7 @@ router.post("/first-admin", async (req, res) => {
     const password = String(req.body?.password || "");
     const name = req.body?.name != null ? String(req.body.name).trim() || null : null;
     const tenantName =
-      String(req.body?.tenantName || "Minha organização").trim() || "Minha organização";
+      String(req.body?.tenantName || "Colombocal").trim() || "Colombocal";
 
     if (!email || !password) {
       return res.status(400).json({ error: "Informe e-mail e senha" });
