@@ -19,6 +19,7 @@ import {
   type Venda,
 } from "@/lib/utils";
 import api from "@/lib/api";
+import { VendaOrdem } from "@/components/VendaOrdem";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reportApiError } from "@/lib/report-api-error";
@@ -493,8 +494,22 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         >
           <ArrowLeftIcon className="w-4 h-4" />
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {isEdit ? `Editar Venda #${numeroVenda ?? editId}` : "Nova Venda"}
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+          {isEdit && editId ? (
+            <>
+              <span className="text-gray-500 font-normal text-lg">Editar</span>
+              <VendaOrdem
+                venda={{
+                  id: Number(editId),
+                  numeroVenda: numeroVenda ? Number(numeroVenda) : null,
+                }}
+                link={false}
+                size="xl"
+              />
+            </>
+          ) : (
+            "Nova Venda"
+          )}
         </h1>
       </div>
 

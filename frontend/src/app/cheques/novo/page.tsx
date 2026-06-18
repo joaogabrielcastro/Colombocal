@@ -8,8 +8,8 @@ import {
   localDateInputValue,
   type Cliente,
   type Venda,
-  vendaNumeroPublico,
 } from "@/lib/utils";
+import { vendaOrdemTexto } from "@/components/VendaOrdem";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -18,7 +18,7 @@ import { useVendasEmAberto } from "@/features/cheques/hooks/useVendasEmAberto";
 
 function vendaOptionLabel(v: Venda) {
   const valor = formatMoney(v.valorTotal);
-  const base = `Venda #${vendaNumeroPublico(v)} – ${new Date(v.dataVenda).toLocaleDateString("pt-BR")} – ${valor}`;
+  const base = `Venda ${vendaOrdemTexto(v)} – ${new Date(v.dataVenda).toLocaleDateString("pt-BR")} – ${valor}`;
   const saldo =
     v.saldoEmAbertoTitulos != null && v.saldoEmAbertoTitulos > 0
       ? ` · em aberto ${formatMoney(v.saldoEmAbertoTitulos)}`

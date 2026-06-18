@@ -9,6 +9,7 @@ import {
   ArrowTrendingUpIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
+import { VendaOrdem } from "@/components/VendaOrdem";
 import api from "@/lib/api";
 import { DashboardSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,6 +27,7 @@ interface DashboardData {
   totalProdutosAtivos: number;
   ultimasVendas: {
     id: number;
+    numeroVenda?: number | null;
     dataVenda: string;
     valorTotal: number;
     cliente: { razaoSocial: string; nomeFantasia?: string | null };
@@ -285,23 +287,25 @@ export default function DashboardPage() {
               </div>
             ) : (
               d.ultimasVendas.map((v) => (
-                <Link
+                <div
                   key={v.id}
-                  href={`/vendas/${v.id}`}
                   className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {v.cliente.nomeFantasia || v.cliente.razaoSocial}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {formatDate(v.dataVenda)} • {v.vendedor.nome}
-                    </p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <VendaOrdem venda={v} size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {v.cliente.nomeFantasia || v.cliente.razaoSocial}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatDate(v.dataVenda)} • {v.vendedor.nome}
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-sm font-semibold text-green-700">
+                  <span className="text-sm font-semibold text-green-700 shrink-0 ml-3">
                     {formatMoney(v.valorTotal)}
                   </span>
-                </Link>
+                </div>
               ))
             )}
           </div>

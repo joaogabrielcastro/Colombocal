@@ -2,7 +2,8 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatDate, formatMoney, type Cliente, vendaNumeroPublico } from "@/lib/utils";
+import { formatDate, formatMoney, type Cliente } from "@/lib/utils";
+import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import api from "@/lib/api";
 import { apiFetchWithMeta } from "@/lib/api";
 import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
@@ -147,7 +148,7 @@ function RelatorioTitulosContent() {
       return {
         titulo: t.numero || `#${t.id}`,
         cliente: t.cliente.nomeFantasia || t.cliente.razaoSocial,
-        venda: t.venda ? `Venda #${vendaNumeroPublico(t.venda)}` : "-",
+        venda: t.venda ? `Venda ${vendaOrdemTexto(t.venda)}` : "-",
         vencimento: formatDate(t.vencimento),
         valorOriginal: parseFloat(String(t.valorOriginal)),
         valorPago: parseFloat(String(t.valorPago)),
@@ -378,7 +379,7 @@ function RelatorioTitulosContent() {
               <tr className="border-b border-gray-200">
                 <th className="table-header">Título</th>
                 <th className="table-header">Cliente</th>
-                <th className="table-header">Venda</th>
+                <th className="table-header w-28 bg-slate-50">Ordem</th>
                 <th className="table-header">Vencimento</th>
                 <th className="table-header text-right">Original</th>
                 <th className="table-header text-right">Pago</th>
@@ -416,12 +417,7 @@ function RelatorioTitulosContent() {
                     </td>
                     <td className="table-cell">
                       {t.venda ? (
-                        <Link
-                          href={`/vendas/${t.venda.id}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          Venda #{vendaNumeroPublico(t.venda)}
-                        </Link>
+                        <VendaOrdem venda={t.venda} size="sm" prefix="Venda" />
                       ) : (
                         "-"
                       )}

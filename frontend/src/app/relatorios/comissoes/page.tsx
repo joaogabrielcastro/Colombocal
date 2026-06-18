@@ -5,7 +5,8 @@ import {
   ArrowDownTrayIcon,
   PrinterIcon,
 } from "@heroicons/react/24/outline";
-import { formatMoney, formatDate, vendaNumeroPublico, localDateInputValue } from "@/lib/utils";
+import { formatMoney, formatDate, localDateInputValue } from "@/lib/utils";
+import { VendaOrdemCell } from "@/components/VendaOrdem";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
@@ -489,7 +490,7 @@ export default function ComissoesPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-100">
-                        <th className="table-header">#</th>
+                        <th className="table-header w-24 bg-slate-50">Ordem</th>
                         <th className="table-header">Data</th>
                         <th className="table-header">Cliente</th>
                         <th className="table-header text-right">Total</th>
@@ -502,7 +503,7 @@ export default function ComissoesPage() {
                     <tbody>
                       {d.vendas.map((v: any) => (
                         <tr key={v.id} className="table-row bg-gray-50">
-                          <td className="table-cell text-gray-400">#{vendaNumeroPublico(v)}</td>
+                          <VendaOrdemCell venda={v} />
                           <td className="table-cell">
                             {formatDate(v.dataVenda)}
                           </td>

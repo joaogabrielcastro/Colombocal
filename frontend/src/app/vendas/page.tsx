@@ -7,6 +7,7 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { VendaOrdemCell } from '@/components/VendaOrdem';
 import {
   formatMoney,
   formatDate,
@@ -14,7 +15,6 @@ import {
   type Venda,
   type Vendedor,
   type Motorista,
-  vendaNumeroPublico,
 } from '@/lib/utils';
 import api from '@/lib/api';
 import { ListPageSkeleton, TableListSkeleton } from '@/components/ui/skeletons';
@@ -333,7 +333,7 @@ function VendasPageContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="table-header">#</th>
+                <th className="table-header w-24 bg-slate-50">Ordem</th>
                 <th className="table-header">Data</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Vendedor</th>
@@ -348,7 +348,7 @@ function VendasPageContent() {
             <tbody>
               {vendas.map((v) => (
                 <tr key={v.id} className="table-row">
-                  <td className="table-cell text-gray-400 font-mono">#{vendaNumeroPublico(v)}</td>
+                  <VendaOrdemCell venda={v} />
                   <td className="table-cell">{formatDate(v.dataVenda)}</td>
                   <td className="table-cell">
                     <p className="font-medium">

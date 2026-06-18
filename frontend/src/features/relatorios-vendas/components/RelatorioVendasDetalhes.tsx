@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import {
   formatDate,
   formatFreteReciboLinha,
   formatMoney,
   type Venda,
-  vendaNumeroPublico,
 } from "@/lib/utils";
+import { VendaOrdemCell } from "@/components/VendaOrdem";
 import type { RelatorioVendasPdfSecao } from "../services/exports";
 import { RelatorioPdfSecaoButton } from "./RelatorioPdfSecaoButton";
 
@@ -39,15 +38,7 @@ export function RelatorioVendasDetalhes({ vendas, onExportPdfSecao }: Props) {
           <tbody>
             {vendas.map((v) => (
               <tr key={v.id} className="table-row">
-                <td className="table-cell bg-slate-50/80">
-                  <Link
-                    href={`/vendas/${v.id}`}
-                    className="inline-flex items-center font-mono text-base font-bold text-blue-700 hover:text-blue-900 hover:underline"
-                    title="Abrir venda"
-                  >
-                    #{vendaNumeroPublico(v)}
-                  </Link>
-                </td>
+                <VendaOrdemCell venda={v} />
                 <td className="table-cell">{formatDate(v.dataVenda)}</td>
                 <td className="table-cell font-medium">
                   {v.cliente.nomeFantasia || v.cliente.razaoSocial}

@@ -3,7 +3,8 @@
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatMoney, formatDate, vendaNumeroPublico } from "@/lib/utils";
+import { formatMoney, formatDate } from "@/lib/utils";
+import { VendaOrdem } from "@/components/VendaOrdem";
 import api, { apiFetchWithMeta } from "@/lib/api";
 import type { FreteMovimento } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -156,7 +157,7 @@ function FretesContent() {
                 <tr className="border-b border-gray-200">
                   <th className="table-header">Data mov.</th>
                   <th className="table-header">Cliente</th>
-                  <th className="table-header">Venda</th>
+                  <th className="table-header w-24 bg-slate-50">Ordem</th>
                   <th className="table-header text-right">Valor</th>
                   <th className="table-header">Frete pago</th>
                 </tr>
@@ -178,12 +179,7 @@ function FretesContent() {
                     </td>
                     <td className="table-cell">
                       {r.venda ? (
-                        <Link
-                          href={`/vendas/${r.venda.id}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          #{vendaNumeroPublico(r.venda)}
-                        </Link>
+                        <VendaOrdem venda={r.venda} size="sm" />
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}

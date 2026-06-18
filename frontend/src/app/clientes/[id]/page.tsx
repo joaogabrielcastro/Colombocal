@@ -16,8 +16,8 @@ import {
   type Produto,
   type Cheque,
   type FreteMovimento,
-  vendaNumeroPublico,
 } from "@/lib/utils";
+import { VendaOrdem } from "@/components/VendaOrdem";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { DetailPageSkeleton } from "@/components/ui/skeletons";
@@ -397,21 +397,20 @@ export default function ClienteDetailPage() {
                 </p>
               ) : (
                 conta.vendas.map((v: any) => (
-                  <Link
+                  <div
                     key={v.id}
-                    href={`/vendas/${v.id}`}
-                    className="flex justify-between px-5 py-3 hover:bg-gray-50"
+                    className="flex justify-between items-center px-5 py-3 hover:bg-gray-50"
                   >
                     <div>
-                      <p className="text-sm font-medium">Venda #{vendaNumeroPublico(v)}</p>
-                      <p className="text-xs text-gray-400">
+                      <VendaOrdem venda={v} size="sm" prefix="Venda" />
+                      <p className="text-xs text-gray-400 mt-0.5">
                         {formatDate(v.dataVenda)}
                       </p>
                     </div>
                     <span className="text-sm font-semibold text-red-600">
                       -{formatMoney(v.valorTotal)}
                     </span>
-                  </Link>
+                  </div>
                 ))
               )}
             </div>
@@ -442,12 +441,15 @@ export default function ClienteDetailPage() {
                         {formatDate(p.data)}
                       </p>
                       {p.vendaId && (
-                        <Link
-                          href={`/vendas/${p.vendaId}`}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Venda #{p.venda ? vendaNumeroPublico(p.venda) : p.vendaId}
-                        </Link>
+                        <VendaOrdem
+                          venda={{
+                            id: p.vendaId,
+                            numeroVenda: p.venda?.numeroVenda,
+                          }}
+                          size="xs"
+                          prefix="Venda"
+                          className="mt-0.5"
+                        />
                       )}
                     </div>
                     <span className="text-sm font-semibold text-green-600">
@@ -637,7 +639,7 @@ export default function ClienteDetailPage() {
                 <tr className="border-b border-gray-200">
                   <th className="table-header w-16">Ordem</th>
                   <th className="table-header">Banco / Nº</th>
-                  <th className="table-header">Venda</th>
+                  <th className="table-header w-28 bg-slate-50">Ordem</th>
                   <th className="table-header">Valor</th>
                   <th className="table-header">Data</th>
                 </tr>
@@ -666,12 +668,7 @@ export default function ClienteDetailPage() {
                     </td>
                     <td className="table-cell">
                       {c.venda ? (
-                        <Link
-                          href={`/vendas/${c.venda.id}`}
-                          className="text-blue-600 hover:underline text-sm"
-                        >
-                          Venda #{c.venda ? vendaNumeroPublico(c.venda) : c.vendaId}
-                        </Link>
+                        <VendaOrdem venda={c.venda} size="sm" prefix="Venda" />
                       ) : (
                         <span className="text-gray-400 text-sm">-</span>
                       )}

@@ -6,8 +6,8 @@ import { PlusIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import {
   formatMoney,
   formatDate,
-  vendaNumeroPublico,
 } from "@/lib/utils";
+import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import * as XLSX from "xlsx";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import { ExportActions } from "@/components/ui/export-actions";
@@ -135,7 +135,7 @@ function ChequesPageContent() {
       cliente: c.cliente.nomeFantasia || c.cliente.razaoSocial,
       banco: c.banco || "",
       numeroCheque: c.numero || "",
-      venda: c.venda ? `Venda #${vendaNumeroPublico(c.venda)}` : "-",
+      venda: c.venda ? `Venda ${vendaOrdemTexto(c.venda)}` : "-",
       valor: parseFloat(String(c.valor)),
       emitente: c.emitenteNome || "",
       preDatado: formatDate(c.dataRecebimento),
@@ -160,7 +160,7 @@ function ChequesPageContent() {
         <td>#${c.numeroOrdem}</td>
         <td>${c.cliente.nomeFantasia || c.cliente.razaoSocial}</td>
         <td>${c.banco || "-"}${c.numero ? ` / Nº ${c.numero}` : ""}</td>
-        <td>${c.venda ? `Venda #${vendaNumeroPublico(c.venda)}` : "-"}</td>
+        <td>${c.venda ? `Venda ${vendaOrdemTexto(c.venda)}` : "-"}</td>
         <td>${formatMoney(c.valor)}</td>
         <td>${formatDate(c.dataRecebimento)}</td>
       </tr>
@@ -414,7 +414,7 @@ function ChequesPageContent() {
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Banco / Nº</th>
                 <th className="table-header">Emitente</th>
-                <th className="table-header">Venda</th>
+                <th className="table-header w-28 bg-slate-50">Ordem</th>
                 <th className="table-header">Valor</th>
                 <th className="table-header">Data</th>
               </tr>
@@ -444,12 +444,7 @@ function ChequesPageContent() {
                   </td>
                   <td className="table-cell">
                     {c.venda ? (
-                      <Link
-                        href={`/vendas/${c.venda.id}`}
-                        className="text-blue-600 hover:underline text-sm"
-                      >
-                        Venda #{vendaNumeroPublico(c.venda)}
-                      </Link>
+                      <VendaOrdem venda={c.venda} size="sm" prefix="Venda" />
                     ) : (
                       <span className="text-gray-400 text-sm">-</span>
                     )}

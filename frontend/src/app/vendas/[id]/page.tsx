@@ -12,12 +12,13 @@ import {
   formatMoney,
   formatDate,
   formatQuantidade,
+  formatFreteReciboLinha,
   localDateInputValue,
   toInputDate,
   type Venda,
   type Pagamento,
-  vendaNumeroPublico,
 } from "@/lib/utils";
+import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { DetailPageSkeleton } from "@/components/ui/skeletons";
@@ -176,7 +177,7 @@ export default function VendaDetailPage() {
         valor: v,
         trocoTipo,
         data: dataBaixa,
-        observacoes: obsBaixa || `Baixa venda #${vendaNumeroPublico(venda)}`,
+        observacoes: obsBaixa || `Baixa venda ${vendaOrdemTexto(venda)}`,
       });
       setValorBaixa("");
       setObsBaixa("");
@@ -201,7 +202,7 @@ export default function VendaDetailPage() {
     if (!venda) return;
     const w = window.open("", "_blank");
     if (!w) return;
-    const numPub = vendaNumeroPublico(venda);
+    const numPub = vendaOrdemTexto(venda);
 
     const clienteNome = venda.cliente.nomeFantasia || venda.cliente.razaoSocial;
     const enderecoCliente = [
@@ -231,7 +232,7 @@ export default function VendaDetailPage() {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Ordem de Serviço - Venda #${numPub}</title>
+  <title>Ordem de Serviço - Venda ${numPub}</title>
   <style>
     * { box-sizing: border-box; }
     @page { size: A4; margin: 6mm; }
@@ -262,7 +263,7 @@ export default function VendaDetailPage() {
 <body>
   <div class="sheet">
     <h1>Ordem de Serviço - Entrega</h1>
-    <div class="meta">Venda #${numPub} • Data ${formatDate(venda.dataVenda)}</div>
+    <div class="meta">Venda ${numPub} • Data ${formatDate(venda.dataVenda)}</div>
 
     <div class="grid">
       <div class="box">
@@ -372,8 +373,9 @@ export default function VendaDetailPage() {
           <ArrowLeftIcon className="w-4 h-4" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Venda #{vendaNumeroPublico(venda)}
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+            <span className="text-gray-500 font-normal text-lg">Venda</span>
+            <VendaOrdem venda={venda} link={false} size="xl" />
           </h1>
           <p className="text-gray-500 text-sm">{formatDate(venda.dataVenda)}</p>
         </div>
