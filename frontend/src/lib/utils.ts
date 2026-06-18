@@ -25,6 +25,23 @@ export function formatCNPJ(cnpj: string): string {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
+export function formatCPF(cpf: string): string {
+  const d = cpf.replace(/\D/g, "");
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+export function formatDocumentoCliente(cliente: {
+  tipoPessoa?: string | null;
+  cnpj?: string | null;
+  cpf?: string | null;
+}): string {
+  if (cliente.tipoPessoa === "PF" && cliente.cpf) return formatCPF(cliente.cpf);
+  if (cliente.cnpj) return formatCNPJ(cliente.cnpj);
+  if (cliente.cpf) return formatCPF(cliente.cpf);
+  return "—";
+}
+
 export function formatQuantidade(
   value: number | string,
   unidade: string,
@@ -70,7 +87,9 @@ export interface Vendedor {
 
 export interface Cliente {
   id: number;
-  cnpj: string;
+  tipoPessoa?: "PJ" | "PF" | string;
+  cnpj?: string | null;
+  cpf?: string | null;
   razaoSocial: string;
   nomeFantasia?: string;
   telefone?: string;

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
@@ -17,7 +17,10 @@ interface CnpjData {
   endereco: string;
 }
 
+type TipoPessoa = 'PF' | 'PJ';
+
 const initialForm = {
+  cpf: '',
   cnpj: '',
   razaoSocial: '',
   nomeFantasia: '',
@@ -34,11 +37,24 @@ const initialForm = {
 
 export default function NovoClientePage() {
   const router = useRouter();
+  const [permiteCpf, setPermiteCpf] = useState(false);
+  const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>('PJ');
   const [form, setForm] = useState(initialForm);
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    api
+      .get<{ features?: { clienteCpf?: boolean } }>('/auth/me')
+      .then((r) => {
+        const cpf = !!r.features?.clienteCpf;
+        setPermiteCpf(cpf);
+        if (cpf) setTipoPessoa('PF');
+      })
+      .catch(() => setPermiteCpf(false));
+  }, []);
 
   const loadVendedorOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({ take: '80' });
@@ -65,7 +81,7 @@ export default function NovoClientePage() {
     setErro('');
     try {
       const data = await api.get<CnpjData>(`/cnpj/${cnpj}`);
-      setForm(prev => ({
+      setForm((prev) => ({
         ...prev,
         cnpj: data.cnpj,
         razaoSocial: data.razaoSocial,
@@ -75,8 +91,8 @@ export default function NovoClientePage() {
         estado: data.estado || '',
         endereco: data.endereco || '',
       }));
-    } catch (e: any) {
-      setErro(e.message);
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Erro ao buscar CNPJ');
     } finally {
       setBuscando(false);
     }
@@ -87,8 +103,15 @@ export default function NovoClientePage() {
     setSalvando(true);
     setErro('');
     try {
-      const cliente = await api.post<{ id: number }>('/clientes', {
-        ...form,
+      const payload: Record<string, unknown> = {
+        tipoPessoa,
+        razaoSocial: form.razaoSocial.trim(),
+        nomeFantasia: form.nomeFantasia.trim() || null,
+        telefone: form.telefone.trim() || null,
+        cidade: form.cidade.trim() || null,
+        estado: form.estado.trim() || null,
+        endereco: form.endereco.trim() || null,
+        observacoes: form.observacoes.trim() || null,
         fretePadraoSaco: parseFloat(form.fretePadraoSaco || '0'),
         fretePadraoTonelada: parseFloat(form.fretePadraoTonelada || '0'),
         vendedorId: form.vendedorId ? parseInt(form.vendedorId, 10) : undefined,
@@ -96,10 +119,18 @@ export default function NovoClientePage() {
           form.comissaoFixaPercentual !== ''
             ? parseFloat(form.comissaoFixaPercentual.replace(',', '.'))
             : undefined,
-      });
+      };
+
+      if (tipoPessoa === 'PF') {
+        payload.cpf = form.cpf.replace(/\D/g, '');
+      } else {
+        payload.cnpj = form.cnpj.replace(/\D/g, '');
+      }
+
+      const cliente = await api.post<{ id: number }>('/clientes', payload);
       router.push(`/clientes/${cliente.id}`);
-    } catch (e: any) {
-      setErro(e.message);
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Erro ao salvar cliente');
       setSalvando(false);
     }
   };
@@ -113,6 +144,8 @@ export default function NovoClientePage() {
     ) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const isPf = tipoPessoa === 'PF';
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -121,7 +154,11 @@ export default function NovoClientePage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Novo Cliente</h1>
-          <p className="text-gray-500 text-sm">Busque pelo CNPJ para preencher automaticamente</p>
+          <p className="text-gray-500 text-sm">
+            {permiteCpf && isPf
+              ? 'Cadastro de pessoa física com CPF'
+              : 'Busque pelo CNPJ para preencher automaticamente'}
+          </p>
         </div>
       </div>
 
@@ -129,46 +166,96 @@ export default function NovoClientePage() {
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{erro}</div>
       )}
 
-      {/* Busca CNPJ */}
-      <div className="card p-5 mb-5">
-        <h2 className="font-semibold text-gray-900 mb-3">Busca por CNPJ</h2>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            placeholder="00.000.000/0000-00"
-            value={cnpjBusca}
-            onChange={e => setCnpjBusca(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleBuscarCNPJ()}
-            className="input-field flex-1"
-            maxLength={18}
-          />
-          <button onClick={handleBuscarCNPJ} disabled={buscando} className="btn-primary">
-            <MagnifyingGlassIcon className="w-4 h-4" />
-            {buscando ? 'Buscando...' : 'Buscar'}
-          </button>
+      {permiteCpf ? (
+        <div className="card p-5 mb-5">
+          <h2 className="font-semibold text-gray-900 mb-3">Tipo de cliente</h2>
+          <div className="flex flex-wrap gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="radio"
+                name="tipoPessoa"
+                checked={tipoPessoa === 'PF'}
+                onChange={() => setTipoPessoa('PF')}
+              />
+              Pessoa física (CPF)
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="radio"
+                name="tipoPessoa"
+                checked={tipoPessoa === 'PJ'}
+                onChange={() => setTipoPessoa('PJ')}
+              />
+              Pessoa jurídica (CNPJ)
+            </label>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {/* Formulário */}
+      {!isPf ? (
+        <div className="card p-5 mb-5">
+          <h2 className="font-semibold text-gray-900 mb-3">Busca por CNPJ</h2>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              placeholder="00.000.000/0000-00"
+              value={cnpjBusca}
+              onChange={(e) => setCnpjBusca(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleBuscarCNPJ())}
+              className="input-field flex-1"
+              maxLength={18}
+            />
+            <button type="button" onClick={handleBuscarCNPJ} disabled={buscando} className="btn-primary">
+              <MagnifyingGlassIcon className="w-4 h-4" />
+              {buscando ? 'Buscando...' : 'Buscar'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <form onSubmit={handleSubmit} className="card p-5">
         <h2 className="font-semibold text-gray-900 mb-4">Dados do Cliente</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ *</label>
-            <input required value={form.cnpj} onChange={set('cnpj')} className="input-field" placeholder="00000000000000" />
-          </div>
+          {isPf ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">CPF *</label>
+              <input
+                required
+                value={form.cpf}
+                onChange={set('cpf')}
+                className="input-field"
+                placeholder="000.000.000-00"
+                maxLength={14}
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ *</label>
+              <input
+                required
+                value={form.cnpj}
+                onChange={set('cnpj')}
+                className="input-field"
+                placeholder="00000000000000"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
             <input value={form.telefone} onChange={set('telefone')} className="input-field" placeholder="(XX) XXXXX-XXXX" />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Razão Social *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {isPf ? 'Nome completo *' : 'Razão Social *'}
+            </label>
             <input required value={form.razaoSocial} onChange={set('razaoSocial')} className="input-field" />
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
-            <input value={form.nomeFantasia} onChange={set('nomeFantasia')} className="input-field" />
-          </div>
+          {!isPf ? (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
+              <input value={form.nomeFantasia} onChange={set('nomeFantasia')} className="input-field" />
+            </div>
+          ) : null}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
             <input value={form.cidade} onChange={set('cidade')} className="input-field" />

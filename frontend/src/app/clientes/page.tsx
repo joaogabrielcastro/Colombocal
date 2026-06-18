@@ -7,7 +7,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
-import { formatMoney, formatCNPJ, type Cliente } from "@/lib/utils";
+import { formatMoney, formatDocumentoCliente, type Cliente } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -70,7 +70,7 @@ export default function ClientesPage() {
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por nome, CNPJ ou cidade..."
+              placeholder="Buscar por nome, documento ou cidade..."
               value={buscaInput}
               onChange={(e) => setBuscaInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
@@ -124,7 +124,7 @@ export default function ClientesPage() {
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="table-header">Razão Social / Fantasia</th>
-                <th className="table-header">CNPJ</th>
+                <th className="table-header">Documento</th>
                 <th className="table-header">Cidade / UF</th>
                 <th className="table-header">Frete padrão (saco / ton)</th>
                 <th className="table-header"></th>
@@ -140,7 +140,7 @@ export default function ClientesPage() {
                     )}
                   </td>
                   <td className="table-cell font-mono text-sm">
-                    {formatCNPJ(c.cnpj)}
+                    {formatDocumentoCliente(c)}
                   </td>
                   <td className="table-cell">
                     {c.cidade

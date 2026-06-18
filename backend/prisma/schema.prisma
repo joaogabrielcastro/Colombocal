@@ -51,7 +51,10 @@ model User {
 model Cliente {
   id                     Int      @id @default(autoincrement())
   tenantId               Int
-  cnpj                   String
+  /// PJ = empresa (CNPJ); PF = pessoa física (CPF)
+  tipoPessoa             String   @default("PJ")
+  cnpj                   String?
+  cpf                    String?
   razaoSocial            String
   nomeFantasia           String?
   telefone               String?
@@ -78,6 +81,7 @@ model Cliente {
   fretes          FreteMovimento[]
 
   @@unique([tenantId, cnpj])
+  @@unique([tenantId, cpf])
   @@index([tenantId, ativo, razaoSocial])
 }
 

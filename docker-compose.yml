@@ -49,6 +49,8 @@ services:
       OPEN_REGISTRATION: "false"
       # Com cadastro aberto, liste as orgs permitidas (slugs no banco), ex.: default,requinte
       # REGISTRATION_TENANT_SLUGS: "default,requinte"
+      # Requinte: cadastro de cliente por CPF (slug do tenant no banco)
+      # CLIENT_CPF_TENANT_SLUGS: "requinte"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules

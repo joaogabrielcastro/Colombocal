@@ -8,10 +8,11 @@ const {
 } = require("../utils/api");
 const { parseBody } = require("../utils/zodParse");
 const {
-  clienteCreateSchema,
+  getClienteCreateSchema,
   clienteUpdateSchema,
   clientePrecosSchema,
 } = require("../schemas/cliente");
+const { tenantAllowsClienteCpf } = require("../constants/tenantFeatures");
 const { resumoFinanceiroCliente } = require("../domain/financeiro/saldoCliente");
 const { recalcularTodosTitulosCliente } = require("../services/recebiveis");
 
@@ -41,6 +42,7 @@ router.get("/", async (req, res) => {
         { razaoSocial: { contains: busca, mode: "insensitive" } },
         { nomeFantasia: { contains: busca, mode: "insensitive" } },
         { cnpj: { contains: busca } },
+        { cpf: { contains: busca } },
         { cidade: { contains: busca, mode: "insensitive" } },
         { telefone: { contains: busca } },
       ];
@@ -238,11 +240,21 @@ router.post("/:id/reconciliar-recebiveis", async (req, res) => {
 // POST /api/clientes - criar cliente
 router.post("/", async (req, res) => {
   try {
-    const b = parseBody(clienteCreateSchema, req.body);
-    const cnpjLimpo = b.cnpj.replace(/\D/g, "");
+    const tenantRow = await prisma.tenant.findUnique({
+      where: { id: req.tenantId },
+      select: { slug: true },
+    });
+    const allowsClienteCpf = tenantAllowsClienteCpf(tenantRow?.slug);
+    const b = parseBody(
+      getClienteCreateSchema({ allowsClienteCpf }),
+      req.body,
+    );
+
     const data = {
       ...tenant(req),
-      cnpj: cnpjLimpo,
+      tipoPessoa: b.tipoPessoa,
+      cnpj: b.cnpj,
+      cpf: b.cpf,
       razaoSocial: b.razaoSocial,
       nomeFantasia: b.nomeFantasia,
       telefone: b.telefone,
@@ -261,13 +273,20 @@ router.post("/", async (req, res) => {
           : parseFloat(String(b.comissaoFixaPercentual)),
     };
 
+    const docWhere =
+      b.tipoPessoa === "PF"
+        ? { cpf: b.cpf, ...tenant(req) }
+        : { cnpj: b.cnpj, ...tenant(req) };
+
     const existente = await prisma.cliente.findFirst({
-      where: { cnpj: cnpjLimpo, ...tenant(req) },
+      where: docWhere,
       select: { id: true, ativo: true },
     });
 
     if (existente?.ativo) {
-      return res.status(400).json({ error: "CNPJ já cadastrado" });
+      return res.status(400).json({
+        error: b.tipoPessoa === "PF" ? "CPF já cadastrado" : "CNPJ já cadastrado",
+      });
     }
 
     if (existente && !existente.ativo) {
@@ -285,8 +304,9 @@ router.post("/", async (req, res) => {
     });
     res.status(201).json(cliente);
   } catch (error) {
-    if (error.code === "P2002")
-      return res.status(400).json({ error: "CNPJ já cadastrado" });
+    if (error.code === "P2002") {
+      return res.status(400).json({ error: "Documento já cadastrado" });
+    }
     handleRouteError(res, error);
   }
 });

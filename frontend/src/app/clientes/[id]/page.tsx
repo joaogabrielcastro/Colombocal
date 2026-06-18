@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   formatMoney,
-  formatCNPJ,
+  formatDocumentoCliente,
   formatDate,
   localDateInputValue,
   STATUS_CHEQUE_LABEL,
@@ -283,7 +283,7 @@ export default function ClienteDetailPage() {
             {cliente.nomeFantasia || cliente.razaoSocial}
           </h1>
           <p className="text-gray-500 text-sm">
-            {cliente.razaoSocial} • {formatCNPJ(cliente.cnpj)}
+            {cliente.razaoSocial} • {formatDocumentoCliente(cliente)}
           </p>
           {cliente.cidade && (
             <p className="text-gray-400 text-xs mt-0.5">
