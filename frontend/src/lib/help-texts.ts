@@ -18,3 +18,6 @@ export const FLUXO_VENDA_PASSOS = [
     href: "/vendas",
   },
 ] as const;
+
+export const CHEQUES_HEADER =
+  "Ao salvar, o valor abate o saldo do cliente na hora (como dinheiro ou PIX). Vincule à venda quando houver parcela em aberto.";

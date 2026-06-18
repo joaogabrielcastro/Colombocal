@@ -27,9 +27,37 @@ function setPaginationHeaders(res, { total, take, skip }) {
   if (typeof skip === "number") res.set("x-page-offset", String(skip));
 }
 
+function friendlyErrorMessage(error) {
+  if (error?.name === "AppError" && error.message) {
+    return error.message;
+  }
+  if (error?.code === "P2002") {
+    const target = error.meta?.target;
+    const fields = Array.isArray(target)
+      ? target
+      : typeof target === "string"
+        ? [target]
+        : [];
+    if (fields.some((f) => String(f).includes("numeroOrdem"))) {
+      return "Não foi possível gerar o número interno do cheque. Clique em salvar novamente.";
+    }
+    return "Registro duplicado. Verifique os dados e tente outra vez.";
+  }
+  if (error?.name === "PrismaClientKnownRequestError") {
+    return "Erro ao gravar no banco de dados. Tente novamente.";
+  }
+  const msg = error?.message || "";
+  if (msg.includes("prisma.") || msg.includes("Invalid `prisma.")) {
+    return "Erro ao gravar no banco de dados. Tente novamente ou contate o suporte.";
+  }
+  return error?.message || "Erro interno do servidor";
+}
+
 function handleRouteError(res, error) {
-  const status = error?.httpStatus || error?.statusCode || 500;
-  const payload = { error: error?.message || "Erro interno do servidor" };
+  let status = error?.httpStatus || error?.statusCode;
+  if (!status && error?.code === "P2002") status = 409;
+  if (!status) status = 500;
+  const payload = { error: friendlyErrorMessage(error) };
   if (error?.code) payload.code = error.code;
   res.status(status).json(payload);
 }

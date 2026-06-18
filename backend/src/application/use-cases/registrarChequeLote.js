@@ -4,7 +4,7 @@ const { recalcularTitulos } = require("../../services/recebiveis");
 const { registrarEventoFinanceiro } = require("../../services/financeiroEventos");
 const { findVendaFinanceiraById } = require("../../infra/prisma/repositories/vendaRepository");
 const { createPagamento } = require("../../infra/prisma/repositories/pagamentoRepository");
-const { createCheque } = require("../../infra/prisma/repositories/chequeRepository");
+const { createCheque, getNextNumeroOrdem } = require("../../infra/prisma/repositories/chequeRepository");
 const {
   assertClienteDoTenant,
   assertVendaDoTenant,
@@ -39,6 +39,7 @@ async function registrarChequeLote(prisma, payload) {
     }
 
     const criados = [];
+    let nextNumeroOrdem = await getNextNumeroOrdem(tx, tenantId);
     for (const item of payload.itens) {
       const dataRecebimentoDate =
         item.dataRecebimento instanceof Date
@@ -48,21 +49,25 @@ async function registrarChequeLote(prisma, payload) {
             : new Date();
       const dataPagamento = dataRecebimentoDate;
 
-      const novoCheque = await createCheque(tx, {
-        tenantId,
-        clienteId,
-        vendaId,
-        valor: item.valor,
-        emitenteNome: item.emitenteNome,
-        banco: item.banco ?? null,
-        numero: item.numero ?? null,
-        agencia: item.agencia ?? null,
-        conta: item.conta ?? null,
-        dataRecebimento: dataPagamento,
-        dataCompensacao: dataPagamento,
-        status: "registrado",
-        observacoes: item.observacoes ?? null,
-      });
+      const novoCheque = await createCheque(
+        tx,
+        {
+          tenantId,
+          clienteId,
+          vendaId,
+          valor: item.valor,
+          emitenteNome: item.emitenteNome,
+          banco: item.banco ?? null,
+          numero: item.numero ?? null,
+          agencia: item.agencia ?? null,
+          conta: item.conta ?? null,
+          dataRecebimento: dataPagamento,
+          dataCompensacao: dataPagamento,
+          status: "registrado",
+          observacoes: item.observacoes ?? null,
+        },
+        { numeroOrdem: nextNumeroOrdem++ },
+      );
 
       await createPagamento(tx, {
         tenantId,

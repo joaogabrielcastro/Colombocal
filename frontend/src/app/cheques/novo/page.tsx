@@ -10,6 +10,8 @@ import {
   type Venda,
 } from "@/lib/utils";
 import { vendaOrdemTexto } from "@/components/VendaOrdem";
+import { HelpCallout } from "@/components/ui/help-callout";
+import { CHEQUES_HEADER } from "@/lib/help-texts";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -240,12 +242,14 @@ function NovoChequeForm() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Registrar Cheque</h1>
-          <p className="text-gray-500 text-sm">
-            Cheques A Receber não afetam o saldo até serem marcados como
-            Recebidos. Depois, podem ser Repassados para circular.
-          </p>
+          <p className="text-gray-500 text-sm mt-1">{CHEQUES_HEADER}</p>
         </div>
       </div>
+
+      <HelpCallout variant="tip" className="mb-4">
+        <strong>Quando usar:</strong> o cliente pagou com cheque? Cadastre aqui. Se pagou em
+        dinheiro ou PIX, registre na tela da <strong>venda</strong> (Registrar baixa).
+      </HelpCallout>
 
       {erro && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">

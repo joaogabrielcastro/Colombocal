@@ -187,6 +187,8 @@ test("registrarChequeLote cria troco quando total excede saldo", async () => {
   assert.equal(state.pagamentos.length, 3);
   assert.equal(state.pagamentos[2].tipo, "troco_transferencia");
   assert.equal(state.pagamentos[2].valor, -20);
+  assert.equal(state.cheques[0].numeroOrdem, 1);
+  assert.equal(state.cheques[1].numeroOrdem, 2);
 });
 
 test("registrarPagamento rejeita cliente de outro tenant", async () => {
