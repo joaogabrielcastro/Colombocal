@@ -6,8 +6,6 @@ import { PlusIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import {
   formatMoney,
   formatDate,
-  STATUS_CHEQUE_LABEL,
-  STATUS_CHEQUE_COLOR,
   vendaNumeroPublico,
 } from "@/lib/utils";
 import * as XLSX from "xlsx";
@@ -53,7 +51,7 @@ function ChequesPageContent() {
     pageSize,
   });
   const cheques = data?.cheques ?? [];
-  const resumoPorStatus = data?.resumoPorStatus ?? null;
+  const resumo = data?.resumo ?? null;
   const total = data?.total ?? 0;
   const aplicarFiltros = () => {
     setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
@@ -141,8 +139,6 @@ function ChequesPageContent() {
       valor: parseFloat(String(c.valor)),
       emitente: c.emitenteNome || "",
       preDatado: formatDate(c.dataRecebimento),
-      dataCompensacao: formatDate(c.dataCompensacao),
-      status: STATUS_CHEQUE_LABEL[c.status as keyof typeof STATUS_CHEQUE_LABEL] || "Ativo",
     }));
 
   const handleExportExcel = () => {
@@ -167,8 +163,6 @@ function ChequesPageContent() {
         <td>${c.venda ? `Venda #${vendaNumeroPublico(c.venda)}` : "-"}</td>
         <td>${formatMoney(c.valor)}</td>
         <td>${formatDate(c.dataRecebimento)}</td>
-        <td>${formatDate(c.dataCompensacao)}</td>
-        <td>${STATUS_CHEQUE_LABEL[c.status as keyof typeof STATUS_CHEQUE_LABEL] || "Ativo"}</td>
       </tr>
     `,
       )
@@ -198,9 +192,7 @@ function ChequesPageContent() {
                 <th>Banco / Nº</th>
                 <th>Venda</th>
                 <th>Valor</th>
-                <th>Pré-datado</th>
-                <th>Compensado em</th>
-                <th>Status</th>
+                <th>Data</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>
@@ -213,10 +205,9 @@ function ChequesPageContent() {
     printWindow.print();
   };
 
-  const resumoMap = new Map(
-    (resumoPorStatus ?? []).map((r) => [r.status, r]),
-  );
-  const totalExibido = resumoMap.get("ativo")?.total ?? cheques.reduce((acc, c) => acc + parseFloat(String(c.valor)), 0);
+  const totalExibido =
+    resumo?.total ??
+    cheques.reduce((acc, c) => acc + parseFloat(String(c.valor)), 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -393,18 +384,15 @@ function ChequesPageContent() {
       content={(
         <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-        <div className="card p-3 text-center border-2 border-transparent">
-          <span
-            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CHEQUE_COLOR.ativo}`}
-          >
-            {STATUS_CHEQUE_LABEL.ativo}
-          </span>
+        <div className="card p-3 text-center">
+          <p className="text-xs text-gray-500 uppercase font-semibold">
+            Total nos filtros
+          </p>
           <p className="font-bold text-gray-900 mt-1">
-            {resumoMap.get("ativo")?.count ?? cheques.length}
+            {resumo?.count ?? cheques.length} cheque
+            {(resumo?.count ?? cheques.length) === 1 ? "" : "s"}
           </p>
-          <p className="text-xs text-gray-500">
-            {formatMoney(totalExibido)}
-          </p>
+          <p className="text-xs text-gray-500">{formatMoney(totalExibido)}</p>
         </div>
       </div>
 
@@ -428,9 +416,7 @@ function ChequesPageContent() {
                 <th className="table-header">Emitente</th>
                 <th className="table-header">Venda</th>
                 <th className="table-header">Valor</th>
-                <th className="table-header">Pré-datado</th>
-                <th className="table-header">Compensado em</th>
-                <th className="table-header">Status</th>
+                <th className="table-header">Data</th>
               </tr>
             </thead>
             <tbody>
@@ -473,14 +459,6 @@ function ChequesPageContent() {
                   </td>
                   <td className="table-cell">
                     {formatDate(c.dataRecebimento)}
-                  </td>
-                  <td className="table-cell">{formatDate(c.dataCompensacao)}</td>
-                  <td className="table-cell">
-                    <span
-                      className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_CHEQUE_COLOR[c.status]}`}
-                    >
-                      {STATUS_CHEQUE_LABEL[c.status as keyof typeof STATUS_CHEQUE_LABEL] || "Ativo"}
-                    </span>
                   </td>
                 </tr>
               ))}

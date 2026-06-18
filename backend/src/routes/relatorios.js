@@ -483,87 +483,22 @@ function sumDecimal(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function normalizeChequeStatusSlug(raw) {
-  return String(raw ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_");
-}
-
-function mapChequeGroupBy(rows) {
-  const order = ["ativo"];
-  const merged = new Map();
-  for (const row of rows) {
-    const status = normalizeChequeStatusSlug(row.status);
-    const count = row._count?.id ?? 0;
-    const total = sumDecimal(row._sum?.valor);
-    const cur = merged.get(status) || { status, count: 0, total: 0 };
-    cur.count += count;
-    cur.total += total;
-    merged.set(status, cur);
-  }
-  return [...merged.values()].sort((a, b) => {
-    const ia = order.indexOf(a.status);
-    const ib = order.indexOf(b.status);
-    const fa = ia === -1 ? 999 : ia;
-    const fb = ib === -1 ? 999 : ib;
-    return fa - fb || a.status.localeCompare(b.status);
-  });
-}
-
 // GET /api/relatorios/financeiro
 router.get("/financeiro", async (req, res) => {
   try {
-    const aba = req.query.aba === "pendentes" ? "pendentes" : "devedores";
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 100,
       maxTake: 500,
     });
-    const chequePendenteWhere = {
-      tenantId: req.tenantId,
-      status: "ativo",
-    };
-    // Todos clientes ativos com suas contas (baseado em títulos)
-    const [
-      clientes,
-      titulosAgg,
-      chequesPorStatusRaw,
-      chequesPendentesCount,
-      chequesPendentesValorAgg,
-      chequesPendentesRows,
-      chequesDevolvidos,
-    ] = await Promise.all([
+
+    const [clientes, titulosAgg] = await Promise.all([
       prisma.cliente.findMany({ where: { tenantId: req.tenantId, ativo: true } }),
       prisma.tituloReceber.groupBy({
         by: ["clienteId"],
         where: { tenantId: req.tenantId },
         _sum: { valorOriginal: true, valorPago: true },
       }),
-      prisma.cheque.groupBy({
-        by: ["status"],
-        where: { tenantId: req.tenantId },
-        _sum: { valor: true },
-        _count: { id: true },
-      }),
-      prisma.cheque.count({ where: chequePendenteWhere }),
-      prisma.cheque.aggregate({
-        where: chequePendenteWhere,
-        _sum: { valor: true },
-      }),
-      prisma.cheque.findMany({
-        where: chequePendenteWhere,
-        take: aba === "pendentes" ? take : 500,
-        skip: aba === "pendentes" ? skip : 0,
-        include: { cliente: true },
-        orderBy: { dataRecebimento: "asc" },
-      }),
-      Promise.resolve([]),
     ]);
-
-    const chequesPorStatus = mapChequeGroupBy(chequesPorStatusRaw);
-    const chequesPendentesValorTotal = sumDecimal(
-      chequesPendentesValorAgg._sum?.valor,
-    );
 
     const aggMap = new Map(
       titulosAgg.map((a) => [
@@ -586,30 +521,15 @@ router.get("/financeiro", async (req, res) => {
       .sort((a, b) => b.saldo - a.saldo);
     const totalEmAberto = clientesDevedores.reduce((acc, c) => acc + c.saldo, 0);
     const clientesDevedoresCount = clientesDevedores.length;
-    const clientesDevedoresPage =
-      aba === "devedores"
-        ? clientesDevedores.slice(skip, skip + take)
-        : clientesDevedores.slice(0, Math.min(100, clientesDevedores.length));
+    const clientesDevedoresPage = clientesDevedores.slice(skip, skip + take);
 
-    const chequesPendentes =
-      aba === "pendentes"
-        ? chequesPendentesRows
-        : chequesPendentesRows.slice(0, Math.min(100, chequesPendentesRows.length));
-
-    const totalAba = aba === "pendentes" ? chequesPendentesCount : clientesDevedoresCount;
-    setPaginationHeaders(res, { total: totalAba, take, skip });
+    setPaginationHeaders(res, { total: clientesDevedoresCount, take, skip });
 
     res.json({
       contasClientes,
       clientesDevedores: clientesDevedoresPage,
       clientesDevedoresCount,
       totalEmAberto,
-      chequesPorStatus,
-      chequesPendentes,
-      chequesPendentesCount: chequesPendentesCount,
-      chequesPendentesValorTotal,
-      chequesPendentesListaMax: 500,
-      chequesDevolvidos,
     });
   } catch (error) {
     handleRouteError(res, error);
@@ -619,10 +539,8 @@ router.get("/financeiro", async (req, res) => {
 // POST /api/relatorios/financeiro/export-async
 router.post("/financeiro/export-async", async (req, res) => {
   try {
-    const aba = req.body?.aba === "pendentes" ? "pendentes" : "devedores";
     const tenantSnap = req.tenantId;
     const jobId = createExportJob("financeiro_csv", tenantSnap, {
-      aba,
       tenantId: String(tenantSnap),
     });
     res.status(202).json({ jobId, status: "pending" });
@@ -631,7 +549,6 @@ router.post("/financeiro/export-async", async (req, res) => {
       try {
         markRunning(jobId);
         const tenantId = tenantSnap;
-        const chequePendenteWhere = { tenantId, status: "ativo" };
         const [clientes, titulosAgg] = await Promise.all([
           prisma.cliente.findMany({ where: { tenantId, ativo: true } }),
           prisma.tituloReceber.groupBy({
@@ -660,51 +577,19 @@ router.post("/financeiro/export-async", async (req, res) => {
           .filter((c) => c.saldo > 0)
           .sort((a, b) => b.saldo - a.saldo);
 
-        let csv = "";
-        let totalLinhas = 0;
-        if (aba === "devedores") {
-          totalLinhas = clientesDevedores.length;
-          csv =
-            "Cliente,Debitos,Pagamentos,Em aberto\n" +
-            clientesDevedores
-              .map(
-                (c) =>
-                  `"${String(c.cliente.nomeFantasia || c.cliente.razaoSocial).replaceAll('"', '""')}",${c.debito.toFixed(2)},${c.credito.toFixed(2)},${c.saldo.toFixed(2)}`,
-              )
-              .join("\n");
-        } else {
-          const chequesPendentes = await prisma.cheque.findMany({
-            where: chequePendenteWhere,
-            include: { cliente: true },
-            orderBy: { dataRecebimento: "asc" },
-          });
-          totalLinhas = chequesPendentes.length;
-          csv =
-            "Cliente,Banco,Numero,Pre-datado,Compensacao,Valor,Status\n" +
-            chequesPendentes
-              .map((c) =>
-                [
-                  c.cliente.nomeFantasia || c.cliente.razaoSocial,
-                  c.banco || "",
-                  c.numero || "",
-                  c.dataRecebimento
-                    ? new Date(c.dataRecebimento).toLocaleDateString("pt-BR")
-                    : "",
-                  c.dataCompensacao
-                    ? new Date(c.dataCompensacao).toLocaleDateString("pt-BR")
-                    : "",
-                  parseFloat(String(c.valor || 0)).toFixed(2),
-                  c.status,
-                ]
-                  .map((v) => `"${String(v).replaceAll('"', '""')}"`)
-                  .join(","),
-              )
-              .join("\n");
-        }
+        const totalLinhas = clientesDevedores.length;
+        const csv =
+          "Cliente,Debitos,Pagamentos,Em aberto\n" +
+          clientesDevedores
+            .map(
+              (c) =>
+                `"${String(c.cliente.nomeFantasia || c.cliente.razaoSocial).replaceAll('"', '""')}",${c.debito.toFixed(2)},${c.credito.toFixed(2)},${c.saldo.toFixed(2)}`,
+            )
+            .join("\n");
 
         markCompleted(jobId, {
           mimeType: "text/csv;charset=utf-8;",
-          filename: `financeiro-${aba}_${new Date().toISOString().slice(0, 10)}.csv`,
+          filename: `financeiro-devedores_${new Date().toISOString().slice(0, 10)}.csv`,
           content: "\uFEFF" + csv,
           totalLinhas,
         });

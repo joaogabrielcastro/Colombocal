@@ -1,7 +1,5 @@
 const { z } = require("zod");
 
-const chequeStatusEnum = z.enum(["ativo"]);
-
 const optionalDateInput = z.preprocess(
   (v) => (v === "" || v == null ? undefined : v),
   z.union([z.coerce.date(), z.string()]).optional(),
@@ -18,8 +16,6 @@ const chequeCreateSchema = z.object({
   agencia: z.union([z.string(), z.null()]).optional(),
   conta: z.union([z.string(), z.null()]).optional(),
   dataRecebimento: optionalDateInput,
-  dataCompensacao: optionalDateInput,
-  status: chequeStatusEnum.optional(),
   observacoes: z.union([z.string(), z.null()]).optional(),
 });
 
@@ -31,7 +27,6 @@ const chequeLoteItemSchema = z.object({
   agencia: z.union([z.string(), z.null()]).optional(),
   conta: z.union([z.string(), z.null()]).optional(),
   dataRecebimento: optionalDateInput,
-  dataCompensacao: optionalDateInput,
   observacoes: z.union([z.string(), z.null()]).optional(),
 });
 
@@ -42,13 +37,7 @@ const chequeLoteCreateSchema = z.object({
   itens: z.array(chequeLoteItemSchema).min(1, "informe ao menos um cheque"),
 });
 
-const chequeStatusPatchSchema = z.object({
-  status: chequeStatusEnum,
-  dataCompensacao: optionalDateInput,
-});
-
 module.exports = {
   chequeCreateSchema,
   chequeLoteCreateSchema,
-  chequeStatusPatchSchema,
 };

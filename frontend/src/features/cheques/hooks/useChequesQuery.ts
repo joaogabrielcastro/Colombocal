@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { Cheque } from "@/lib/utils";
 import api from "@/lib/api";
 
-export type ResumoStatus = { status: string; count: number; total: number };
-type ChequesPayload = Cheque[] | { items: Cheque[]; resumoPorStatus: ResumoStatus[] };
+export type ResumoCheques = { count: number; total: number };
+type ChequesPayload = Cheque[] | { items: Cheque[]; resumo: ResumoCheques };
 
 type ChequesFilters = {
   dataInicio: string;
@@ -50,10 +50,10 @@ export function useChequesQuery(filters: ChequesFilters) {
       const resp = await api.getWithMeta<ChequesPayload>(`/cheques?${toParams(filters)}`);
       const raw = resp.data;
       const cheques = Array.isArray(raw) ? raw : raw.items;
-      const resumoPorStatus = Array.isArray(raw) ? null : raw.resumoPorStatus;
+      const resumo = Array.isArray(raw) ? null : raw.resumo;
       return {
         cheques,
-        resumoPorStatus,
+        resumo,
         total: resp.meta.totalCount ?? cheques.length,
       };
     },

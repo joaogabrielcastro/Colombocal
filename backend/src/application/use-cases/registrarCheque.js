@@ -16,19 +16,13 @@ async function registrarCheque(prisma, payload) {
     throw new AppError("tenantId ausente", { code: "TENANT_REQUIRED", httpStatus: 500 });
   }
 
-  const statusInicial = "ativo";
   const dataRecebimentoDate =
     payload.dataRecebimento instanceof Date
       ? payload.dataRecebimento
       : payload.dataRecebimento
         ? new Date(payload.dataRecebimento)
-        : null;
-  const dataCompensacaoDate =
-    payload.dataCompensacao instanceof Date
-      ? payload.dataCompensacao
-      : payload.dataCompensacao
-        ? new Date(payload.dataCompensacao)
-        : null;
+        : new Date();
+  const dataPagamento = dataRecebimentoDate;
 
   const result = await prisma.$transaction(async (tx) => {
     await assertClienteDoTenant(tx, payload.clienteId, tenantId);
@@ -67,9 +61,9 @@ async function registrarCheque(prisma, payload) {
       numero: payload.numero ?? null,
       agencia: payload.agencia ?? null,
       conta: payload.conta ?? null,
-      dataRecebimento: dataRecebimentoDate || new Date(),
-      dataCompensacao: dataCompensacaoDate,
-      status: statusInicial,
+      dataRecebimento: dataPagamento,
+      dataCompensacao: dataPagamento,
+      status: "registrado",
       observacoes: payload.observacoes ?? null,
     });
 
@@ -79,7 +73,7 @@ async function registrarCheque(prisma, payload) {
       vendaId: novoCheque.vendaId,
       tipo: "cheque",
       valor: valorPrincipal,
-      data: dataRecebimentoDate || new Date(),
+      data: dataPagamento,
       chequeId: novoCheque.id,
       observacoes: `Cheque #${payload.numero || novoCheque.id} - ${payload.banco || ""}`,
     });
@@ -92,7 +86,7 @@ async function registrarCheque(prisma, payload) {
         vendaId: novoCheque.vendaId,
         tipo: `troco_${trocoTipo}`,
         valor: -trocoValor,
-        data: dataRecebimentoDate || new Date(),
+        data: dataPagamento,
         observacoes:
           `Troco de cheque da venda #${novoCheque.vendaId} ` +
           `(${trocoTipo === "transferencia" ? "pix/transferência" : "dinheiro"})`,
@@ -111,7 +105,7 @@ async function registrarCheque(prisma, payload) {
       vendaId: novoCheque.vendaId,
       valor: payload.valor,
       payload: {
-        status: statusInicial,
+        status: "registrado",
         banco: payload.banco || null,
         trocoValor,
         trocoTipo: trocoValor > 0.0001 ? (payload.trocoTipo || "dinheiro") : null,

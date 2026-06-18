@@ -319,7 +319,7 @@ function NovoChequeForm() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Data do cheque
+                  Data do pagamento
                 </label>
                 <input
                   type="date"
@@ -327,6 +327,10 @@ function NovoChequeForm() {
                   onChange={set("dataRecebimento")}
                   className="input-field"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Ao salvar, o valor abate o saldo do cliente na hora (como
+                  dinheiro ou PIX).
+                </p>
               </div>
 
               <div>

@@ -1,8 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
-const { recalcularTitulos, recalcularTodosTitulosCliente } = require("../services/recebiveis");
-const { registrarAuditoria, actorFromReq } = require("../services/financeiroEventos");
 const { registrarCheque } = require("../application/use-cases/registrarCheque");
 const { registrarChequeLote } = require("../application/use-cases/registrarChequeLote");
 const { excluirCheque } = require("../application/use-cases/excluirCheque");
@@ -11,70 +9,16 @@ const { parseBody } = require("../utils/zodParse");
 const {
   chequeCreateSchema,
   chequeLoteCreateSchema,
-  chequeStatusPatchSchema,
 } = require("../schemas/cheque");
 const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
+const { actorFromReq } = require("../services/financeiroEventos");
 
 function tw(req) {
   return { tenantId: req.tenantId };
-}
-
-/**
- * Mesma regra do PATCH /:id/status (pagamento + títulos), dentro de tx.
- * @param {import("@prisma/client").Prisma.TransactionClient} tx
- */
-async function aplicarMudancaStatusCheque(
-  tx,
-  chequeAtual,
-  statusValidado,
-  dataCompensacaoDate,
-  req,
-) {
-  const id = chequeAtual.id;
-  const tenantId = chequeAtual.tenantId;
-  const data = { status: statusValidado };
-  if (statusValidado === "ativo" && dataCompensacaoDate) data.dataCompensacao = dataCompensacaoDate;
-
-  await tx.cheque.update({ where: { id }, data });
-  await registrarAuditoria(tx, req, {
-    tenantId,
-    tipo: "CHEQUE_STATUS_ALTERADO",
-    entidade: "Cheque",
-    entidadeId: chequeAtual.id,
-    chequeId: chequeAtual.id,
-    clienteId: chequeAtual.clienteId,
-    vendaId: chequeAtual.vendaId,
-    valor: parseFloat(String(chequeAtual.valor)),
-    payload: { de: chequeAtual.status, para: statusValidado },
-  });
-
-  const temPagamento = !!chequeAtual.pagamento;
-  const precisaPagamento = statusValidado === "ativo";
-
-  if (precisaPagamento && !temPagamento) {
-    await tx.pagamento.create({
-      data: {
-        tenantId,
-        clienteId: chequeAtual.clienteId,
-        vendaId: chequeAtual.vendaId,
-        tipo: "cheque",
-        valor: chequeAtual.valor,
-        data: chequeAtual.dataRecebimento,
-        chequeId: chequeAtual.id,
-        observacoes: `Cheque #${chequeAtual.numero || chequeAtual.id} - ${chequeAtual.banco || ""}`,
-      },
-    });
-    await recalcularTodosTitulosCliente(tx, chequeAtual.clienteId);
-  }
-
-  if (!precisaPagamento && temPagamento) {
-    await tx.pagamento.deleteMany({ where: { chequeId: chequeAtual.id, tenantId } });
-    await recalcularTitulos(tx, { clienteId: chequeAtual.clienteId, vendaId: chequeAtual.vendaId });
-  }
 }
 
 // GET /api/cheques
@@ -82,7 +26,6 @@ router.get("/", async (req, res) => {
   try {
     const {
       clienteId,
-      status: _statusIgnored,
       dataInicio,
       dataFim,
       ordem,
@@ -102,7 +45,6 @@ router.get("/", async (req, res) => {
 
     const and = [{ ...tw(req) }];
     if (clienteId) and.push({ clienteId: parseInt(clienteId, 10) });
-    // status unico: nao aplicamos filtro de status na listagem
     if (dataInicio || dataFim) {
       const dr = {};
       if (dataInicio) dr.gte = new Date(dataInicio);
@@ -158,7 +100,6 @@ router.get("/", async (req, res) => {
       }
       if (valorMax != null && String(valorMax).trim() !== "") {
         const max = Number(String(valorMax).replace(",", "."));
-        // 0 ou inválido = sem teto (evita lista vazia com "máx. 0" no formulário)
         if (!Number.isNaN(max) && max > 0) vr.lte = max;
       }
       if (Object.keys(vr).length) and.push({ valor: vr });
@@ -182,8 +123,7 @@ router.get("/", async (req, res) => {
     ];
     if (includeResumo) {
       queries.push(
-        prisma.cheque.groupBy({
-          by: ["status"],
+        prisma.cheque.aggregate({
           where,
           _sum: { valor: true },
           _count: { id: true },
@@ -197,20 +137,14 @@ router.get("/", async (req, res) => {
     setPaginationHeaders(res, { total, take, skip });
 
     if (includeResumo) {
-      const raw = results[2];
-      const order = ["ativo"];
-      const resumoPorStatus = raw
-        .map((row) => ({
-          status: String(row.status || "").trim(),
-          count: row._count?.id ?? 0,
-          total: parseFloat(String(row._sum?.valor ?? 0)),
-        }))
-        .sort(
-          (a, b) =>
-            order.indexOf(a.status) - order.indexOf(b.status) ||
-            a.status.localeCompare(b.status),
-        );
-      res.json({ items: cheques, resumoPorStatus });
+      const agg = results[2];
+      res.json({
+        items: cheques,
+        resumo: {
+          count: agg._count?.id ?? 0,
+          total: parseFloat(String(agg._sum?.valor ?? 0)),
+        },
+      });
     } else {
       res.json(cheques);
     }
@@ -234,8 +168,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/cheques - registrar cheque
-// status inicial: a_receber (sem pagamento) | recebido (com pagamento)
+// POST /api/cheques — registra pagamento e abate saldo do cliente na hora
 router.post("/", async (req, res) => {
   try {
     const b = parseBody(chequeCreateSchema, req.body);
@@ -250,7 +183,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// POST /api/cheques/lote - cadastro em lote de cheques vinculados a venda
+// POST /api/cheques/lote
 router.post("/lote", async (req, res) => {
   try {
     const b = parseBody(chequeLoteCreateSchema, req.body);
@@ -260,46 +193,6 @@ router.post("/lote", async (req, res) => {
       auditActor: actorFromReq(req),
     });
     res.status(201).json(result);
-  } catch (error) {
-    handleRouteError(res, error);
-  }
-});
-
-// PATCH /api/cheques/:id/status - atualizar status do cheque
-router.patch("/:id/status", async (req, res) => {
-  try {
-    const body = parseBody(chequeStatusPatchSchema, req.body);
-    const id = parseIntField(req.params.id, "id", { min: 1 });
-    const statusValidado = body.status;
-    const dataCompensacaoDate =
-      body.dataCompensacao instanceof Date
-        ? body.dataCompensacao
-        : body.dataCompensacao
-          ? new Date(body.dataCompensacao)
-          : null;
-
-    const chequeAtual = await prisma.cheque.findFirst({
-      where: { id, ...tw(req) },
-      include: { pagamento: true },
-    });
-    if (!chequeAtual)
-      return res.status(404).json({ error: "Cheque não encontrado" });
-
-    await prisma.$transaction(async (tx) => {
-      await aplicarMudancaStatusCheque(
-        tx,
-        chequeAtual,
-        statusValidado,
-        dataCompensacaoDate,
-        req,
-      );
-    });
-
-    const cheque = await prisma.cheque.findFirst({
-      where: { id, ...tw(req) },
-      include: { cliente: true, venda: true },
-    });
-    res.json(cheque);
   } catch (error) {
     handleRouteError(res, error);
   }

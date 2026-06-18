@@ -46,12 +46,7 @@ async function registrarChequeLote(prisma, payload) {
           : item.dataRecebimento
             ? new Date(item.dataRecebimento)
             : new Date();
-      const dataCompensacaoDate =
-        item.dataCompensacao instanceof Date
-          ? item.dataCompensacao
-          : item.dataCompensacao
-            ? new Date(item.dataCompensacao)
-            : null;
+      const dataPagamento = dataRecebimentoDate;
 
       const novoCheque = await createCheque(tx, {
         tenantId,
@@ -63,9 +58,9 @@ async function registrarChequeLote(prisma, payload) {
         numero: item.numero ?? null,
         agencia: item.agencia ?? null,
         conta: item.conta ?? null,
-        dataRecebimento: dataRecebimentoDate,
-        dataCompensacao: dataCompensacaoDate,
-        status: "ativo",
+        dataRecebimento: dataPagamento,
+        dataCompensacao: dataPagamento,
+        status: "registrado",
         observacoes: item.observacoes ?? null,
       });
 
@@ -75,7 +70,7 @@ async function registrarChequeLote(prisma, payload) {
         vendaId,
         tipo: "cheque",
         valor: item.valor,
-        data: dataRecebimentoDate,
+        data: dataPagamento,
         chequeId: novoCheque.id,
         observacoes: `Cheque #${item.numero || novoCheque.id} - ${item.banco || ""}`,
       });

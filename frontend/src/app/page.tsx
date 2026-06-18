@@ -21,8 +21,8 @@ interface DashboardData {
   quantidadeVendasMes: number;
   clientesDevendo: number;
   totalEmAberto: number;
-  chequesEmMaos: number;
-  totalChequesEmMaos: number;
+  chequesRegistrados: number;
+  totalChequesRegistrados: number;
   totalProdutosAtivos: number;
   ultimasVendas: {
     id: number;
@@ -159,13 +159,13 @@ export default function DashboardPage() {
           href="/relatorios/financeiro"
         />
         <StatCard
-          title="Cheques em mãos"
-          value={String(d.chequesEmMaos)}
-          sub={`Total: ${formatMoney(d.totalChequesEmMaos)}`}
+          title="Cheques registrados"
+          value={String(d.chequesRegistrados)}
+          sub={`Total: ${formatMoney(d.totalChequesRegistrados)}`}
           icon={BanknotesIcon}
           color={
-            d.chequesEmMaos > 0
-              ? "bg-yellow-100 text-yellow-600"
+            d.chequesRegistrados > 0
+              ? "bg-slate-100 text-slate-600"
               : "bg-gray-100 text-gray-500"
           }
           href="/cheques"

@@ -157,10 +157,25 @@ router.get("/:id", async (req, res) => {
         vendedor: true,
         motorista: true,
         itens: { include: { produto: true } },
-        pagamentos: { orderBy: { data: "desc" } },
+        pagamentos: {
+          orderBy: { data: "desc" },
+          include: {
+            cheque: {
+              select: { id: true, numeroOrdem: true, banco: true, numero: true, valor: true },
+            },
+          },
+        },
         titulos: { orderBy: { vencimento: "asc" } },
         fretes: { orderBy: { data: "desc" } },
-        cheques: { select: { id: true } },
+        cheques: {
+          select: {
+            id: true,
+            numeroOrdem: true,
+            banco: true,
+            numero: true,
+            valor: true,
+          },
+        },
       },
     });
     if (!venda) return res.status(404).json({ error: "Venda não encontrada" });

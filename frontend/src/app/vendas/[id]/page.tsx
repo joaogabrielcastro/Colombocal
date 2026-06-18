@@ -47,6 +47,12 @@ export default function VendaDetailPage() {
     data: "",
   });
   const [salvandoFrete, setSalvandoFrete] = useState(false);
+  const [estornandoId, setEstornandoId] = useState<number | null>(null);
+  const [confirmEstorno, setConfirmEstorno] = useState<{
+    kind: "pagamento" | "cheque";
+    id: number;
+    label: string;
+  } | null>(null);
 
   const carregar = () => api.get<Venda>(`/vendas/${id}`).then(setVenda);
 
@@ -120,6 +126,37 @@ export default function VendaDetailPage() {
       reportApiError(e, { title: "Não foi possível cancelar a venda" });
       setCancelando(false);
     }
+  };
+
+  const executarEstorno = async () => {
+    if (!confirmEstorno) return;
+    const { kind, id: alvoId } = confirmEstorno;
+    setConfirmEstorno(null);
+    setEstornandoId(alvoId);
+    try {
+      if (kind === "cheque") {
+        await api.delete(`/cheques/${alvoId}`);
+        toast.success("Cheque estornado");
+      } else {
+        await api.delete(`/pagamentos/${alvoId}`);
+        toast.success("Pagamento estornado");
+      }
+      await carregar();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível estornar" });
+    } finally {
+      setEstornandoId(null);
+    }
+  };
+
+  const labelTipoPagamento = (tipo: string) => {
+    const t = tipo.toLowerCase();
+    if (t === "dinheiro") return "Dinheiro";
+    if (t === "transferencia") return "PIX / transferência";
+    if (t === "cheque") return "Cheque";
+    if (t.startsWith("troco_dinheiro")) return "Troco (dinheiro)";
+    if (t.startsWith("troco_transferencia")) return "Troco (PIX / transferência)";
+    return tipo;
   };
 
   const handleBaixa = async (e: React.FormEvent) => {
@@ -318,6 +355,15 @@ export default function VendaDetailPage() {
       0,
     ) ?? parseFloat(String(venda.valorTotal));
   const saldoVenda = totalPagoVenda - totalTituloVenda;
+  const temBaixas =
+    (venda.pagamentos?.length ?? 0) > 0 || (venda.cheques?.length ?? 0) > 0;
+
+  const chequesSemPagamento = (venda.cheques ?? []).filter((ch) => {
+    const ligado = (venda.pagamentos ?? []).some(
+      (p) => p.chequeId === ch.id || p.cheque?.id === ch.id,
+    );
+    return !ligado;
+  });
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -350,17 +396,40 @@ export default function VendaDetailPage() {
         )}
         <button
           onClick={() => setConfirmCancelOpen(true)}
-          disabled={cancelando}
-          className="btn-danger"
+          disabled={cancelando || temBaixas}
+          className="btn-danger disabled:opacity-50"
+          title={
+            temBaixas
+              ? "Estorne todas as baixas e cheques antes de cancelar"
+              : undefined
+          }
         >
           <TrashIcon className="w-4 h-4" />
           {cancelando ? "Cancelando..." : "Cancelar Venda"}
         </button>
       </div>
       <ConfirmDialog
+        open={confirmEstorno != null}
+        title="Estornar baixa"
+        description={
+          confirmEstorno
+            ? `Remover ${confirmEstorno.label}? O saldo do cliente e os títulos desta venda serão recalculados.`
+            : undefined
+        }
+        tone="danger"
+        busy={estornandoId != null}
+        confirmText="Estornar"
+        onCancel={() => setConfirmEstorno(null)}
+        onConfirm={() => void executarEstorno()}
+      />
+      <ConfirmDialog
         open={confirmCancelOpen}
         title="Cancelar venda"
-        description="Tem certeza que deseja cancelar esta venda? As movimentações vinculadas serão removidas."
+        description={
+          temBaixas
+            ? "Estorne todas as baixas e cheques vinculados antes de cancelar a venda."
+            : "Tem certeza que deseja cancelar esta venda? As movimentações vinculadas serão removidas."
+        }
         tone="danger"
         busy={cancelando}
         confirmText="Cancelar venda"
@@ -587,30 +656,110 @@ export default function VendaDetailPage() {
             {saldoVenda >= 0 ? " (quitado)" : " (a receber)"}
           </span>
         </p>
+        {temBaixas ? (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
+            Para cancelar ou editar a venda, estorne todas as baixas abaixo (cheques
+            e trocos inclusos).
+          </p>
+        ) : null}
         {venda.pagamentos && venda.pagamentos.length > 0 ? (
           <ul className="divide-y divide-gray-100 text-sm">
-            {venda.pagamentos.map((p) => (
-              <li key={p.id} className="py-2 flex justify-between">
-                <span className="capitalize text-gray-700 flex items-center gap-2">
-                  {p.tipo} • {formatDate(p.data)}
+            {venda.pagamentos.map((p) => {
+              const isCheque = String(p.tipo || "").toLowerCase() === "cheque";
+              const chequeId = p.chequeId ?? p.cheque?.id;
+              const estornoKind: "cheque" | "pagamento" =
+                isCheque && chequeId ? "cheque" : "pagamento";
+              const estornoAlvoId =
+                estornoKind === "cheque" ? Number(chequeId) : p.id;
+              const chequeInfo =
+                isCheque && p.cheque
+                  ? ` #${p.cheque.numeroOrdem}${p.cheque.banco ? ` · ${p.cheque.banco}` : ""}`
+                  : "";
+              return (
+              <li
+                key={p.id}
+                className="py-2 flex flex-wrap items-center justify-between gap-2"
+              >
+                <span className="text-gray-700 flex items-center gap-2 flex-wrap">
+                  <span className="font-medium">{labelTipoPagamento(p.tipo)}</span>
+                  {chequeInfo ? (
+                    <span className="text-gray-500">{chequeInfo}</span>
+                  ) : null}
+                  <span className="text-gray-400">• {formatDate(p.data)}</span>
                   {String(p.tipo || "").toLowerCase().startsWith("troco_") && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
                       Troco
                     </span>
                   )}
                 </span>
-                <span
-                  className={`font-medium ${parseFloat(String(p.valor)) >= 0 ? "text-green-700" : "text-amber-700"}`}
-                >
-                  {parseFloat(String(p.valor)) >= 0 ? "+" : ""}
-                  {formatMoney(p.valor)}
-                </span>
+                <div className="flex items-center gap-3 ml-auto">
+                  <span
+                    className={`font-medium ${parseFloat(String(p.valor)) >= 0 ? "text-green-700" : "text-amber-700"}`}
+                  >
+                    {parseFloat(String(p.valor)) >= 0 ? "+" : ""}
+                    {formatMoney(p.valor)}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                    disabled={estornandoId != null}
+                    onClick={() =>
+                      setConfirmEstorno({
+                        kind: estornoKind,
+                        id: estornoAlvoId,
+                        label:
+                          estornoKind === "cheque"
+                            ? `o cheque${chequeInfo}`
+                            : `o pagamento (${labelTipoPagamento(p.tipo)} · ${formatMoney(p.valor)})`,
+                      })
+                    }
+                  >
+                    {estornandoId === estornoAlvoId ? "Estornando…" : "Estornar"}
+                  </button>
+                </div>
               </li>
-            ))}
+            );
+            })}
           </ul>
         ) : (
           <p className="text-gray-400 text-sm">Nenhum pagamento vinculado.</p>
         )}
+
+        {chequesSemPagamento.length > 0 ? (
+          <ul className="mt-3 pt-3 border-t border-gray-100 divide-y divide-gray-100 text-sm">
+            {chequesSemPagamento.map((ch) => (
+              <li
+                key={ch.id}
+                className="py-2 flex flex-wrap items-center justify-between gap-2"
+              >
+                <span className="text-gray-700">
+                  Cheque #{ch.numeroOrdem}
+                  {ch.banco ? ` · ${ch.banco}` : ""}
+                  {ch.numero ? ` nº ${ch.numero}` : ""}
+                </span>
+                <div className="flex items-center gap-3 ml-auto">
+                  <span className="font-medium text-green-700">
+                    {formatMoney(ch.valor ?? 0)}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                    disabled={estornandoId != null}
+                    onClick={() =>
+                      setConfirmEstorno({
+                        kind: "cheque",
+                        id: ch.id,
+                        label: `o cheque #${ch.numeroOrdem}`,
+                      })
+                    }
+                  >
+                    {estornandoId === ch.id ? "Estornando…" : "Estornar"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         <form onSubmit={handleBaixa} className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>

@@ -12,8 +12,6 @@ import {
   formatDocumentoCliente,
   formatDate,
   localDateInputValue,
-  STATUS_CHEQUE_LABEL,
-  STATUS_CHEQUE_COLOR,
   type Cliente,
   type Produto,
   type Cheque,
@@ -331,7 +329,7 @@ export default function ClienteDetailPage() {
               {formatMoney(conta.totalCreditos)}
             </p>
             <p className="text-[11px] text-gray-400 mt-1 text-left leading-snug">
-              Soma dos pagamentos registrados (dinheiro, PIX, cheques compensados
+              Soma dos pagamentos registrados (dinheiro, PIX, cheques
               etc.).
             </p>
           </div>
@@ -641,8 +639,7 @@ export default function ClienteDetailPage() {
                   <th className="table-header">Banco / Nº</th>
                   <th className="table-header">Venda</th>
                   <th className="table-header">Valor</th>
-                  <th className="table-header">Pré-datado</th>
-                  <th className="table-header">Status</th>
+                  <th className="table-header">Data</th>
                 </tr>
               </thead>
               <tbody>
@@ -684,13 +681,6 @@ export default function ClienteDetailPage() {
                     </td>
                     <td className="table-cell">
                       {formatDate(c.dataRecebimento)}
-                    </td>
-                    <td className="table-cell">
-                      <span
-                        className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_CHEQUE_COLOR.ativo}`}
-                      >
-                        {STATUS_CHEQUE_LABEL.ativo}
-                      </span>
                     </td>
                   </tr>
                 ))}

@@ -59,16 +59,6 @@ export function vendaNumeroPublico(v: {
   return n != null && n > 0 ? n : v.id;
 }
 
-export type StatusCheque = "ativo";
-
-export const STATUS_CHEQUE_LABEL: Record<StatusCheque, string> = {
-  ativo: "Ativo",
-};
-
-export const STATUS_CHEQUE_COLOR: Record<StatusCheque, string> = {
-  ativo: "bg-blue-100 text-blue-800",
-};
-
 export function toInputDate(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
@@ -161,7 +151,13 @@ export interface Venda {
   /** Soma do saldo em aberto nos títulos desta venda (API GET /vendas). */
   saldoEmAbertoTitulos?: number;
   podeEditar?: boolean;
-  cheques?: { id: number }[];
+  cheques?: {
+    id: number;
+    numeroOrdem?: number;
+    banco?: string | null;
+    numero?: string | null;
+    valor?: number;
+  }[];
 }
 
 export interface TituloReceber {
@@ -201,7 +197,6 @@ export interface Cheque {
   conta?: string;
   dataRecebimento: string;
   dataCompensacao?: string;
-  status: StatusCheque;
   observacoes?: string;
   cliente: Cliente;
   venda?: {
@@ -219,8 +214,15 @@ export interface Pagamento {
   tipo: string;
   valor: number;
   data: string;
+  chequeId?: number | null;
   observacoes?: string;
-  cheque?: Cheque;
+  cheque?: {
+    id: number;
+    numeroOrdem?: number;
+    banco?: string | null;
+    numero?: string | null;
+    valor?: number;
+  } | null;
   venda?: {
     id: number;
     numeroVenda?: number | null;
