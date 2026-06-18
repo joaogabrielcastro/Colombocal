@@ -1,12 +1,20 @@
 "use client";
 
 import { formatDate, formatFreteReciboLinha, formatMoney, type Venda, vendaNumeroPublico } from "@/lib/utils";
+import type { RelatorioVendasPdfSecao } from "../services/exports";
+import { RelatorioPdfSecaoButton } from "./RelatorioPdfSecaoButton";
 
-export function RelatorioVendasDetalhes({ vendas }: { vendas: Venda[] }) {
+type Props = {
+  vendas: Venda[];
+  onExportPdfSecao: (secao: RelatorioVendasPdfSecao) => void;
+};
+
+export function RelatorioVendasDetalhes({ vendas, onExportPdfSecao }: Props) {
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100">
+      <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
         <h3 className="font-semibold">Detalhamento das Vendas</h3>
+        <RelatorioPdfSecaoButton onClick={() => onExportPdfSecao("detalhes")} />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">

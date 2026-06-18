@@ -7,6 +7,8 @@ import type {
   ResumoRepresentante,
   SortRepKey,
 } from "../services/resumo";
+import type { RelatorioVendasPdfSecao } from "../services/exports";
+import { RelatorioPdfSecaoButton } from "./RelatorioPdfSecaoButton";
 
 type Props = {
   totalRegistros: number;
@@ -17,7 +19,25 @@ type Props = {
   resumoProdutos: ResumoProduto[];
   onSortRep: (key: SortRepKey) => void;
   sortIndicator: (key: SortRepKey) => string;
+  onExportPdfSecao: (secao: RelatorioVendasPdfSecao) => void;
 };
+
+function SecaoHeader({
+  title,
+  secao,
+  onExportPdfSecao,
+}: {
+  title: string;
+  secao: RelatorioVendasPdfSecao;
+  onExportPdfSecao: (s: RelatorioVendasPdfSecao) => void;
+}) {
+  return (
+    <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
+      <h3 className="font-semibold">{title}</h3>
+      <RelatorioPdfSecaoButton onClick={() => onExportPdfSecao(secao)} />
+    </div>
+  );
+}
 
 export function RelatorioVendasResumo({
   totalRegistros,
@@ -28,9 +48,17 @@ export function RelatorioVendasResumo({
   resumoProdutos,
   onSortRep,
   sortIndicator,
+  onExportPdfSecao,
 }: Props) {
   return (
     <>
+      <div className="flex items-center justify-between gap-2 mb-2 print:hidden">
+        <p className="text-sm text-gray-500">Totais do período</p>
+        <RelatorioPdfSecaoButton
+          label="PDF resumo"
+          onClick={() => onExportPdfSecao("totais")}
+        />
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="card p-4 text-center">
           <p className="text-sm text-gray-500">Vendas no período</p>
@@ -54,9 +82,11 @@ export function RelatorioVendasResumo({
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
         <div className="card overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100">
-            <h3 className="font-semibold">Por Representante (Completo)</h3>
-          </div>
+          <SecaoHeader
+            title="Por Representante (Completo)"
+            secao="representantes"
+            onExportPdfSecao={onExportPdfSecao}
+          />
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
@@ -80,9 +110,7 @@ export function RelatorioVendasResumo({
         </div>
 
         <div className="card overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100">
-            <h3 className="font-semibold">Por Cliente</h3>
-          </div>
+          <SecaoHeader title="Por Cliente" secao="clientes" onExportPdfSecao={onExportPdfSecao} />
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
@@ -104,9 +132,7 @@ export function RelatorioVendasResumo({
         </div>
 
         <div className="card overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100">
-            <h3 className="font-semibold">Por Produto</h3>
-          </div>
+          <SecaoHeader title="Por Produto" secao="produtos" onExportPdfSecao={onExportPdfSecao} />
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">

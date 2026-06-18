@@ -20,15 +20,33 @@ import {
 } from "@/lib/utils";
 import api from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reportApiError } from "@/lib/report-api-error";
+import {
+  buildClienteCadastroDiff,
+  diffToAtualizarClientePayload,
+  formatClienteCadastroDiffMessage,
+  type ClienteCadastroDiff,
+} from "@/lib/venda-cliente-sync";
 import SearchableSelect from "@/components/SearchableSelect";
 
 interface ItemForm {
   produtoId: string;
+  produtoNome: string;
   quantidade: string;
   precoUnitario: string;
+  precoReferencia: string;
   unidade: string;
 }
+
+const emptyItem = (): ItemForm => ({
+  produtoId: "",
+  produtoNome: "",
+  quantidade: "",
+  precoUnitario: "",
+  precoReferencia: "",
+  unidade: "",
+});
 
 interface ProdutoPreco extends Produto {
   precoEspecial: number | null;
@@ -63,9 +81,13 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [fretePorTonelada, setFretePorTonelada] = useState("");
   const [dataVenda, setDataVenda] = useState(localDateInputValue());
   const [observacoes, setObservacoes] = useState("");
-  const [itens, setItens] = useState<ItemForm[]>([
-    { produtoId: "", quantidade: "", precoUnitario: "", unidade: "" },
-  ]);
+  const [itens, setItens] = useState<ItemForm[]>([emptyItem()]);
+  const [freteRefSaco, setFreteRefSaco] = useState("");
+  const [freteRefTonelada, setFreteRefTonelada] = useState("");
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncDialogDiff, setSyncDialogDiff] = useState<ClienteCadastroDiff | null>(
+    null,
+  );
 
   const [freteRecibo, setFreteRecibo] = useState(false);
   const [freteReciboData, setFreteReciboData] = useState(localDateInputValue());
@@ -113,11 +135,15 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         setItens(
           v.itens.map((item) => ({
             produtoId: String(item.produtoId),
+            produtoNome: item.produto.nome,
             quantidade: String(item.quantidade),
             precoUnitario: String(item.precoUnitario),
+            precoReferencia: String(item.precoUnitario),
             unidade: String(item.produto.unidade || ""),
           })),
         );
+        setFreteRefSaco(String(v.freteTarifaSaco ?? 0));
+        setFreteRefTonelada(String(v.freteTarifaTonelada ?? 0));
       })
       .catch((e) => {
         if (alive) {
@@ -138,6 +164,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       setSelectedCliente(null);
       setFretePorSaco("");
       setFretePorTonelada("");
+      setFreteRefSaco("");
+      setFreteRefTonelada("");
       return;
     }
     let cancelled = false;
@@ -146,18 +174,18 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       .then((cli) => {
         if (cancelled) return;
         setSelectedCliente(cli);
-        setFretePorSaco(
-          String(cli.fretePadraoSaco ?? cli.fretePadrao ?? 0),
-        );
-        setFretePorTonelada(String(cli.fretePadraoTonelada ?? 0));
+        const saco = String(cli.fretePadraoSaco ?? cli.fretePadrao ?? 0);
+        const ton = String(cli.fretePadraoTonelada ?? 0);
+        setFretePorSaco(saco);
+        setFretePorTonelada(ton);
+        setFreteRefSaco(saco);
+        setFreteRefTonelada(ton);
         if (cli.vendedorId) setVendedorId(String(cli.vendedorId));
       })
       .catch(() => {
         if (!cancelled) setSelectedCliente(null);
       });
-    setItens((prev) =>
-      prev.map((i) => ({ ...i, produtoId: "", precoUnitario: "", unidade: "" })),
-    );
+    setItens((prev) => prev.map(() => emptyItem()));
     return () => {
       cancelled = true;
     };
@@ -254,15 +282,15 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     const cidSnapshot = clienteIdRef.current;
     if (!produtoId) {
       setItens((prev) =>
-        prev.map((item, i) =>
-          i === idx ? { ...item, produtoId: "", precoUnitario: "", unidade: "" } : item,
-        ),
+        prev.map((item, i) => (i === idx ? emptyItem() : item)),
       );
       return;
     }
 
     let preco = "";
+    let precoReferencia = "";
     let unidade = "";
+    let produtoNome = "";
     if (cidSnapshot) {
       try {
         const rows = await api.get<ProdutoPreco[]>(
@@ -272,7 +300,9 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         const pc = rows[0];
         if (pc) {
           preco = parsePrecoApi(pc.precoAplicado);
+          precoReferencia = preco;
           unidade = String(pc.unidade || "");
+          produtoNome = pc.nome;
         }
       } catch {
         if (clienteIdRef.current !== cidSnapshot) return;
@@ -282,7 +312,9 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         const p = await api.get<Produto>(`/produtos/${produtoId}`);
         if (clienteIdRef.current !== "") return;
         preco = parsePrecoApi(p.precoPadrao);
+        precoReferencia = preco;
         unidade = String(p.unidade || "");
+        produtoNome = p.nome;
       } catch {
         if (clienteIdRef.current !== "") return;
       }
@@ -292,16 +324,21 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
 
     setItens((prev) =>
       prev.map((item, i) =>
-        i === idx ? { ...item, produtoId, precoUnitario: preco, unidade } : item,
+        i === idx
+          ? {
+              ...item,
+              produtoId,
+              produtoNome,
+              precoUnitario: preco,
+              precoReferencia,
+              unidade,
+            }
+          : item,
       ),
     );
   };
 
-  const addItem = () =>
-    setItens((prev) => [
-      ...prev,
-      { produtoId: "", quantidade: "", precoUnitario: "", unidade: "" },
-    ]);
+  const addItem = () => setItens((prev) => [...prev, emptyItem()]);
   const removeItem = (idx: number) =>
     setItens((prev) => prev.filter((_, i) => i !== idx));
 
@@ -330,6 +367,47 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     setFrete(totalFrete.toFixed(2));
   }, [itens, fretePorSacoVal, fretePorTonVal]);
 
+  const salvarVenda = async (atualizarCliente?: ClienteCadastroDiff | null) => {
+    const itensValidos = itens.filter(
+      (i) => i.produtoId && i.quantidade && i.precoUnitario,
+    );
+    const payload = {
+      clienteId: parseInt(clienteId, 10),
+      vendedorId: parseInt(vendedorId, 10),
+      motoristaId: motoristaId ? parseInt(motoristaId, 10) : null,
+      freteRecibo,
+      freteReciboNum: null,
+      freteReciboData: freteRecibo ? freteReciboData : null,
+      fretePorSaco: Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0,
+      fretePorTonelada: Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0,
+      dataVenda,
+      observacoes: observacoes || null,
+      itens: itensValidos.map((i) => ({
+        produtoId: parseInt(i.produtoId, 10),
+        quantidade: parseFloat(i.quantidade),
+        precoUnitario: parseFloat(i.precoUnitario),
+      })),
+      ...(atualizarCliente
+        ? { atualizarCliente: diffToAtualizarClientePayload(atualizarCliente) }
+        : {}),
+    };
+
+    if (isEdit && editId) {
+      const venda = await api.put<Venda>(`/vendas/${editId}`, payload);
+      router.push(`/vendas/${venda.id}`);
+    } else {
+      const venda = await api.post<{ id: number }>("/vendas", {
+        ...payload,
+        frete: freteVal,
+        clienteId,
+        vendedorId,
+        motoristaId: motoristaId || undefined,
+        itens: itensValidos,
+      });
+      router.push(`/vendas/${venda.id}`);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteId || !vendedorId) {
@@ -344,43 +422,57 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       return;
     }
 
-    setSalvando(true);
     setErro("");
+    const diff = buildClienteCadastroDiff({
+      itens: itensValidos,
+      fretePorSaco,
+      fretePorTonelada,
+      freteRefSaco,
+      freteRefTonelada,
+      clienteId,
+    });
+
+    if (diff) {
+      setSyncDialogDiff(diff);
+      setSyncDialogOpen(true);
+      return;
+    }
+
+    setSalvando(true);
     try {
-      const payload = {
-        clienteId: parseInt(clienteId, 10),
-        vendedorId: parseInt(vendedorId, 10),
-        motoristaId: motoristaId ? parseInt(motoristaId, 10) : null,
-        freteRecibo,
-        freteReciboNum: null,
-        freteReciboData: freteRecibo ? freteReciboData : null,
-        fretePorSaco: Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0,
-        fretePorTonelada: Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0,
-        dataVenda,
-        observacoes: observacoes || null,
-        itens: itensValidos.map((i) => ({
-          produtoId: parseInt(i.produtoId, 10),
-          quantidade: parseFloat(i.quantidade),
-          precoUnitario: parseFloat(i.precoUnitario),
-        })),
-      };
-      if (isEdit && editId) {
-        const venda = await api.put<Venda>(`/vendas/${editId}`, payload);
-        router.push(`/vendas/${venda.id}`);
-      } else {
-        const venda = await api.post<{ id: number }>("/vendas", {
-          ...payload,
-          frete: freteVal,
-          clienteId,
-          vendedorId,
-          motoristaId: motoristaId || undefined,
-          itens: itensValidos,
-        });
-        router.push(`/vendas/${venda.id}`);
-      }
+      await salvarVenda(null);
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : "Erro ao registrar");
       setSalvando(false);
+    }
+  };
+
+  const fecharSyncDialog = () => {
+    setSyncDialogOpen(false);
+    setSyncDialogDiff(null);
+    setSalvando(false);
+  };
+
+  const confirmarSyncCliente = async () => {
+    if (!syncDialogDiff) return;
+    setSalvando(true);
+    try {
+      await salvarVenda(syncDialogDiff);
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : "Erro ao registrar");
+      setSalvando(false);
+      setSyncDialogOpen(false);
+    }
+  };
+
+  const salvarSemAtualizarCliente = async () => {
+    setSalvando(true);
+    try {
+      await salvarVenda(null);
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : "Erro ao registrar");
+      setSalvando(false);
+      setSyncDialogOpen(false);
     }
   };
 
@@ -692,6 +784,21 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
           </Link>
         </div>
       </form>
+
+      <ConfirmDialog
+        open={syncDialogOpen}
+        title="Atualizar cadastro do cliente?"
+        description={
+          syncDialogDiff ? formatClienteCadastroDiffMessage(syncDialogDiff) : undefined
+        }
+        cancelText="Voltar"
+        secondaryText="Só salvar venda"
+        onSecondary={() => void salvarSemAtualizarCliente()}
+        confirmText="Atualizar cliente e salvar"
+        busy={salvando}
+        onConfirm={() => void confirmarSyncCliente()}
+        onCancel={fecharSyncDialog}
+      />
     </div>
   );
 }

@@ -3,6 +3,10 @@
 import { ArrowDownTrayIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import type { Cliente, Produto, Vendedor } from "@/lib/utils";
 import type { RelVendas } from "../types";
+import {
+  RELATORIO_VENDAS_PDF_SECOES,
+  type RelatorioVendasPdfSecao,
+} from "../services/exports";
 
 type Props = {
   dataInicio: string;
@@ -25,7 +29,7 @@ type Props = {
   onLimpar: () => void;
   onExportCSV: () => void;
   onExportExcel: () => void;
-  onExportPDF: () => void;
+  onExportPdfSecao: (secao: RelatorioVendasPdfSecao) => void;
   exportCsvLabel?: string;
   exportCsvDisabled?: boolean;
 };
@@ -52,7 +56,7 @@ export function RelatorioVendasFiltros(props: Props) {
     onLimpar,
     onExportCSV,
     onExportExcel,
-    onExportPDF,
+    onExportPdfSecao,
     exportCsvLabel,
     exportCsvDisabled,
   } = props;
@@ -132,9 +136,23 @@ export function RelatorioVendasFiltros(props: Props) {
               <button onClick={onExportExcel} className="btn-secondary flex items-center gap-1">
                 <ArrowDownTrayIcon className="w-4 h-4" /> Excel
               </button>
-              <button onClick={onExportPDF} className="btn-secondary flex items-center gap-1">
-                <ArrowDownTrayIcon className="w-4 h-4" /> PDF
-              </button>
+              <select
+                className="input-field py-2 text-sm max-w-[11rem]"
+                defaultValue=""
+                onChange={(e) => {
+                  const v = e.target.value as RelatorioVendasPdfSecao | "";
+                  if (v) onExportPdfSecao(v);
+                  e.target.value = "";
+                }}
+                aria-label="Exportar PDF por seção"
+              >
+                <option value="">PDF por seção…</option>
+                {RELATORIO_VENDAS_PDF_SECOES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </>
           )}
         </div>

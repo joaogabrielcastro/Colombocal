@@ -11,6 +11,10 @@ const { parseBody } = require("../utils/zodParse");
 const { vendaFretePatchSchema, vendaPutSchema } = require("../schemas/venda");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const {
+  syncClienteFromVenda,
+  parseAtualizarCliente,
+} = require("../services/syncClienteFromVenda");
+const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
@@ -481,6 +485,14 @@ router.post("/", async (req, res) => {
         });
       }
 
+      const atualizarCliente = parseAtualizarCliente(req.body);
+      if (atualizarCliente) {
+        await syncClienteFromVenda(tx, {
+          clienteId: clienteIdNum,
+          ...atualizarCliente,
+        });
+      }
+
       return novaVenda;
     });
 
@@ -754,6 +766,14 @@ router.put("/:id", async (req, res) => {
           },
         },
       });
+
+      const atualizarCliente = parseAtualizarCliente(req.body);
+      if (atualizarCliente) {
+        await syncClienteFromVenda(tx, {
+          clienteId: clienteIdNum,
+          ...atualizarCliente,
+        });
+      }
 
       return vendaAtualizada;
     });

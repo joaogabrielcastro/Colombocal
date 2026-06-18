@@ -8,7 +8,8 @@ import { useRelatorioVendasQuery } from "@/features/relatorios-vendas/hooks/useR
 import {
   exportarRelatorioVendasCSV,
   exportarRelatorioVendasExcel,
-  exportarRelatorioVendasPdf,
+  exportarRelatorioVendasPdfSecao,
+  type RelatorioVendasPdfSecao,
 } from "@/features/relatorios-vendas/services/exports";
 import {
   montarResumoRelatorioVendas,
@@ -76,9 +77,24 @@ export default function RelatorioVendasPage() {
     exportarRelatorioVendasExcel(data, dataInicio, dataFim);
   };
 
-  const exportarPdf = () => {
+  const { resumoRepresentantes, resumoClientes, resumoProdutos } = useMemo(
+    () => montarResumoRelatorioVendas(data),
+    [data],
+  );
+  const { resumoRepresentantesOrdenado, toggleRepSort, sortIndicator } = useResumoRepresentantesSort(
+    resumoRepresentantes,
+  );
+
+  const exportarPdfSecao = (secao: RelatorioVendasPdfSecao) => {
     if (!data) return;
-    exportarRelatorioVendasPdf(data, dataInicio, dataFim);
+    exportarRelatorioVendasPdfSecao(secao, {
+      data,
+      dataInicio,
+      dataFim,
+      resumoRepresentantes: resumoRepresentantesOrdenado,
+      resumoClientes,
+      resumoProdutos,
+    });
   };
 
   const buscar = (override?: Partial<typeof filtrosAplicados>) => {
@@ -94,14 +110,6 @@ export default function RelatorioVendasPage() {
     setFiltrosAplicados(next);
     void refetch();
   };
-
-  const { resumoRepresentantes, resumoClientes, resumoProdutos } = useMemo(
-    () => montarResumoRelatorioVendas(data),
-    [data],
-  );
-  const { resumoRepresentantesOrdenado, toggleRepSort, sortIndicator } = useResumoRepresentantesSort(
-    resumoRepresentantes,
-  );
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -153,7 +161,7 @@ export default function RelatorioVendasPage() {
         }}
         onExportCSV={exportarCSV}
         onExportExcel={exportarExcel}
-        onExportPDF={exportarPdf}
+        onExportPdfSecao={exportarPdfSecao}
         exportCsvLabel={exportandoCsv ? "Gerando CSV..." : "CSV"}
         exportCsvDisabled={exportandoCsv}
       />
@@ -181,8 +189,12 @@ export default function RelatorioVendasPage() {
             resumoProdutos={resumoProdutos}
             onSortRep={toggleRepSort}
             sortIndicator={sortIndicator}
+            onExportPdfSecao={exportarPdfSecao}
           />
-          <RelatorioVendasDetalhes vendas={data.vendas} />
+          <RelatorioVendasDetalhes
+            vendas={data.vendas}
+            onExportPdfSecao={exportarPdfSecao}
+          />
         </>
       )}
     </div>
