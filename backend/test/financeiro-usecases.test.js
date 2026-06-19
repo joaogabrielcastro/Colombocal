@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { registrarPagamento } = require("../src/application/use-cases/registrarPagamento");
 const { registrarCheque } = require("../src/application/use-cases/registrarCheque");
 const { registrarChequeLote } = require("../src/application/use-cases/registrarChequeLote");
+const { registrarRecebimentoComposto } = require("../src/application/use-cases/registrarRecebimentoComposto");
 const { AppError } = require("../src/shared/errors/appError");
 
 const TENANT_ID = 1;
@@ -189,6 +190,45 @@ test("registrarChequeLote cria troco quando total excede saldo", async () => {
   assert.equal(state.pagamentos[2].valor, -20);
   assert.equal(state.cheques[0].numeroOrdem, 1);
   assert.equal(state.cheques[1].numeroOrdem, 2);
+});
+
+test("registrarRecebimentoComposto exige trocoTipo quando total excede saldo", async () => {
+  const { prisma } = makeFakePrisma();
+  await assert.rejects(
+    () =>
+      registrarRecebimentoComposto(prisma, {
+        tenantId: TENANT_ID,
+        clienteId: 10,
+        vendaId: 1,
+        cheques: [{ emitenteNome: "A", valor: 60 }],
+        dinheiro: { valor: 50 },
+      }),
+    (err) => err instanceof AppError && err.code === "RECEBIMENTO_EXCEDE_SALDO",
+  );
+});
+
+test("registrarRecebimentoComposto registra cheques dinheiro e pix numa operação", async () => {
+  const { prisma, state } = makeFakePrisma();
+  const result = await registrarRecebimentoComposto(prisma, {
+    tenantId: TENANT_ID,
+    clienteId: 10,
+    vendaId: 1,
+    cheques: [
+      { emitenteNome: "A", valor: 30, dataRecebimento: "2026-04-27" },
+      { emitenteNome: "B", valor: 20, dataRecebimento: "2026-04-27" },
+    ],
+    dinheiro: { valor: 40, data: "2026-04-27" },
+    pix: { valor: 10, data: "2026-04-27" },
+  });
+
+  assert.equal(result.chequesCriados, 2);
+  assert.equal(result.totalGeral, 100);
+  assert.equal(result.excedente, 0);
+  assert.equal(state.cheques.length, 2);
+  assert.equal(state.pagamentos.length, 4);
+  assert.equal(state.pagamentos.filter((p) => p.tipo === "cheque").length, 2);
+  assert.equal(state.pagamentos.filter((p) => p.tipo === "dinheiro").length, 1);
+  assert.equal(state.pagamentos.filter((p) => p.tipo === "transferencia").length, 1);
 });
 
 test("registrarPagamento rejeita cliente de outro tenant", async () => {

@@ -13,10 +13,8 @@ import {
   formatDate,
   formatQuantidade,
   formatFreteReciboLinha,
-  localDateInputValue,
   toInputDate,
   type Venda,
-  type Pagamento,
 } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import { toast } from "sonner";
@@ -31,16 +29,6 @@ export default function VendaDetailPage() {
   const [venda, setVenda] = useState<Venda | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelando, setCancelando] = useState(false);
-  const [tipoBaixa, setTipoBaixa] = useState<"dinheiro" | "transferencia">(
-    "dinheiro",
-  );
-  const [valorBaixa, setValorBaixa] = useState("");
-  const [dataBaixa, setDataBaixa] = useState(localDateInputValue());
-  const [obsBaixa, setObsBaixa] = useState("");
-  const [trocoTipo, setTrocoTipo] = useState<"dinheiro" | "transferencia">(
-    "dinheiro",
-  );
-  const [salvandoBaixa, setSalvandoBaixa] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [freteForm, setFreteForm] = useState({
     valor: "",
@@ -158,36 +146,6 @@ export default function VendaDetailPage() {
     if (t.startsWith("troco_dinheiro")) return "Troco (dinheiro)";
     if (t.startsWith("troco_transferencia")) return "Troco (PIX / transferência)";
     return tipo;
-  };
-
-  const handleBaixa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!venda) return;
-    const v = parseFloat(valorBaixa.replace(",", "."));
-    if (!v || v <= 0) {
-      alert("Informe um valor válido");
-      return;
-    }
-    setSalvandoBaixa(true);
-    try {
-      await api.post<Pagamento>("/pagamentos", {
-        clienteId: venda.clienteId,
-        vendaId: venda.id,
-        tipo: tipoBaixa,
-        valor: v,
-        trocoTipo,
-        data: dataBaixa,
-        observacoes: obsBaixa || `Baixa venda ${vendaOrdemTexto(venda)}`,
-      });
-      setValorBaixa("");
-      setObsBaixa("");
-      await carregar();
-      toast.success("Pagamento registrado");
-    } catch (e) {
-      reportApiError(e, { title: "Erro ao registrar pagamento" });
-    } finally {
-      setSalvandoBaixa(false);
-    }
   };
 
   const escapeHtml = (value: string) =>
@@ -763,75 +721,17 @@ export default function VendaDetailPage() {
           </ul>
         ) : null}
 
-        <form onSubmit={handleBaixa} className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Tipo</label>
-            <select
-              value={tipoBaixa}
-              onChange={(e) =>
-                setTipoBaixa(e.target.value as "dinheiro" | "transferencia")
-              }
-              className="input-field"
-            >
-              <option value="dinheiro">Dinheiro</option>
-              <option value="transferencia">Transferência</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Valor (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={valorBaixa}
-              onChange={(e) => setValorBaixa(e.target.value)}
-              className="input-field"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Data</label>
-            <input
-              type="date"
-              value={dataBaixa}
-              onChange={(e) => setDataBaixa(e.target.value)}
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Troco (se passar do saldo)
-            </label>
-            <select
-              value={trocoTipo}
-              onChange={(e) =>
-                setTrocoTipo(e.target.value as "dinheiro" | "transferencia")
-              }
-              className="input-field"
-            >
-              <option value="dinheiro">Devolver em dinheiro</option>
-              <option value="transferencia">Devolver em transferência</option>
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Observações</label>
-            <input
-              value={obsBaixa}
-              onChange={(e) => setObsBaixa(e.target.value)}
-              className="input-field"
-              placeholder="Opcional"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              disabled={salvandoBaixa}
-              className="btn-primary"
-            >
-              {salvandoBaixa ? "Registrando..." : "Registrar baixa nesta venda"}
-            </button>
-          </div>
-        </form>
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <Link
+            href={`/financeiro/novo?clienteId=${venda.clienteId}&vendaId=${venda.id}&ordem=${venda.numeroVenda ?? venda.id}`}
+            className="btn-primary inline-flex"
+          >
+            Registrar recebimento (dinheiro, PIX ou cheque)
+          </Link>
+          <p className="text-xs text-gray-500 mt-2">
+            Todas as baixas são feitas na tela Financeiro, com a ordem já preenchida.
+          </p>
+        </div>
       </div>
     </div>
   );

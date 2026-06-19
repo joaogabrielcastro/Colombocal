@@ -15,6 +15,8 @@ type SearchableSelectProps = {
   emptyHint?: string;
   minChars?: number;
   disabled?: boolean;
+  /** Rótulo conhecido pelo pai (ex.: após busca por ordem) — evita campo vazio com value preenchido */
+  selectedLabel?: string;
   className?: string;
   /** Em tabelas, omitir o &lt;label&gt; visual */
   hideLabel?: boolean;
@@ -39,6 +41,7 @@ export default function SearchableSelect({
   emptyHint,
   minChars = 2,
   disabled = false,
+  selectedLabel: selectedLabelProp,
   className = '',
   hideLabel = false,
 }: SearchableSelectProps) {
@@ -59,17 +62,21 @@ export default function SearchableSelect({
       setSelectedLabel('');
       return;
     }
+    if (selectedLabelProp) {
+      setSelectedLabel(selectedLabelProp);
+      return;
+    }
     let cancelled = false;
     (async () => {
       if (loadLabelById) {
         const lbl = await loadLabelById(value);
         if (!cancelled && lbl) setSelectedLabel(lbl);
       }
-    })();
+   })();
     return () => {
       cancelled = true;
     };
-  }, [value, loadLabelById]);
+  }, [value, loadLabelById, selectedLabelProp]);
 
   const fetchList = useCallback(
     async (q: string) => {

@@ -50,12 +50,12 @@ export const NAV_PERMISSION_OPTIONS: { key: NavPermissionKey; label: string; gro
   { key: 'clientes', label: 'Clientes', group: 'Principal' },
   { key: 'produtos', label: 'Produtos', group: 'Principal' },
   { key: 'vendas', label: 'Vendas', group: 'Principal' },
-  { key: 'cheques', label: 'Cheques', group: 'Principal' },
+  { key: 'cheques', label: 'Financeiro', group: 'Principal' },
   { key: 'fretes', label: 'Fretes', group: 'Avançado' },
   { key: 'motoristas', label: 'Motoristas', group: 'Avançado' },
   { key: 'vendedores', label: 'Vendedores', group: 'Avançado' },
   { key: 'rel_vendas', label: 'Relatório de Vendas', group: 'Relatórios' },
-  { key: 'rel_financeiro', label: 'Financeiro', group: 'Relatórios' },
+  { key: 'rel_financeiro', label: 'Saldos em aberto', group: 'Relatórios' },
   { key: 'rel_comissoes', label: 'Comissões', group: 'Relatórios' },
   { key: 'rel_titulos', label: 'Títulos a Receber', group: 'Relatórios' },
   { key: 'auditoria', label: 'Auditoria', group: 'Sistema' },
@@ -66,7 +66,7 @@ export const MAIN_NAV: MainNavItem[] = [
   { href: '/clientes', label: 'Clientes', icon: UserGroupIcon, navKey: 'clientes' },
   { href: '/produtos', label: 'Produtos', icon: CubeIcon, navKey: 'produtos' },
   { href: '/vendas', label: 'Vendas', icon: ShoppingCartIcon, navKey: 'vendas' },
-  { href: '/cheques', label: 'Cheques', icon: BanknotesIcon, navKey: 'cheques' },
+  { href: '/financeiro', label: 'Financeiro', icon: BanknotesIcon, navKey: 'cheques' },
   { href: '/fretes', label: 'Fretes', icon: TruckIcon, navKey: 'fretes', advancedOnly: true },
   { href: '/motoristas', label: 'Motoristas', icon: TruckIcon, navKey: 'motoristas', advancedOnly: true },
   { href: '/vendedores', label: 'Vendedores', icon: UserIcon, navKey: 'vendedores', advancedOnly: true },
@@ -87,7 +87,7 @@ export const MAIN_NAV: MainNavItem[] = [
 
 export const REPORT_NAV: ReportNavItem[] = [
   { href: '/relatorios/vendas', label: 'Relatório de Vendas', navKey: 'rel_vendas' },
-  { href: '/relatorios/financeiro', label: 'Financeiro', navKey: 'rel_financeiro' },
+  { href: '/relatorios/financeiro', label: 'Saldos em aberto', navKey: 'rel_financeiro' },
   { href: '/relatorios/comissoes', label: 'Comissões', navKey: 'rel_comissoes' },
   { href: '/relatorios/titulos', label: 'Títulos a Receber', navKey: 'rel_titulos', advancedOnly: true },
 ];

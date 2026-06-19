@@ -219,10 +219,10 @@ export default function DashboardPage() {
           primary
         />
         <QuickAction
-          href="/cheques/novo"
+          href="/financeiro/novo"
           icon={BanknotesIcon}
-          label="Registrar cheque"
-          desc="Cliente pagou com cheque? Cadastre aqui"
+          label="Registrar recebimento"
+          desc="Dinheiro, PIX ou cheque na mesma tela"
         />
         <QuickAction
           href="/relatorios/financeiro"
@@ -271,7 +271,7 @@ export default function DashboardPage() {
           sub={`Total: ${formatMoney(d.totalChequesRegistrados)}`}
           icon={BanknotesIcon}
           color="bg-slate-100 text-slate-600"
-          href="/cheques"
+          href="/financeiro"
         />
         <StatCard
           title="Produtos ativos"

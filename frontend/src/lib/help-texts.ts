@@ -14,8 +14,8 @@ export const FLUXO_VENDA_PASSOS = [
   {
     passo: 3,
     titulo: "Recebimento",
-    descricao: "Abra a venda e registre dinheiro, PIX ou cheque.",
-    href: "/vendas",
+    descricao: "Registre dinheiro, PIX ou cheque na tela Financeiro.",
+    href: "/financeiro/novo",
   },
 ] as const;
 

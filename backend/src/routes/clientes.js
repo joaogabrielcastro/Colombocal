@@ -11,7 +11,9 @@ const {
   getClienteCreateSchema,
   clienteUpdateSchema,
   clientePrecosSchema,
+  clienteComissoesSchema,
 } = require("../schemas/cliente");
+const { percentualPadraoCliente } = require("../services/comissaoCadastro");
 const { tenantAllowsClienteCpf } = require("../constants/tenantFeatures");
 const { resumoFinanceiroCliente } = require("../domain/financeiro/saldoCliente");
 const { recalcularTodosTitulosCliente } = require("../services/recebiveis");
@@ -127,6 +129,57 @@ router.get("/:id/precos", async (req, res) => {
       };
     });
     res.json(result);
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/clientes/:id/comissoes — comissão por produto (específica ou padrão)
+router.get("/:id/comissoes", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "ID de cliente inválido" });
+    }
+    const cli = await prisma.cliente.findFirst({
+      where: { id, ...tenant(req) },
+      include: { vendedor: { select: { id: true, nome: true, comissaoPercentual: true } } },
+    });
+    if (!cli) return res.status(404).json({ error: "Cliente não encontrado" });
+
+    const produtos = await prisma.produto.findMany({
+      where: { ...tenant(req), ativo: true },
+      orderBy: { nome: "asc" },
+    });
+    const comissoesEspeciais = await prisma.comissaoClienteProduto.findMany({
+      where: { clienteId: id },
+    });
+    const comissaoMap = new Map(
+      comissoesEspeciais.map((row) => [row.produtoId, row.comissaoPercentual]),
+    );
+    const padrao = percentualPadraoCliente(cli, cli.vendedor);
+
+    const result = produtos.map((p) => {
+      const rawEsp = comissaoMap.get(p.id);
+      const espNum = rawEsp != null ? toMoneyNumber(rawEsp) : null;
+      const aplicado = espNum != null ? espNum : padrao;
+      return {
+        ...p,
+        comissaoEspecial: espNum,
+        comissaoPadrao: padrao,
+        comissaoAplicada: aplicado,
+      };
+    });
+
+    res.json({
+      comissaoPadrao: padrao,
+      vendedor: cli.vendedor,
+      comissaoFixaPercentual:
+        cli.comissaoFixaPercentual != null
+          ? toMoneyNumber(cli.comissaoFixaPercentual)
+          : null,
+      produtos: result,
+    });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -378,6 +431,42 @@ router.put("/:id/precos", async (req, res) => {
           where: { clienteId_produtoId: { clienteId, produtoId: p.produtoId } },
           update: { preco: p.preco },
           create: { clienteId, produtoId: p.produtoId, preco: p.preco },
+        });
+      }
+    }
+    res.json({ success: true });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// PUT /api/clientes/:id/comissoes - comissão específica por produto
+router.put("/:id/comissoes", async (req, res) => {
+  try {
+    const clienteId = parseInt(req.params.id);
+    const cli = await prisma.cliente.findFirst({
+      where: { id: clienteId, ...tenant(req) },
+      select: { id: true },
+    });
+    if (!cli) return res.status(404).json({ error: "Cliente não encontrado" });
+
+    const { comissoes } = parseBody(clienteComissoesSchema, req.body);
+    for (const c of comissoes) {
+      if (c.comissaoPercentual === null || c.comissaoPercentual === "") {
+        await prisma.comissaoClienteProduto.deleteMany({
+          where: { clienteId, produtoId: c.produtoId },
+        });
+      } else {
+        await prisma.comissaoClienteProduto.upsert({
+          where: {
+            clienteId_produtoId: { clienteId, produtoId: c.produtoId },
+          },
+          update: { comissaoPercentual: c.comissaoPercentual },
+          create: {
+            clienteId,
+            produtoId: c.produtoId,
+            comissaoPercentual: c.comissaoPercentual,
+          },
         });
       }
     }

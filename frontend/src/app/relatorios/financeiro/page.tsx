@@ -105,7 +105,7 @@ export default function FinanceiroPage() {
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            Relatório Financeiro
+            Saldos em aberto
           </h1>
           <p className="text-gray-500 text-sm mt-1 max-w-2xl">
             Saldo em aberto por cliente com base na{" "}

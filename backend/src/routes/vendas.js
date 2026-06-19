@@ -15,6 +15,10 @@ const {
   parseAtualizarCliente,
 } = require("../services/syncClienteFromVenda");
 const {
+  calcularComissaoParaVenda,
+  loadComissaoMapPorCliente,
+} = require("../services/comissaoCadastro");
+const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
@@ -23,6 +27,35 @@ const { getDateRange } = require("../utils/dateRangeQuery");
 
 function tw(req) {
   return { tenantId: req.tenantId };
+}
+
+function calcSaldoEmAbertoTitulos(venda) {
+  let saldo = 0;
+  for (const t of venda.titulos || []) {
+    const vo = parseFloat(String(t.valorOriginal ?? 0));
+    const vp = parseFloat(String(t.valorPago ?? 0));
+    if (!Number.isNaN(vo) && !Number.isNaN(vp)) {
+      saldo += Math.max(0, vo - vp);
+    }
+  }
+  return saldo;
+}
+
+function parseOrdemNumero(raw) {
+  const s = String(raw ?? "")
+    .trim()
+    .replace(/^#/, "");
+  const n = parseInt(s, 10);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return { n, exact: String(n) === s };
+}
+
+function wherePorOrdem(ordemRaw, tenantId) {
+  const parsed = parseOrdemNumero(ordemRaw);
+  if (!parsed) return null;
+  const or = [{ numeroVenda: parsed.n }];
+  if (parsed.exact) or.push({ id: parsed.n });
+  return { tenantId, OR: or };
 }
 
 function addDays(date, days) {
@@ -61,6 +94,7 @@ router.get("/", async (req, res) => {
       valorMin,
       valorMax,
       saldoEmAberto,
+      ordem,
     } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 100,
@@ -93,6 +127,12 @@ router.get("/", async (req, res) => {
           status: { in: ["aberto", "parcial"] },
         },
       };
+    }
+    if (ordem) {
+      const ordemWhere = wherePorOrdem(ordem, req.tenantId);
+      if (ordemWhere) {
+        Object.assign(where, ordemWhere);
+      }
     }
     if (busca) {
       where.cliente = {
@@ -130,18 +170,40 @@ router.get("/", async (req, res) => {
     const soma = somaAgg._sum.valorTotal;
     const somaNum = soma != null ? parseFloat(String(soma)) : 0;
     res.set("x-sum-valor-total", Number.isFinite(somaNum) ? somaNum.toFixed(2) : "0");
-    const comSaldo = vendas.map((v) => {
-      let saldoEmAbertoTitulos = 0;
-      for (const t of v.titulos || []) {
-        const vo = parseFloat(String(t.valorOriginal ?? 0));
-        const vp = parseFloat(String(t.valorPago ?? 0));
-        if (!Number.isNaN(vo) && !Number.isNaN(vp)) {
-          saldoEmAbertoTitulos += Math.max(0, vo - vp);
-        }
-      }
-      return { ...v, saldoEmAbertoTitulos };
-    });
+    const comSaldo = vendas.map((v) => ({
+      ...v,
+      saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(v),
+    }));
     res.json(comSaldo);
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/vendas/por-ordem/:numero — busca venda pelo nº da ordem (#278 ou 278)
+router.get("/por-ordem/:numero", async (req, res) => {
+  try {
+    const ordemWhere = wherePorOrdem(req.params.numero, req.tenantId);
+    if (!ordemWhere) {
+      return res.status(400).json({ error: "Número da ordem inválido" });
+    }
+    const venda = await prisma.venda.findFirst({
+      where: ordemWhere,
+      include: {
+        cliente: true,
+        vendedor: true,
+        titulos: true,
+        pagamentos: { select: { valor: true } },
+      },
+      orderBy: { dataVenda: "desc" },
+    });
+    if (!venda) {
+      return res.status(404).json({ error: "Venda não encontrada para esta ordem" });
+    }
+    res.json({
+      ...venda,
+      saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(venda),
+    });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -379,11 +441,17 @@ router.post("/", async (req, res) => {
         if (!mot) throw new Error("Motorista não encontrado");
       }
 
-      const comissaoPercentualAplicado =
-        cliente.comissaoFixaPercentual != null
-          ? parseFloat(cliente.comissaoFixaPercentual)
-          : parseFloat(vendedor.comissaoPercentual || 0);
-      const comissaoValor = (valorTotal * comissaoPercentualAplicado) / 100;
+      const comissaoMap = await loadComissaoMapPorCliente(tx, clienteIdNum);
+      const {
+        comissaoValor,
+        comissaoPercentualAplicado,
+        itensComComissao,
+      } = calcularComissaoParaVenda({
+        itens: itensValidos,
+        cliente,
+        vendedor,
+        comissaoPorProdutoMap: comissaoMap,
+      });
       const dataEfetivaVenda = dataVendaDate || new Date();
       const fretePorSacoAplicado =
         fretePorSacoNum != null
@@ -425,11 +493,13 @@ router.post("/", async (req, res) => {
           dataVenda: dataEfetivaVenda,
           observacoes,
           itens: {
-            create: itensValidos.map((item) => ({
+            create: itensComComissao.map((item) => ({
               produtoId: item.produtoId,
               quantidade: item.quantidade,
               precoUnitario: item.precoUnitario,
-              subtotal: item.quantidade * item.precoUnitario,
+              subtotal: item.subtotal,
+              comissaoPercentualAplicado: item.comissaoPercentualAplicado,
+              comissaoValor: item.comissaoValor,
             })),
           },
         },
@@ -628,11 +698,17 @@ router.put("/:id", async (req, res) => {
         if (!mot) throw new Error("Motorista não encontrado");
       }
 
-      const comissaoPercentualAplicado =
-        cliente.comissaoFixaPercentual != null
-          ? parseFloat(cliente.comissaoFixaPercentual)
-          : parseFloat(vendedor.comissaoPercentual || 0);
-      const comissaoValor = (valorTotal * comissaoPercentualAplicado) / 100;
+      const comissaoMap = await loadComissaoMapPorCliente(tx, clienteIdNum);
+      const {
+        comissaoValor,
+        comissaoPercentualAplicado,
+        itensComComissao,
+      } = calcularComissaoParaVenda({
+        itens: itensValidos,
+        cliente,
+        vendedor,
+        comissaoPorProdutoMap: comissaoMap,
+      });
       const dataEfetivaVenda = dataVendaDate || existente.dataVenda;
 
       const fretePorSacoAplicado =
@@ -682,11 +758,13 @@ router.put("/:id", async (req, res) => {
               ? body.observacoes
               : existente.observacoes,
           itens: {
-            create: itensValidos.map((item) => ({
+            create: itensComComissao.map((item) => ({
               produtoId: item.produtoId,
               quantidade: item.quantidade,
               precoUnitario: item.precoUnitario,
-              subtotal: item.quantidade * item.precoUnitario,
+              subtotal: item.subtotal,
+              comissaoPercentualAplicado: item.comissaoPercentualAplicado,
+              comissaoValor: item.comissaoValor,
             })),
           },
         },

@@ -114,8 +114,20 @@ const clientePrecosSchema = z.object({
     .min(1, "Informe ao menos um preço"),
 });
 
+const clienteComissoesSchema = z.object({
+  comissoes: z
+    .array(
+      z.object({
+        produtoId: z.coerce.number().int().positive(),
+        comissaoPercentual: z.union([z.coerce.number().nonnegative(), z.null()]),
+      }),
+    )
+    .min(1, "Informe ao menos uma comissão"),
+});
+
 module.exports = {
   getClienteCreateSchema,
   clienteUpdateSchema,
   clientePrecosSchema,
+  clienteComissoesSchema,
 };

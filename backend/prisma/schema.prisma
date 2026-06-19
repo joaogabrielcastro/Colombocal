@@ -74,6 +74,7 @@ model Cliente {
   tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vendedor        Vendedor?             @relation(fields: [vendedorId], references: [id])
   precosEspeciais PrecoClienteProduto[]
+  comissoesProduto ComissaoClienteProduto[]
   vendas          Venda[]
   cheques         Cheque[]
   pagamentos      Pagamento[]
@@ -97,7 +98,8 @@ model Produto {
   updatedAt   DateTime @updatedAt
 
   tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  precosClientes PrecoClienteProduto[]
+  precosClientes   PrecoClienteProduto[]
+  comissoesClientes ComissaoClienteProduto[]
   itensVenda     ItemVenda[]
   movimentacoes  MovimentacaoEstoque[]
 
@@ -112,6 +114,18 @@ model PrecoClienteProduto {
 
   cliente Cliente @relation(fields: [clienteId], references: [id])
   produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@unique([clienteId, produtoId])
+}
+
+model ComissaoClienteProduto {
+  id                 Int     @id @default(autoincrement())
+  clienteId          Int
+  produtoId          Int
+  comissaoPercentual Decimal @db.Decimal(5, 2)
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
   @@unique([clienteId, produtoId])
 }
@@ -192,8 +206,10 @@ model ItemVenda {
   vendaId       Int
   produtoId     Int
   quantidade    Decimal @db.Decimal(10, 3)
-  precoUnitario Decimal @db.Decimal(10, 2)
-  subtotal      Decimal @db.Decimal(10, 2)
+  precoUnitario             Decimal @db.Decimal(10, 2)
+  subtotal                  Decimal @db.Decimal(10, 2)
+  comissaoPercentualAplicado Decimal @default(0) @db.Decimal(5, 2)
+  comissaoValor              Decimal @default(0) @db.Decimal(10, 2)
 
   venda   Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
   produto Produto @relation(fields: [produtoId], references: [id])

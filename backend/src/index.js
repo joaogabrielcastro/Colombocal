@@ -140,6 +140,7 @@ app.use("/api/users", requireTenantUser, requireAdmin, require("./routes/users")
 app.use("/api/auditoria", requireTenantUser, require("./routes/auditoria"));
 app.use("/api/cheques", requireTenantUser, requireNavKey("cheques"), require("./routes/cheques"));
 app.use("/api/pagamentos", requireTenantUser, requireNavKey("cheques"), require("./routes/pagamentos"));
+app.use("/api/recebimentos", requireTenantUser, requireNavKey("cheques"), require("./routes/recebimentos"));
 app.use("/api/relatorios", requireTenantUser, require("./routes/relatorios"));
 app.use("/api/dashboard", requireTenantUser, requireNavKey("dashboard"), require("./routes/dashboard"));
 app.use("/api/cnpj", requireTenantUser, require("./routes/cnpj"));

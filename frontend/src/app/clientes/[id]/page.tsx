@@ -63,6 +63,19 @@ interface ProdutoPreco extends Produto {
   precoAplicado: number;
 }
 
+interface ProdutoComissao extends Produto {
+  comissaoEspecial: number | null;
+  comissaoPadrao: number;
+  comissaoAplicada: number;
+}
+
+interface ComissoesData {
+  comissaoPadrao: number;
+  comissaoFixaPercentual: number | null;
+  vendedor: { id: number; nome: string; comissaoPercentual: number } | null;
+  produtos: ProdutoComissao[];
+}
+
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -70,12 +83,19 @@ export default function ClienteDetailPage() {
   const [conta, setConta] = useState<ContaData | null>(null);
   const [produtos, setProdutos] = useState<ProdutoPreco[]>([]);
   const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [aba, setAba] = useState<"conta" | "cheques" | "precos" | "editar">(
-    "conta",
-  );
+  const [aba, setAba] = useState<
+    "conta" | "cheques" | "precos" | "comissoes" | "editar"
+  >("conta");
   const [loading, setLoading] = useState(true);
   const [precosEdit, setPrecosEdit] = useState<Record<number, string>>({});
   const [salvandoPrecos, setSalvandoPrecos] = useState(false);
+  const [comissoesData, setComissoesData] = useState<ComissoesData | null>(
+    null,
+  );
+  const [comissoesEdit, setComissoesEdit] = useState<Record<number, string>>(
+    {},
+  );
+  const [salvandoComissoes, setSalvandoComissoes] = useState(false);
   const [form, setForm] = useState<Partial<Cliente>>({});
   const [salvandoForm, setSalvandoForm] = useState(false);
   const [erro, setErro] = useState("");
@@ -90,10 +110,27 @@ export default function ClienteDetailPage() {
 
   useEffect(() => {
     const abaUrl = searchParams.get("aba");
-    if (abaUrl === "conta" || abaUrl === "cheques" || abaUrl === "precos" || abaUrl === "editar") {
+    if (
+      abaUrl === "conta" ||
+      abaUrl === "cheques" ||
+      abaUrl === "precos" ||
+      abaUrl === "comissoes" ||
+      abaUrl === "editar"
+    ) {
       setAba(abaUrl);
     }
   }, [searchParams]);
+
+  const carregarComissoes = useCallback(() => {
+    return api.get<ComissoesData>(`/clientes/${id}/comissoes`).then((data) => {
+      setComissoesData(data);
+      const mapa: Record<number, string> = {};
+      data.produtos.forEach((p) => {
+        if (p.comissaoEspecial != null) mapa[p.id] = String(p.comissaoEspecial);
+      });
+      setComissoesEdit(mapa);
+    });
+  }, [id]);
 
   const carregarCheques = () => {
     const params = new URLSearchParams();
@@ -166,6 +203,14 @@ export default function ClienteDetailPage() {
     carregarCheques();
   }, [id]);
 
+  useEffect(() => {
+    if (aba === "comissoes" && !comissoesData) {
+      void carregarComissoes().catch((e) =>
+        reportApiError(e, { title: "Erro ao carregar comissões" }),
+      );
+    }
+  }, [aba, comissoesData, carregarComissoes]);
+
   const handlePagarFrete = async (frete: FreteMovimento) => {
     setPagandoFreteId(frete.id);
     try {
@@ -218,6 +263,26 @@ export default function ClienteDetailPage() {
       reportApiError(e, { title: "Erro ao salvar preços" });
     } finally {
       setSalvandoPrecos(false);
+    }
+  };
+
+  const handleSalvarComissoes = async () => {
+    if (!comissoesData) return;
+    setSalvandoComissoes(true);
+    try {
+      const comissoes = comissoesData.produtos.map((p) => ({
+        produtoId: p.id,
+        comissaoPercentual: comissoesEdit[p.id]
+          ? parseFloat(comissoesEdit[p.id].replace(",", "."))
+          : null,
+      }));
+      await api.put(`/clientes/${id}/comissoes`, { comissoes });
+      await carregarComissoes();
+      toast.success("Comissões salvas");
+    } catch (e) {
+      reportApiError(e, { title: "Erro ao salvar comissões" });
+    } finally {
+      setSalvandoComissoes(false);
     }
   };
 
@@ -350,7 +415,7 @@ export default function ClienteDetailPage() {
 
       {/* Abas */}
       <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
-        {(["conta", "cheques", "precos", "editar"] as const).map((tab) => (
+        {(["conta", "cheques", "precos", "comissoes", "editar"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => {
@@ -369,7 +434,9 @@ export default function ClienteDetailPage() {
                 ? `Cheques (${cheques.length})`
                 : tab === "precos"
                   ? "Preços Especiais"
-                  : "Editar Cliente"}
+                  : tab === "comissoes"
+                    ? "Comissões"
+                    : "Editar Cliente"}
           </button>
         ))}
       </div>
@@ -421,7 +488,7 @@ export default function ClienteDetailPage() {
                 Pagamentos ({conta.pagamentos.length})
               </h3>
               <Link
-                href={`/cheques/novo?clienteId=${id}`}
+                href={`/financeiro/novo?clienteId=${id}`}
                 className="text-blue-600 text-xs hover:underline"
               >
                 + Cheque
@@ -433,10 +500,21 @@ export default function ClienteDetailPage() {
                   Nenhum pagamento
                 </p>
               ) : (
-                conta.pagamentos.map((p: any) => (
+                conta.pagamentos.map((p: any) => {
+                  const valorNum = parseFloat(String(p.valor ?? 0));
+                  const tipoLabel = (() => {
+                    const t = String(p.tipo || "").toLowerCase();
+                    if (t === "dinheiro") return "Dinheiro";
+                    if (t === "transferencia") return "PIX / transferência";
+                    if (t === "cheque") return "Cheque";
+                    if (t.startsWith("troco_dinheiro")) return "Troco (dinheiro)";
+                    if (t.startsWith("troco_transferencia")) return "Troco (PIX / transferência)";
+                    return p.tipo;
+                  })( );
+                  return (
                   <div key={p.id} className="flex justify-between px-5 py-3">
                     <div>
-                      <p className="text-sm font-medium capitalize">{p.tipo}</p>
+                      <p className="text-sm font-medium">{tipoLabel}</p>
                       <p className="text-xs text-gray-400">
                         {formatDate(p.data)}
                       </p>
@@ -452,11 +530,17 @@ export default function ClienteDetailPage() {
                         />
                       )}
                     </div>
-                    <span className="text-sm font-semibold text-green-600">
-                      +{formatMoney(p.valor)}
+                    <span
+                      className={`text-sm font-semibold ${
+                        valorNum >= 0 ? "text-green-600" : "text-amber-700"
+                      }`}
+                    >
+                      {valorNum >= 0 ? "+" : ""}
+                      {formatMoney(p.valor)}
                     </span>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -577,7 +661,7 @@ export default function ClienteDetailPage() {
           <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2">
             <h3 className="font-semibold text-gray-900">Cheques do Cliente</h3>
             <Link
-              href={`/cheques/novo?clienteId=${id}`}
+              href={`/financeiro/novo?clienteId=${id}`}
               className="btn-primary text-sm"
             >
               + Novo Cheque
@@ -742,6 +826,102 @@ export default function ClienteDetailPage() {
               {salvandoPrecos ? "Salvando..." : "Salvar Preços"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Comissões por produto */}
+      {aba === "comissoes" && comissoesData && (
+        <div className="card">
+          <div className="px-5 py-3 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">
+              Comissões por produto
+            </h3>
+            <p className="text-gray-500 text-xs mt-0.5">
+              {comissoesData.vendedor ? (
+                <>
+                  Representante: <strong>{comissoesData.vendedor.nome}</strong>
+                  {" · "}
+                  Padrão:{" "}
+                  <strong>{comissoesData.comissaoPadrao.toFixed(2)}%</strong>
+                  {comissoesData.comissaoFixaPercentual != null
+                    ? " (comissão fixa do cliente)"
+                    : " (% do representante)"}
+                </>
+              ) : (
+                <>Defina um representante no cadastro do cliente para usar o padrão.</>
+              )}
+            </p>
+            <p className="text-gray-400 text-xs mt-1">
+              Deixe em branco para usar a comissão padrão do cliente/representante
+            </p>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="table-header">Produto</th>
+                <th className="table-header">Unidade</th>
+                <th className="table-header">Padrão (%)</th>
+                <th className="table-header">Comissão específica (%)</th>
+                <th className="table-header">Aplicada (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comissoesData.produtos.map((p) => {
+                const editVal = comissoesEdit[p.id] ?? "";
+                const aplicada =
+                  editVal !== ""
+                    ? parseFloat(editVal.replace(",", ".")) ||
+                      comissoesData.comissaoPadrao
+                    : p.comissaoAplicada;
+                return (
+                  <tr key={p.id} className="table-row">
+                    <td className="table-cell font-medium">{p.nome}</td>
+                    <td className="table-cell text-gray-500">{p.unidade}</td>
+                    <td className="table-cell">
+                      {comissoesData.comissaoPadrao.toFixed(2)}%
+                    </td>
+                    <td className="table-cell">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        placeholder={`${comissoesData.comissaoPadrao.toFixed(2)}`}
+                        value={editVal}
+                        onChange={(e) =>
+                          setComissoesEdit((prev) => ({
+                            ...prev,
+                            [p.id]: e.target.value,
+                          }))
+                        }
+                        className="input-field w-28"
+                      />
+                    </td>
+                    <td className="table-cell text-gray-600">
+                      {Number.isFinite(aplicada)
+                        ? `${aplicada.toFixed(2)}%`
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="px-5 py-4 border-t border-gray-100">
+            <button
+              onClick={handleSalvarComissoes}
+              disabled={salvandoComissoes}
+              className="btn-primary"
+            >
+              {salvandoComissoes ? "Salvando..." : "Salvar Comissões"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {aba === "comissoes" && !comissoesData && (
+        <div className="card p-8 text-center text-gray-400 text-sm">
+          Carregando comissões...
         </div>
       )}
 
