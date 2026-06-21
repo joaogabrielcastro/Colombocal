@@ -293,7 +293,7 @@ function RegistrarRecebimentoForm() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto" data-enter-nav-group>
       <div className="flex items-center gap-3 mb-6">
         <Link href="/financeiro" className="btn-secondary py-1.5 px-2.5">
           <ArrowLeftIcon className="w-4 h-4" />
@@ -312,7 +312,7 @@ function RegistrarRecebimentoForm() {
         </div>
       )}
 
-      <div className="card p-5 mb-4">
+      <div className="card p-5 mb-4" data-enter-nav="container">
         <p className="text-sm font-semibold text-gray-900 mb-3">1. Localizar a venda</p>
         <div className="flex flex-wrap gap-2 mb-4">
           <div className="flex-1 min-w-[12rem]">
@@ -321,6 +321,7 @@ function RegistrarRecebimentoForm() {
               className="input-field font-mono"
               placeholder="Ex.: 278 ou #278"
               value={ordemInput}
+              data-enter-nav="skip"
               onChange={(e) => setOrdemInput(e.target.value.replace(/^#/, ""))}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {

@@ -153,6 +153,28 @@ export default function SearchableSelect({
             setOpen(true);
             setQuery('');
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setOpen(false);
+              return;
+            }
+            if (!open) return;
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setHighlight((h) => Math.min(h + 1, Math.max(0, options.length - 1)));
+              return;
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setHighlight((h) => Math.max(h - 1, 0));
+              return;
+            }
+            if (e.key === 'Enter' && options.length > 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              pick(options[highlight] ?? options[0]);
+            }
+          }}
         />
       </div>
       {emptyHint && <p className="text-xs text-gray-500 mt-1">{emptyHint}</p>}
