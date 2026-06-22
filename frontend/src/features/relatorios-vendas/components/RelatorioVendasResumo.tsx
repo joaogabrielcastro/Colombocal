@@ -11,6 +11,7 @@ import type { RelatorioVendasPdfSecao } from "../services/exports";
 import { RelatorioPdfSecaoButton } from "./RelatorioPdfSecaoButton";
 
 type Props = {
+  freteEnabled?: boolean;
   totalRegistros: number;
   totalFaturamento: number;
   totalFrete: number;
@@ -40,6 +41,7 @@ function SecaoHeader({
 }
 
 export function RelatorioVendasResumo({
+  freteEnabled = true,
   totalRegistros,
   totalFaturamento,
   totalFrete,
@@ -59,7 +61,7 @@ export function RelatorioVendasResumo({
           onClick={() => onExportPdfSecao("totais")}
         />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className={`grid gap-4 mb-6 ${freteEnabled ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2 lg:grid-cols-3"}`}>
         <div className="card p-4 text-center">
           <p className="text-sm text-gray-500">Vendas no período</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalRegistros}</p>
@@ -68,10 +70,12 @@ export function RelatorioVendasResumo({
           <p className="text-sm text-gray-500">Total vendido (período)</p>
           <p className="text-3xl font-bold text-green-700 mt-1">{formatMoney(totalFaturamento)}</p>
         </div>
+        {freteEnabled ? (
         <div className="card p-4 text-center">
           <p className="text-sm text-gray-500">Frete total</p>
           <p className="text-3xl font-bold text-indigo-700 mt-1">{formatMoney(totalFrete)}</p>
         </div>
+        ) : null}
         <div className="card p-4 text-center">
           <p className="text-sm text-gray-500">Ticket médio</p>
           <p className="text-3xl font-bold text-blue-600 mt-1">

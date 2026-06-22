@@ -7,7 +7,7 @@ const { prisma } = require("../lib/prisma");
 const { signAuthToken, requireTenantUser } = require("../middleware/auth");
 const { handleRouteError } = require("../utils/api");
 const { normalizeNavPermissions } = require("../constants/navPermissions");
-const { tenantAllowsClienteCpf } = require("../constants/tenantFeatures");
+const { tenantAllowsClienteCpf, tenantAllowsFrete } = require("../constants/tenantFeatures");
 const {
   loadRegistrationTenants,
   resolveRegistrationTenantSlug,
@@ -222,6 +222,7 @@ router.get("/me", requireTenantUser, async (req, res) => {
       },
       features: {
         clienteCpf: tenantAllowsClienteCpf(user.tenant.slug),
+        frete: tenantAllowsFrete(user.tenant.slug),
       },
     });
   } catch (e) {

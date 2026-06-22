@@ -16,10 +16,12 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { ListScaffold } from "@/components/ui/list-scaffold";
 import { useClientesListaQuery } from "@/features/clientes/hooks/useClientesListaQuery";
 import { reportApiError } from "@/lib/report-api-error";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 const PAGE_SIZE = 20;
 
 export default function ClientesPage() {
+  const { freteEnabled } = useTenantFeatures();
   const [busca, setBusca] = useState("");
   const [buscaInput, setBuscaInput] = useState("");
   const [page, setPage] = useState(0);
@@ -126,7 +128,9 @@ export default function ClientesPage() {
                 <th className="table-header">Razão Social / Fantasia</th>
                 <th className="table-header">Documento</th>
                 <th className="table-header">Cidade / UF</th>
+                {freteEnabled ? (
                 <th className="table-header">Frete padrão (saco / ton)</th>
+                ) : null}
                 <th className="table-header"></th>
               </tr>
             </thead>
@@ -147,9 +151,11 @@ export default function ClientesPage() {
                       ? `${c.cidade}${c.estado ? " - " + c.estado : ""}`
                       : "-"}
                   </td>
+                  {freteEnabled ? (
                   <td className="table-cell">
                     {formatMoney(c.fretePadraoSaco ?? c.fretePadrao)} / {formatMoney(c.fretePadraoTonelada ?? 0)}
                   </td>
+                  ) : null}
                   <td className="table-cell">
                     <div className="flex items-center gap-3">
                       <Link

@@ -7,6 +7,7 @@ import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { formatMoney, localDateInputValue } from "@/lib/utils";
 import { reportApiError } from "@/lib/report-api-error";
+import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
 
 type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; fretePadraoSaco?: number; fretePadraoTonelada?: number };
@@ -210,6 +211,7 @@ export default function NovoFretePage() {
   );
 
   return (
+    <FreteFeatureGuard>
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/fretes" className="btn-secondary py-1.5 px-2.5">
@@ -375,6 +377,7 @@ export default function NovoFretePage() {
         <Link href="/fretes" className="btn-secondary">Cancelar</Link>
       </div>
     </div>
+    </FreteFeatureGuard>
   );
 }
 

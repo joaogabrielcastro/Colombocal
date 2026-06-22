@@ -9,6 +9,7 @@ import {
   EllipsisHorizontalCircleIcon,
 } from '@heroicons/react/24/outline';
 import { UI_HIDE_ADVANCED } from '@/lib/features';
+import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 import {
   MAIN_NAV,
   REPORT_NAV,
@@ -29,6 +30,7 @@ type MeUser = {
 export default function Sidebar() {
   const pathname = usePathname();
   const [me, setMe] = useState<MeUser | null>(null);
+  const { freteEnabled } = useTenantFeatures();
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -44,9 +46,12 @@ export default function Sidebar() {
   const isAdmin = me?.role === 'admin';
   const navOpts = { isAdmin, navPermissions: me?.navPermissions ?? null };
 
-  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED, navOpts);
+  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED, navOpts).filter(
+    (i) => freteEnabled || i.navKey !== 'fretes',
+  );
   const advancedMain = advancedMainNavItems(MAIN_NAV).filter(
     (i) =>
+      (freteEnabled || i.navKey !== 'fretes') &&
       (!i.adminOnly || isAdmin) &&
       !mainVisible.some((v) => v.href === i.href) &&
       filterMainNavForSidebar([i], false, navOpts).length > 0,

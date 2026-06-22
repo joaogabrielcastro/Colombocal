@@ -12,6 +12,20 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+const { requestAllowsFrete } = require("../utils/tenantRequest");
+
+async function requireFreteTenant(req, res, next) {
+  try {
+    if (!(await requestAllowsFrete(req))) {
+      return res.status(403).json({ error: "Frete não disponível para esta organização" });
+    }
+    next();
+  } catch (e) {
+    next(e);
+  }
+}
+
+router.use(requireFreteTenant);
 
 function tw(req) {
   return { tenantId: req.tenantId };

@@ -21,10 +21,12 @@ import { ListPageSkeleton, TableListSkeleton } from '@/components/ui/skeletons';
 import { reportApiError } from '@/lib/report-api-error';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 
 const pageSize = 20;
 
 function VendasPageContent() {
+  const { freteEnabled } = useTenantFeatures();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -176,12 +178,14 @@ function VendasPageContent() {
           <p className="text-gray-400 text-xs mt-0.5">
             Subtotal só desta página: {formatMoney(subtotalPagina)}
           </p>
+          {freteEnabled ? (
           <p className="text-gray-400 text-xs mt-1">
             <Link href="/fretes" className="text-blue-600 hover:underline">
               Histórico de fretes
             </Link>{' '}
             (leitura; alteração pelo cadastro da venda)
           </p>
+          ) : null}
         </div>
         <Link href="/vendas/nova" className="btn-primary">
           <PlusIcon className="w-4 h-4" /> Nova Venda
@@ -339,8 +343,12 @@ function VendasPageContent() {
                 <th className="table-header">Vendedor</th>
                 <th className="table-header">Motorista</th>
                 <th className="table-header">Itens</th>
+                {freteEnabled ? (
+                  <>
                 <th className="table-header">Frete</th>
                 <th className="table-header">Frete pago</th>
+                  </>
+                ) : null}
                 <th className="table-header">Total</th>
                 <th className="table-header"></th>
               </tr>
@@ -361,10 +369,14 @@ function VendasPageContent() {
                   <td className="table-cell text-center">
                     {v.itens?.length || 0}
                   </td>
+                  {freteEnabled ? (
+                    <>
                   <td className="table-cell">{formatMoney(v.frete)}</td>
                   <td className="table-cell text-xs text-gray-600 max-w-[10rem]">
                     {formatFreteReciboLinha(v)}
                   </td>
+                    </>
+                  ) : null}
                   <td className="table-cell font-semibold text-green-700">
                     {formatMoney(v.valorTotal)}
                   </td>

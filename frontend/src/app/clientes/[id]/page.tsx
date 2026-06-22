@@ -24,6 +24,7 @@ import { DetailPageSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { reportApiError } from "@/lib/report-api-error";
 import SearchableSelect from "@/components/SearchableSelect";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 interface ResumoFinanceiro {
   contaCorrente: {
@@ -78,6 +79,7 @@ interface ComissoesData {
 
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { freteEnabled } = useTenantFeatures();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [conta, setConta] = useState<ContaData | null>(null);
@@ -196,8 +198,8 @@ export default function ClienteDetailPage() {
 
   useEffect(() => {
     void carregarPrincipal();
-    void carregarFretesPendentes();
-  }, [carregarPrincipal, carregarFretesPendentes]);
+    if (freteEnabled) void carregarFretesPendentes();
+  }, [carregarPrincipal, carregarFretesPendentes, freteEnabled]);
 
   useEffect(() => {
     carregarCheques();
@@ -593,6 +595,7 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
+          {freteEnabled ? (
           <div className="card lg:col-span-2">
             <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2">
               <h3 className="font-semibold text-gray-900">
@@ -651,6 +654,7 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
+          ) : null}
         </div>
         </div>
       )}
@@ -971,6 +975,8 @@ export default function ClienteDetailPage() {
                 className="input-field"
               />
             </div>
+            {freteEnabled ? (
+            <>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Frete padrão por saco (R$)
@@ -1008,6 +1014,8 @@ export default function ClienteDetailPage() {
                 className="input-field"
               />
             </div>
+            </>
+            ) : null}
             <div>
               <SearchableSelect
                 label="Vendedor do cliente"

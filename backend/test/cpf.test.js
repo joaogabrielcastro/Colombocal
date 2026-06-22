@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { isValidCpf, normalizeCpf } = require("../src/utils/cpf");
-const { tenantAllowsClienteCpf } = require("../src/constants/tenantFeatures");
+const { tenantAllowsClienteCpf, tenantAllowsFrete } = require("../src/constants/tenantFeatures");
 
 test("isValidCpf: aceita CPF válido", () => {
   assert.equal(isValidCpf("529.982.247-25"), true);
@@ -29,4 +29,9 @@ test("tenantAllowsClienteCpf: respeita CLIENT_CPF_TENANT_SLUGS", () => {
     if (prev === undefined) delete process.env.CLIENT_CPF_TENANT_SLUGS;
     else process.env.CLIENT_CPF_TENANT_SLUGS = prev;
   }
+});
+
+test("tenantAllowsFrete: requinte sem frete por padrão", () => {
+  assert.equal(tenantAllowsFrete("requinte"), false);
+  assert.equal(tenantAllowsFrete("default"), true);
 });

@@ -22,10 +22,12 @@ import api from "@/lib/api";
 import { DetailPageSkeleton } from "@/components/ui/skeletons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reportApiError } from "@/lib/report-api-error";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 export default function VendaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { freteEnabled } = useTenantFeatures();
   const [venda, setVenda] = useState<Venda | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelando, setCancelando] = useState(false);
@@ -263,11 +265,18 @@ export default function VendaDetailPage() {
     </table>
 
     <div class="totais">
-      <div>Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>
+      <div>Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>${
+        freteEnabled
+          ? `
         · Frete/saco: <strong>${escapeHtml(formatMoney(tarifaSaco))}</strong>
-        · Frete/t: <strong>${escapeHtml(formatMoney(tarifaTon))}</strong>
-      </div>
-      <div class="frete-hint">Frete total calculado no destino conforme quantidade entregue.</div>
+        · Frete/t: <strong>${escapeHtml(formatMoney(tarifaTon))}</strong>`
+          : ""
+      }
+      </div>${
+        freteEnabled
+          ? `<div class="frete-hint">Frete total calculado no destino conforme quantidade entregue.</div>`
+          : ""
+      }
     </div>
 
     <div class="obs">
@@ -482,6 +491,7 @@ export default function VendaDetailPage() {
         </table>
       </div>
 
+      {freteEnabled ? (
       <div className="card p-5 mb-4">
         <h3 className="font-semibold text-gray-900 mb-2">Frete e pagamento</h3>
         <p className="text-xs text-gray-500 mb-3">
@@ -577,6 +587,20 @@ export default function VendaDetailPage() {
           </div>
         </div>
       </div>
+      ) : (
+      <div className="card p-5 mb-4">
+        <div className="flex justify-end">
+          <div className="w-72 space-y-2">
+            <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
+              <span>Total Produtos:</span>
+              <span className="text-green-700 text-lg">
+                {formatMoney(venda.valorTotal)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
 
       <div className="card p-5 mb-4">
         <h3 className="font-semibold text-gray-900 mb-2">Títulos desta venda</h3>

@@ -19,8 +19,10 @@ import { RelatorioVendasFiltros } from "@/features/relatorios-vendas/components/
 import { RelatorioVendasResumo } from "@/features/relatorios-vendas/components/RelatorioVendasResumo";
 import { RelatorioVendasDetalhes } from "@/features/relatorios-vendas/components/RelatorioVendasDetalhes";
 import { localDateInputValue } from "@/lib/utils";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 export default function RelatorioVendasPage() {
+  const { freteEnabled } = useTenantFeatures();
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [busca, setBusca] = useState("");
@@ -181,6 +183,7 @@ export default function RelatorioVendasPage() {
       {data && !loading && (
         <>
           <RelatorioVendasResumo
+            freteEnabled={freteEnabled}
             totalRegistros={data.totalRegistros ?? data.quantidade}
             totalFaturamento={data.totalFaturamento}
             totalFrete={data.totalFrete ?? 0}
@@ -192,6 +195,7 @@ export default function RelatorioVendasPage() {
             onExportPdfSecao={exportarPdfSecao}
           />
           <RelatorioVendasDetalhes
+            freteEnabled={freteEnabled}
             vendas={data.vendas}
             onExportPdfSecao={exportarPdfSecao}
           />

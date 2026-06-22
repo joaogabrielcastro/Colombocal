@@ -30,6 +30,7 @@ import {
   type ClienteCadastroDiff,
 } from "@/lib/venda-cliente-sync";
 import SearchableSelect from "@/components/SearchableSelect";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 interface ItemForm {
   produtoId: string;
@@ -64,6 +65,7 @@ export default function NovaVendaPage() {
 
 export function NovaVendaForm({ editId }: { editId?: string }) {
   const router = useRouter();
+  const { freteEnabled } = useTenantFeatures();
   const searchParams = useSearchParams();
   const clienteIdFromQuery = searchParams.get("clienteId");
   const isEdit = !!editId;
@@ -353,6 +355,10 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const fretePorTonVal = parseFloat(fretePorTonelada || "0");
 
   useEffect(() => {
+    if (!freteEnabled) {
+      setFrete("0");
+      return;
+    }
     const tarifaSaco = Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0;
     const tarifaTon = Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0;
     const tarifaKg = tarifaTon / 1000;
@@ -366,7 +372,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       return acc;
     }, 0);
     setFrete(totalFrete.toFixed(2));
-  }, [itens, fretePorSacoVal, fretePorTonVal]);
+  }, [itens, fretePorSacoVal, fretePorTonVal, freteEnabled]);
 
   const salvarVenda = async (atualizarCliente?: ClienteCadastroDiff | null) => {
     const itensValidos = itens.filter(
@@ -424,14 +430,23 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     }
 
     setErro("");
-    const diff = buildClienteCadastroDiff({
-      itens: itensValidos,
-      fretePorSaco,
-      fretePorTonelada,
-      freteRefSaco,
-      freteRefTonelada,
-      clienteId,
-    });
+    const diff = freteEnabled
+      ? buildClienteCadastroDiff({
+          itens: itensValidos,
+          fretePorSaco,
+          fretePorTonelada,
+          freteRefSaco,
+          freteRefTonelada,
+          clienteId,
+        })
+      : buildClienteCadastroDiff({
+          itens: itensValidos,
+          fretePorSaco: "",
+          fretePorTonelada: "",
+          freteRefSaco: "",
+          freteRefTonelada: "",
+          clienteId,
+        });
 
     if (diff) {
       setSyncDialogDiff(diff);
@@ -571,6 +586,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                 className="input-field"
               />
             </div>
+            {freteEnabled ? (
+              <>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Frete (R$) — cobrado à parte
@@ -640,6 +657,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                 />
               )}
             </div>
+              </>
+            ) : null}
             <div className="xl:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Observações
@@ -768,6 +787,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                   {formatMoney(subtotal)}
                 </span>
               </div>
+              {freteEnabled ? (
+                <>
               <div className="flex justify-between text-sm text-gray-500">
                 <span>Frete (cobrado à parte):</span>
                 <span className="font-medium">{formatMoney(freteVal)}</span>
@@ -777,6 +798,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                   Frete pago{freteReciboData ? ` em ${new Date(freteReciboData).toLocaleDateString("pt-BR")}` : ""}
                 </div>
               )}
+                </>
+              ) : null}
             </div>
           </div>
         </div>

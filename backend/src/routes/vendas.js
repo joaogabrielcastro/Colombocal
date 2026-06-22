@@ -18,6 +18,7 @@ const {
   calcularComissaoParaVenda,
   loadComissaoMapPorCliente,
 } = require("../services/comissaoCadastro");
+const { requestAllowsFrete } = require("../utils/tenantRequest");
 const {
   parsePagination,
   setPaginationHeaders,
@@ -265,6 +266,9 @@ function dataFreteReciboParaPrisma(v) {
 // PATCH /api/vendas/:id — frete / recibo (sincroniza com primeiro FreteMovimento)
 router.patch("/:id", async (req, res) => {
   try {
+    if (!(await requestAllowsFrete(req))) {
+      return res.status(403).json({ error: "Frete não disponível para esta organização" });
+    }
     const id = parseIntField(req.params.id, "id", { min: 1 });
     const b = parseBody(vendaFretePatchSchema, req.body);
     const tenantId = req.tenantId;
@@ -392,6 +396,7 @@ router.post("/", async (req, res) => {
     const fretePorTonNum =
       parseNumberField(fretePorTonelada, "fretePorTonelada", { required: false, min: 0 }) ?? null;
     const dataVendaDate = parseDateField(dataVenda, "dataVenda", { required: false });
+    const freteEnabled = await requestAllowsFrete(req);
     const itensValidos = ensureArray(itens, "itens", { minLength: 1 }).map((item) => ({
       produtoId: parseIntField(item?.produtoId, "item.produtoId", { min: 1 }),
       quantidade: parseNumberField(item?.quantidade, "item.quantidade", { min: 0.001 }),
@@ -453,20 +458,25 @@ router.post("/", async (req, res) => {
         comissaoPorProdutoMap: comissaoMap,
       });
       const dataEfetivaVenda = dataVendaDate || new Date();
-      const fretePorSacoAplicado =
-        fretePorSacoNum != null
+      const fretePorSacoAplicado = freteEnabled
+        ? fretePorSacoNum != null
           ? fretePorSacoNum
-          : parseFloat(String(cliente.fretePadraoSaco ?? cliente.fretePadrao ?? 0));
-      const fretePorTonAplicado =
-        fretePorTonNum != null
+          : parseFloat(String(cliente.fretePadraoSaco ?? cliente.fretePadrao ?? 0))
+        : 0;
+      const fretePorTonAplicado = freteEnabled
+        ? fretePorTonNum != null
           ? fretePorTonNum
-          : parseFloat(String(cliente.fretePadraoTonelada ?? 0));
-      const freteFinal = calcularFreteAutomatico(
-        itensValidos,
-        produtosPorId,
-        fretePorSacoAplicado,
-        fretePorTonAplicado,
-      );
+          : parseFloat(String(cliente.fretePadraoTonelada ?? 0))
+        : 0;
+      const freteFinal = freteEnabled
+        ? calcularFreteAutomatico(
+            itensValidos,
+            produtosPorId,
+            fretePorSacoAplicado,
+            fretePorTonAplicado,
+          )
+        : 0;
+      const freteReciboAplicado = freteEnabled && !!freteRecibo;
 
       const ultimaNum = await tx.venda.findFirst({
         where: { tenantId },
@@ -485,8 +495,8 @@ router.post("/", async (req, res) => {
           frete: freteFinal,
           freteTarifaSaco: fretePorSacoAplicado,
           freteTarifaTonelada: fretePorTonAplicado,
-          freteRecibo: !!freteRecibo,
-          freteReciboNum: freteReciboNum || null,
+          freteRecibo: freteReciboAplicado,
+          freteReciboNum: freteReciboAplicado ? freteReciboNum || null : null,
           comissaoPercentualAplicado,
           comissaoValor,
           valorTotal,
@@ -530,8 +540,8 @@ router.post("/", async (req, res) => {
             vendaId: novaVenda.id,
             clienteId: clienteIdNum,
             valor: freteFinal,
-            reciboEmitido: !!freteRecibo,
-            reciboNumero: freteReciboNum || null,
+            reciboEmitido: freteReciboAplicado,
+            reciboNumero: freteReciboAplicado ? freteReciboNum || null : null,
             reciboData: rd,
             data: dataEfetivaVenda,
             observacao: `Frete da venda #${numeroVenda}`,
@@ -572,6 +582,10 @@ router.post("/", async (req, res) => {
 
       const atualizarCliente = parseAtualizarCliente(req.body);
       if (atualizarCliente) {
+        if (!freteEnabled) {
+          delete atualizarCliente.fretePadraoSaco;
+          delete atualizarCliente.fretePadraoTonelada;
+        }
         await syncClienteFromVenda(tx, {
           tenantId: req.tenantId,
           clienteId: clienteIdNum,
@@ -680,6 +694,8 @@ router.put("/:id", async (req, res) => {
       itens: existente.itens.length,
     };
 
+    const freteEnabled = await requestAllowsFrete(req);
+
     await prisma.$transaction(async (tx) => {
       const cliente = await tx.cliente.findFirst({
         where: { id: clienteIdNum, tenantId },
@@ -711,27 +727,32 @@ router.put("/:id", async (req, res) => {
       });
       const dataEfetivaVenda = dataVendaDate || existente.dataVenda;
 
-      const fretePorSacoAplicado =
-        fretePorSacoNum != null
+      const fretePorSacoAplicado = freteEnabled
+        ? fretePorSacoNum != null
           ? fretePorSacoNum
-          : parseFloat(String(cliente.fretePadraoSaco ?? cliente.fretePadrao ?? 0));
-      const fretePorTonAplicado =
-        fretePorTonNum != null
+          : parseFloat(String(cliente.fretePadraoSaco ?? cliente.fretePadrao ?? 0))
+        : 0;
+      const fretePorTonAplicado = freteEnabled
+        ? fretePorTonNum != null
           ? fretePorTonNum
-          : parseFloat(String(cliente.fretePadraoTonelada ?? 0));
-      const freteFinal = calcularFreteAutomatico(
-        itensValidos,
-        produtosPorId,
-        fretePorSacoAplicado,
-        fretePorTonAplicado,
-      );
-
-      const freteRecibo =
+          : parseFloat(String(cliente.fretePadraoTonelada ?? 0))
+        : 0;
+      const freteFinal = freteEnabled
+        ? calcularFreteAutomatico(
+            itensValidos,
+            produtosPorId,
+            fretePorSacoAplicado,
+            fretePorTonAplicado,
+          )
+        : 0;
+      const freteReciboBody =
         body.freteRecibo !== undefined ? !!body.freteRecibo : existente.freteRecibo;
-      const freteReciboNum =
-        body.freteReciboNum !== undefined
+      const freteReciboAplicado = freteEnabled && freteReciboBody;
+      const freteReciboNum = freteEnabled
+        ? body.freteReciboNum !== undefined
           ? body.freteReciboNum || null
-          : existente.freteReciboNum;
+          : existente.freteReciboNum
+        : null;
 
       await tx.itemVenda.deleteMany({ where: { vendaId: id } });
       await tx.movimentacaoEstoque.deleteMany({
@@ -747,7 +768,7 @@ router.put("/:id", async (req, res) => {
           frete: freteFinal,
           freteTarifaSaco: fretePorSacoAplicado,
           freteTarifaTonelada: fretePorTonAplicado,
-          freteRecibo,
+          freteRecibo: freteReciboAplicado,
           freteReciboNum,
           comissaoPercentualAplicado,
           comissaoValor,
@@ -816,7 +837,7 @@ router.put("/:id", async (req, res) => {
         const fmData = {
           clienteId: clienteIdNum,
           valor: freteFinal,
-          reciboEmitido: freteRecibo,
+          reciboEmitido: freteReciboAplicado,
           reciboNumero: freteReciboNum,
           data: dataEfetivaVenda,
         };
@@ -863,6 +884,10 @@ router.put("/:id", async (req, res) => {
 
       const atualizarCliente = parseAtualizarCliente(req.body);
       if (atualizarCliente) {
+        if (!freteEnabled) {
+          delete atualizarCliente.fretePadraoSaco;
+          delete atualizarCliente.fretePadraoTonelada;
+        }
         await syncClienteFromVenda(tx, {
           tenantId: req.tenantId,
           clienteId: clienteIdNum,

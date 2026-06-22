@@ -6,6 +6,7 @@ import { ArrowLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import api from '@/lib/api';
 import type { Vendedor } from '@/lib/utils';
 import SearchableSelect from '@/components/SearchableSelect';
+import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 
 interface CnpjData {
   cnpj: string;
@@ -37,7 +38,7 @@ const initialForm = {
 
 export default function NovoClientePage() {
   const router = useRouter();
-  const [permiteCpf, setPermiteCpf] = useState(false);
+  const { clienteCpfEnabled: permiteCpf, freteEnabled } = useTenantFeatures();
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>('PJ');
   const [form, setForm] = useState(initialForm);
   const [cnpjBusca, setCnpjBusca] = useState('');
@@ -46,15 +47,10 @@ export default function NovoClientePage() {
   const [erro, setErro] = useState('');
 
   useEffect(() => {
-    api
-      .get<{ features?: { clienteCpf?: boolean } }>('/auth/me')
-      .then((r) => {
-        const cpf = !!r.features?.clienteCpf;
-        setPermiteCpf(cpf);
-        if (cpf) setTipoPessoa('PF');
-      })
-      .catch(() => setPermiteCpf(false));
-  }, []);
+    if (permiteCpf) setTipoPessoa('PF');
+  }, [permiteCpf]);
+
+  const isPf = permiteCpf && tipoPessoa === 'PF';
 
   const loadVendedorOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({ take: '80' });
@@ -112,8 +108,12 @@ export default function NovoClientePage() {
         estado: form.estado.trim() || null,
         endereco: form.endereco.trim() || null,
         observacoes: form.observacoes.trim() || null,
-        fretePadraoSaco: parseFloat(form.fretePadraoSaco || '0'),
-        fretePadraoTonelada: parseFloat(form.fretePadraoTonelada || '0'),
+        ...(freteEnabled
+          ? {
+              fretePadraoSaco: parseFloat(form.fretePadraoSaco || '0'),
+              fretePadraoTonelada: parseFloat(form.fretePadraoTonelada || '0'),
+            }
+          : {}),
         vendedorId: form.vendedorId ? parseInt(form.vendedorId, 10) : undefined,
         comissaoFixaPercentual:
           form.comissaoFixaPercentual !== ''
@@ -143,8 +143,6 @@ export default function NovoClientePage() {
       >,
     ) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
-
-  const isPf = tipoPessoa === 'PF';
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -268,6 +266,8 @@ export default function NovoClientePage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label>
             <input value={form.endereco} onChange={set('endereco')} className="input-field" />
           </div>
+          {freteEnabled ? (
+          <>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Frete padrão por saco (R$)</label>
             <input
@@ -292,6 +292,8 @@ export default function NovoClientePage() {
               placeholder="0,00"
             />
           </div>
+          </>
+          ) : null}
           <div>
             <SearchableSelect
               label="Vendedor do cliente"

@@ -11,11 +11,12 @@ import type { RelatorioVendasPdfSecao } from "../services/exports";
 import { RelatorioPdfSecaoButton } from "./RelatorioPdfSecaoButton";
 
 type Props = {
+  freteEnabled?: boolean;
   vendas: Venda[];
   onExportPdfSecao: (secao: RelatorioVendasPdfSecao) => void;
 };
 
-export function RelatorioVendasDetalhes({ vendas, onExportPdfSecao }: Props) {
+export function RelatorioVendasDetalhes({ freteEnabled = true, vendas, onExportPdfSecao }: Props) {
   return (
     <div className="card overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
@@ -30,8 +31,12 @@ export function RelatorioVendasDetalhes({ vendas, onExportPdfSecao }: Props) {
               <th className="table-header">Data</th>
               <th className="table-header">Cliente</th>
               <th className="table-header">Vendedor</th>
+              {freteEnabled ? (
+                <>
               <th className="table-header text-right">Frete</th>
               <th className="table-header">Frete pago</th>
+                </>
+              ) : null}
               <th className="table-header text-right">Total</th>
             </tr>
           </thead>
@@ -44,10 +49,14 @@ export function RelatorioVendasDetalhes({ vendas, onExportPdfSecao }: Props) {
                   {v.cliente.nomeFantasia || v.cliente.razaoSocial}
                 </td>
                 <td className="table-cell">{v.vendedor.nome}</td>
+                {freteEnabled ? (
+                  <>
                 <td className="table-cell text-right">{formatMoney(v.frete)}</td>
                 <td className="table-cell text-xs text-gray-600 max-w-[11rem]">
                   {formatFreteReciboLinha(v)}
                 </td>
+                  </>
+                ) : null}
                 <td className="table-cell text-right font-semibold">
                   {formatMoney(v.valorTotal)}
                 </td>

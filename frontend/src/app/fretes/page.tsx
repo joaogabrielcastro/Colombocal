@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
+import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 
 type FreteListRow = FreteMovimento & {
   cliente: {
@@ -239,8 +240,10 @@ function FretesContent() {
 
 export default function FretesPage() {
   return (
-    <Suspense fallback={<ListPageSkeleton tableRows={10} showFilters />}>
-      <FretesContent />
-    </Suspense>
+    <FreteFeatureGuard>
+      <Suspense fallback={<ListPageSkeleton tableRows={10} showFilters />}>
+        <FretesContent />
+      </Suspense>
+    </FreteFeatureGuard>
   );
 }
