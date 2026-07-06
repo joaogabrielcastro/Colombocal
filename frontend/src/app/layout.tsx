@@ -20,10 +20,10 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: BRAND.name,
   },
-  icons: {
-    icon: [{ url: '/brand/icon-192.png', sizes: '192x192', type: 'image/png' }],
-    apple: [{ url: '/brand/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-  },
+    icons: {
+      icon: [{ url: "/brand/emblem.svg", type: "image/svg+xml" }],
+      apple: [{ url: "/brand/emblem.svg", type: "image/svg+xml" }],
+    },
 };
 
 export const viewport: Viewport = {

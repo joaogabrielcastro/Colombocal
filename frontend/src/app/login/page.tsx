@@ -37,10 +37,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md card p-8 shadow-lg">
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <BrandLogo variant="full" priority className="max-h-24" />
-          </div>
-          <p className="text-sm text-gray-500 mt-1">Entre com seu e-mail e senha</p>
+          <BrandLogo variant="full" className="mb-1" />
+          <p className="text-sm text-gray-500 mt-4">Entre com seu e-mail e senha</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

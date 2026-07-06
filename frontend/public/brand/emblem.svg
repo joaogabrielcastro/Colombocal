@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Colombocal">
+  <path d="M12 48c0-22 14-38 32-42" fill="none" stroke="#004071" stroke-width="7" stroke-linecap="round"/>
+  <path d="M84 48c0 22-14 38-32 42" fill="none" stroke="#004071" stroke-width="7" stroke-linecap="round"/>
+  <ellipse cx="48" cy="50" rx="26" ry="24" fill="#CDEBFA"/>
+  <path d="M26 58c6 3 12 4 22 4s16-1 22-4" fill="none" stroke="#7CB9E8" stroke-width="2" stroke-linecap="round" opacity=".55"/>
+  <path d="M30 56 66 56 62 62 34 62Z" fill="none" stroke="#C1272D" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M40 56V34M48 56V28M56 56V34" stroke="#C1272D" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M40 34 48 28 56 34 56 50 40 50Z" fill="none" stroke="#C1272D" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M40 38 48 32 48 46 40 46Z" fill="none" stroke="#C1272D" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M48 32 56 38 56 46 48 46Z" fill="none" stroke="#C1272D" stroke-width="1.6" stroke-linejoin="round"/>
+  <text x="43.5" y="43" fill="#C1272D" font-size="9" font-family="Georgia, serif" font-weight="700">C</text>
+  <text x="51.5" y="41" fill="#C1272D" font-size="9" font-family="Georgia, serif" font-weight="700">C</text>
+</svg>

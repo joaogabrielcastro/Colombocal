@@ -1,39 +1,43 @@
-import Image from "next/image";
+import { BrandMark, BrandWordmark } from "@/components/brand/BrandMark";
 import { BRAND } from "@/lib/brand";
 
 type BrandLogoProps = {
-  /** Logo completa (emblema + texto) ou só emblema compacto */
-  variant?: "full" | "compact";
+  /**
+   * full — emblema + nome (login, telas públicas)
+   * compact — só emblema (sidebar)
+   * sidebar — emblema + nome em fundo escuro
+   */
+  variant?: "full" | "compact" | "sidebar";
   className?: string;
-  priority?: boolean;
 };
 
 export default function BrandLogo({
   variant = "full",
   className = "",
-  priority = false,
 }: BrandLogoProps) {
-  if (variant === "full") {
+  if (variant === "compact") {
+    return <BrandMark className={`h-10 w-10 ${className}`} />;
+  }
+
+  if (variant === "sidebar") {
     return (
-      <Image
-        src={BRAND.logo}
-        alt={BRAND.name}
-        width={220}
-        height={88}
-        priority={priority}
-        className={`h-auto w-auto max-h-20 object-contain ${className}`}
-      />
+      <div className={`flex items-center gap-3 min-w-0 ${className}`}>
+        <BrandMark className="h-11 w-11" />
+        <div className="min-w-0">
+          <BrandWordmark light className="text-[15px] block truncate" />
+          <p className="text-gray-400 text-xs truncate mt-0.5">{BRAND.tagline}</p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Image
-      src={BRAND.logo}
-      alt={BRAND.name}
-      width={40}
-      height={40}
-      priority={priority}
-      className={`h-10 w-10 rounded-lg object-cover object-top bg-white ${className}`}
-    />
+    <div
+      className={`flex flex-col items-center gap-3 ${className}`}
+      aria-label={BRAND.name}
+    >
+      <BrandMark className="h-[4.5rem] w-[4.5rem] sm:h-20 sm:w-20" />
+      <BrandWordmark className="text-[1.65rem] sm:text-3xl" />
+    </div>
   );
 }

@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
+import BrandLogo from '@/components/BrandLogo';
 import { getAuthToken } from '@/lib/auth-token';
 
 /**
@@ -54,7 +55,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   if (!allowBody) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-sm gap-4">
-        <img src="/brand/logo.png" alt="Colombocal" className="h-16 w-auto object-contain opacity-80" />
+        <BrandLogo variant="full" className="opacity-90 scale-90" />
         A carregar…
       </div>
     );

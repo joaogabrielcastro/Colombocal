@@ -65,10 +65,8 @@ export default function SetupPage() {
     <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
       <div className="w-full max-w-md card p-8 shadow-lg">
         <div className="text-center mb-6">
-          <div className="flex justify-center mb-4">
-            <BrandLogo variant="full" priority className="max-h-20" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Primeiro acesso</h1>
+          <BrandLogo variant="full" className="mb-2" />
+          <h1 className="text-2xl font-bold text-gray-900 mt-4">Primeiro acesso</h1>
           <p className="text-sm text-gray-500 mt-1">
             Crie o administrador sem usar o terminal (apenas enquanto não existir nenhum usuário).
           </p>
