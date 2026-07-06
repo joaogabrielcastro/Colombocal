@@ -21,6 +21,8 @@ import {
 } from '@/lib/navigation';
 import { clearAuthToken, getAuthToken } from '@/lib/auth-token';
 import api from '@/lib/api';
+import BrandLogo from '@/components/BrandLogo';
+import { BRAND } from '@/lib/brand';
 
 type MeUser = {
   role: string;
@@ -79,15 +81,13 @@ export default function Sidebar() {
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col flex-shrink-0 h-screen">
       <div className="px-5 py-5 border-b border-gray-700">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">
-            C
+        <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+          <BrandLogo variant="compact" />
+          <div className="min-w-0">
+            <p className="font-bold text-white text-sm leading-tight truncate">{BRAND.name}</p>
+            <p className="text-gray-400 text-xs truncate">{BRAND.tagline}</p>
           </div>
-          <div>
-            <p className="font-bold text-white text-sm leading-tight">Colombocal</p>
-            <p className="text-gray-400 text-xs">Gestão Comercial</p>
-          </div>
-        </div>
+        </Link>
       </div>
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         {mainVisible.map(({ href, label, icon: Icon }) => (

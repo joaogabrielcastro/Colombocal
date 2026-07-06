@@ -6,6 +6,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
 import { reportApiError } from '@/lib/report-api-error';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,10 +37,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md card p-8 shadow-lg">
         <div className="text-center mb-8">
-          <div className="inline-flex w-12 h-12 bg-blue-600 rounded-xl items-center justify-center text-white font-bold text-lg mb-3">
-            C
+          <div className="flex justify-center mb-4">
+            <BrandLogo variant="full" priority className="max-h-24" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Colombocal</h1>
           <p className="text-sm text-gray-500 mt-1">Entre com seu e-mail e senha</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">

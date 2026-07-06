@@ -53,7 +53,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
   if (!allowBody) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500 text-sm">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-sm gap-4">
+        <img src="/brand/logo.png" alt="Colombocal" className="h-16 w-auto object-contain opacity-80" />
         A carregar…
       </div>
     );

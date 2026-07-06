@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
 import { reportApiError } from '@/lib/report-api-error';
+import BrandLogo from '@/components/BrandLogo';
 
 type SetupStatus = {
   setupEnabled: boolean;
@@ -72,8 +73,8 @@ export default function NovoTenantPage() {
     <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
       <div className="w-full max-w-md card p-8 shadow-lg">
         <div className="text-center mb-6">
-          <div className="inline-flex w-12 h-12 bg-blue-600 rounded-xl items-center justify-center text-white font-bold text-lg mb-3">
-            C
+          <div className="flex justify-center mb-4">
+            <BrandLogo variant="full" priority className="max-h-20" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Nova organização</h1>
           <p className="text-sm text-gray-500 mt-1">
