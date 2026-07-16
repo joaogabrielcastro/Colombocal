@@ -62,9 +62,11 @@ function calcularComissaoParaVenda({ itens, cliente, vendedor, comissaoPorProdut
   };
 }
 
-async function loadComissaoMapPorCliente(tx, clienteId) {
+async function loadComissaoMapPorCliente(tx, clienteId, tenantId) {
+  const where = { clienteId };
+  if (tenantId != null) where.tenantId = tenantId;
   const rows = await tx.comissaoClienteProduto.findMany({
-    where: { clienteId },
+    where,
     select: { produtoId: true, comissaoPercentual: true },
   });
   return new Map(rows.map((r) => [r.produtoId, r.comissaoPercentual]));

@@ -5,7 +5,11 @@
   "main": "src/index.js",
   "scripts": {
     "postinstall": "prisma generate",
-    "test": "node --test test/**/*.test.js",
+    "test": "node --test --test-concurrency=1 test/**/*.test.js",
+    "test:coverage": "c8 node --test --test-concurrency=1 test/**/*.test.js",
+    "test:coverage:check": "c8 --check-coverage node --test --test-concurrency=1 test/**/*.test.js",
+    "test:db:up": "docker run -d --name colombocal-test-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=colombocal_dev -e POSTGRES_DB=colombocal_test -p 5433:5432 postgres:15-alpine",
+    "test:db:migrate": "node scripts/test-db-migrate.js",
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "db:migrate": "prisma migrate dev",
@@ -33,16 +37,20 @@
     "@prisma/client": "^5.10.0",
     "axios": "^1.6.7",
     "bcrypt": "^5.1.1",
-    "jsonwebtoken": "^9.0.2",
+    "bullmq": "^5.80.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.4",
     "express": "^4.18.3",
     "express-rate-limit": "^8.3.1",
     "helmet": "^8.1.0",
+    "ioredis": "^5.11.1",
+    "jsonwebtoken": "^9.0.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "c8": "^11.0.0",
     "nodemon": "^3.1.0",
-    "prisma": "^5.10.0"
+    "prisma": "^5.10.0",
+    "supertest": "^7.2.2"
   }
 }

@@ -4,19 +4,22 @@ const { prisma } = require("../lib/prisma");
 const { handleRouteError, parsePagination, setPaginationHeaders } = require("../utils/api");
 const { getConfig } = require("../services/configSistema");
 const {
-  createExportJob,
+  enqueueExportJob,
   getExportJob,
   exportJobBelongsToTenant,
-  markRunning,
-  markCompleted,
-  markFailed,
 } = require("../services/exportJobs");
+const { listarClientesDevedores } = require("../services/financeiroDevedores");
 const { requireNavKey } = require("../middleware/navPermission");
 const {
   comissaoPorEmissao,
   comissaoPorCaixa,
 } = require("../services/comissao");
+const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { getDateRange } = require("../utils/dateRangeQuery");
+
+/** Limite de linhas de venda no relatório de comissões (UI + memória). */
+const COMISSOES_DEFAULT_TAKE = 500;
+const COMISSOES_MAX_TAKE = 2000;
 
 const relatorioNavByPrefix = [
   ["/vendas", "rel_vendas"],
@@ -33,60 +36,6 @@ router.use((req, res, next) => {
   if (!match) return next();
   return requireNavKey(match[1])(req, res, next);
 });
-
-function buildTitulosWhere(query, tenantId) {
-  const {
-    clienteId,
-    status,
-    dataVencInicio,
-    dataVencFim,
-    somenteEmAberto,
-    vendaId,
-  } = query;
-
-  const where = { tenantId };
-  if (clienteId) where.clienteId = parseInt(clienteId, 10);
-  if (vendaId != null && String(vendaId).trim() !== "") {
-    const vid = parseInt(String(vendaId).replace(/^#/, "").trim(), 10);
-    if (!Number.isNaN(vid) && vid > 0) where.vendaId = vid;
-  }
-  if (status) where.status = status;
-  if (somenteEmAberto === "true") where.status = { in: ["aberto", "parcial"] };
-  if (dataVencInicio || dataVencFim) {
-    where.vencimento = getDateRange(dataVencInicio, dataVencFim);
-  }
-  return where;
-}
-
-function buildVendasWhere(query, tenantId) {
-  const { dataInicio, dataFim, clienteId, vendedorId, produtoId, busca } = query;
-  const where = { tenantId };
-  if (clienteId) where.clienteId = parseInt(clienteId, 10);
-  if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
-  if (dataInicio || dataFim) where.dataVenda = getDateRange(dataInicio, dataFim);
-  if (produtoId) {
-    where.itens = { some: { produtoId: parseInt(produtoId, 10) } };
-  }
-  if (busca && String(busca).trim()) {
-    const term = String(busca).trim();
-    const ordemRaw = term.replace(/^#/, "").trim();
-    const ordemNum = parseInt(ordemRaw, 10);
-    const orConditions = [
-      { cliente: { nomeFantasia: { contains: term, mode: "insensitive" } } },
-      { cliente: { razaoSocial: { contains: term, mode: "insensitive" } } },
-      { vendedor: { nome: { contains: term, mode: "insensitive" } } },
-      { observacoes: { contains: term, mode: "insensitive" } },
-    ];
-    if (!Number.isNaN(ordemNum) && ordemNum > 0) {
-      orConditions.push({ numeroVenda: ordemNum });
-      if (String(ordemNum) === ordemRaw) {
-        orConditions.push({ id: ordemNum });
-      }
-    }
-    where.OR = orConditions;
-  }
-  return where;
-}
 
 // GET /api/relatorios/vendas
 router.get("/vendas", async (req, res) => {
@@ -253,52 +202,8 @@ router.post("/vendas/export-async", async (req, res) => {
       clienteId: req.body?.clienteId ? String(req.body.clienteId) : "",
       produtoId: req.body?.produtoId ? String(req.body.produtoId) : "",
     };
-    const jobId = createExportJob("vendas_csv", req.tenantId, payload);
+    const jobId = await enqueueExportJob("vendas_csv", req.tenantId, payload);
     res.status(202).json({ jobId, status: "pending" });
-
-    setImmediate(async () => {
-      try {
-        markRunning(jobId);
-        const where = buildVendasWhere(payload, parseInt(payload.tenantId, 10));
-        const vendas = await prisma.venda.findMany({
-          where,
-          include: {
-            cliente: { select: { nomeFantasia: true, razaoSocial: true } },
-            vendedor: { select: { nome: true } },
-          },
-          orderBy: { dataVenda: "desc" },
-          take: 50000,
-        });
-
-        const header = "Ordem,Data,Cliente,Vendedor,Valor Total,Frete\n";
-        const rows = vendas
-          .map((v) => {
-            const ordem = v.numeroVenda != null && v.numeroVenda > 0 ? v.numeroVenda : v.id;
-            return [
-              ordem,
-              new Date(v.dataVenda).toLocaleDateString("pt-BR"),
-              String(v.cliente.nomeFantasia || v.cliente.razaoSocial || "").replaceAll('"', '""'),
-              String(v.vendedor.nome || "").replaceAll('"', '""'),
-              parseFloat(String(v.valorTotal || 0)).toFixed(2),
-              parseFloat(String(v.frete || 0)).toFixed(2),
-            ]
-              .map((x) => `"${x}"`)
-              .join(",");
-          })
-          .join("\n");
-
-        const periodoIni = payload.dataInicio || "inicio";
-        const periodoFim = payload.dataFim || "fim";
-        markCompleted(jobId, {
-          mimeType: "text/csv;charset=utf-8;",
-          filename: `relatorio-vendas-${periodoIni}-${periodoFim}.csv`,
-          content: "\uFEFF" + header + rows,
-          totalLinhas: vendas.length,
-        });
-      } catch (error) {
-        markFailed(jobId, error);
-      }
-    });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -306,9 +211,14 @@ router.post("/vendas/export-async", async (req, res) => {
 
 // GET /api/relatorios/comissoes
 // modo=emissao | caixa — emissao: comissão na venda; caixa: proporcional ao recebido na ordem
+// Paginação por vendas do período (take/skip) para limitar memória.
 router.get("/comissoes", async (req, res) => {
   try {
     const { dataInicio, dataFim, vendedorId, modo: modoQ } = req.query;
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: COMISSOES_DEFAULT_TAKE,
+      maxTake: COMISSOES_MAX_TAKE,
+    });
     const stored = await getConfig(prisma, req.tenantId, "COMISSAO_MODO");
     const modo =
       modoQ === "caixa" || modoQ === "emissao"
@@ -328,22 +238,28 @@ router.get("/comissoes", async (req, res) => {
     if (dataInicio || dataFim) {
       vendaWhere.dataVenda = getDateRange(dataInicio, dataFim);
     }
-    const vendas = await prisma.venda.findMany({
-      where: vendaWhere,
-      select: {
-        id: true,
-        numeroVenda: true,
-        vendedorId: true,
-        valorTotal: true,
-        comissaoValor: true,
-        comissaoPercentualAplicado: true,
-        dataVenda: true,
-        cliente: true,
-        itens: { include: { produto: true } },
-        comissaoAjuste: { select: { ajusteValor: true, motivo: true } },
-      },
-      orderBy: { dataVenda: "desc" },
-    });
+
+    const [totalVendasPeriodo, vendas] = await Promise.all([
+      prisma.venda.count({ where: vendaWhere }),
+      prisma.venda.findMany({
+        where: vendaWhere,
+        select: {
+          id: true,
+          numeroVenda: true,
+          vendedorId: true,
+          valorTotal: true,
+          comissaoValor: true,
+          comissaoPercentualAplicado: true,
+          dataVenda: true,
+          cliente: true,
+          itens: { include: { produto: true } },
+          comissaoAjuste: { select: { ajusteValor: true, motivo: true } },
+        },
+        orderBy: [{ dataVenda: "desc" }, { id: "desc" }],
+        take,
+        skip,
+      }),
+    ]);
 
     const vendaIds = vendas.map((x) => x.id);
     const pagamentos =
@@ -428,7 +344,15 @@ router.get("/comissoes", async (req, res) => {
       };
     });
 
-    res.json({ modo, resultado });
+    setPaginationHeaders(res, { total: totalVendasPeriodo, take, skip });
+    res.json({
+      modo,
+      resultado,
+      totalVendasPeriodo,
+      truncated: totalVendasPeriodo > take + skip,
+      take,
+      skip,
+    });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -485,15 +409,6 @@ router.post("/comissoes/ajustes-lote", async (req, res) => {
   }
 });
 
-function sumDecimal(v) {
-  if (v == null || v === "") return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const s = String(v).trim();
-  if (!s) return 0;
-  const n = parseFloat(s.replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-
 // GET /api/relatorios/financeiro
 router.get("/financeiro", async (req, res) => {
   try {
@@ -502,42 +417,17 @@ router.get("/financeiro", async (req, res) => {
       maxTake: 500,
     });
 
-    const [clientes, titulosAgg] = await Promise.all([
-      prisma.cliente.findMany({ where: { tenantId: req.tenantId, ativo: true } }),
-      prisma.tituloReceber.groupBy({
-        by: ["clienteId"],
-        where: { tenantId: req.tenantId },
-        _sum: { valorOriginal: true, valorPago: true },
-      }),
-    ]);
-
-    const aggMap = new Map(
-      titulosAgg.map((a) => [
-        a.clienteId,
-        {
-          debito: parseFloat(a._sum.valorOriginal || 0),
-          credito: parseFloat(a._sum.valorPago || 0),
-        },
-      ]),
-    );
-
-    const contasClientes = clientes.map((c) => {
-      const agg = aggMap.get(c.id) || { debito: 0, credito: 0 };
-      const saldo = Math.max(0, agg.debito - agg.credito);
-      return { cliente: c, debito: agg.debito, credito: agg.credito, saldo };
-    });
-
-    const clientesDevedores = contasClientes
-      .filter((c) => c.saldo > 0)
-      .sort((a, b) => b.saldo - a.saldo);
-    const totalEmAberto = clientesDevedores.reduce((acc, c) => acc + c.saldo, 0);
-    const clientesDevedoresCount = clientesDevedores.length;
-    const clientesDevedoresPage = clientesDevedores.slice(skip, skip + take);
+    const {
+      clientesDevedores: clientesDevedoresPage,
+      clientesDevedoresCount,
+      totalEmAberto,
+    } = await listarClientesDevedores(req.tenantId, { take, skip });
 
     setPaginationHeaders(res, { total: clientesDevedoresCount, take, skip });
 
     res.json({
-      contasClientes,
+      // compat: antes vinha a lista completa; FE usa só a página de devedores
+      contasClientes: clientesDevedoresPage,
       clientesDevedores: clientesDevedoresPage,
       clientesDevedoresCount,
       totalEmAberto,
@@ -551,63 +441,10 @@ router.get("/financeiro", async (req, res) => {
 router.post("/financeiro/export-async", async (req, res) => {
   try {
     const tenantSnap = req.tenantId;
-    const jobId = createExportJob("financeiro_csv", tenantSnap, {
+    const jobId = await enqueueExportJob("financeiro_csv", tenantSnap, {
       tenantId: String(tenantSnap),
     });
     res.status(202).json({ jobId, status: "pending" });
-
-    setImmediate(async () => {
-      try {
-        markRunning(jobId);
-        const tenantId = tenantSnap;
-        const [clientes, titulosAgg] = await Promise.all([
-          prisma.cliente.findMany({ where: { tenantId, ativo: true } }),
-          prisma.tituloReceber.groupBy({
-            by: ["clienteId"],
-            where: { tenantId },
-            _sum: { valorOriginal: true, valorPago: true },
-          }),
-        ]);
-
-        const aggMap = new Map(
-          titulosAgg.map((a) => [
-            a.clienteId,
-            {
-              debito: parseFloat(String(a._sum.valorOriginal || 0)),
-              credito: parseFloat(String(a._sum.valorPago || 0)),
-            },
-          ]),
-        );
-
-        const clientesDevedores = clientes
-          .map((c) => {
-            const agg = aggMap.get(c.id) || { debito: 0, credito: 0 };
-            const saldo = Math.max(0, agg.debito - agg.credito);
-            return { cliente: c, debito: agg.debito, credito: agg.credito, saldo };
-          })
-          .filter((c) => c.saldo > 0)
-          .sort((a, b) => b.saldo - a.saldo);
-
-        const totalLinhas = clientesDevedores.length;
-        const csv =
-          "Cliente,Debitos,Pagamentos,Em aberto\n" +
-          clientesDevedores
-            .map(
-              (c) =>
-                `"${String(c.cliente.nomeFantasia || c.cliente.razaoSocial).replaceAll('"', '""')}",${c.debito.toFixed(2)},${c.credito.toFixed(2)},${c.saldo.toFixed(2)}`,
-            )
-            .join("\n");
-
-        markCompleted(jobId, {
-          mimeType: "text/csv;charset=utf-8;",
-          filename: `financeiro-devedores_${new Date().toISOString().slice(0, 10)}.csv`,
-          content: "\uFEFF" + csv,
-          totalLinhas,
-        });
-      } catch (error) {
-        markFailed(jobId, error);
-      }
-    });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -709,53 +546,8 @@ router.post("/titulos/export-async", async (req, res) => {
       somenteEmAberto: raw.somenteEmAberto ? "true" : "false",
     };
 
-    const jobId = createExportJob("titulos_csv", req.tenantId, payload);
+    const jobId = await enqueueExportJob("titulos_csv", req.tenantId, payload);
     res.status(202).json({ jobId, status: "pending" });
-
-    setImmediate(async () => {
-      try {
-        markRunning(jobId);
-        const where = buildTitulosWhere(payload, parseInt(payload.tenantId, 10));
-        const titulos = await prisma.tituloReceber.findMany({
-          where,
-          include: {
-            cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
-            venda: { select: { id: true, numeroVenda: true, dataVenda: true, valorTotal: true } },
-          },
-          orderBy: [{ vencimento: "asc" }, { id: "desc" }],
-        });
-
-        const header =
-          "Título,Cliente,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Status";
-        const body = titulos
-          .map((t) => {
-            const original = parseFloat(String(t.valorOriginal || 0));
-            const pago = parseFloat(String(t.valorPago || 0));
-            const aberto = Math.max(0, original - pago);
-            const cols = [
-              t.numero || `#${t.id}`,
-              t.cliente.nomeFantasia || t.cliente.razaoSocial,
-              t.venda ? `Venda #${t.venda.numeroVenda ?? t.venda.id}` : "-",
-              new Date(t.vencimento).toLocaleDateString("pt-BR"),
-              original.toFixed(2),
-              pago.toFixed(2),
-              aberto.toFixed(2),
-              t.status,
-            ];
-            return cols.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",");
-          })
-          .join("\n");
-
-        markCompleted(jobId, {
-          mimeType: "text/csv;charset=utf-8;",
-          filename: `titulos_${new Date().toISOString().slice(0, 10)}.csv`,
-          content: "\uFEFF" + header + "\n" + body,
-          totalLinhas: titulos.length,
-        });
-      } catch (error) {
-        markFailed(jobId, error);
-      }
-    });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -764,7 +556,7 @@ router.post("/titulos/export-async", async (req, res) => {
 // GET /api/relatorios/exports/:jobId
 router.get("/exports/:jobId", async (req, res) => {
   try {
-    const job = getExportJob(req.params.jobId);
+    const job = await getExportJob(req.params.jobId);
     if (!job || !exportJobBelongsToTenant(job, req.tenantId)) {
       return res.status(404).json({ error: "Job não encontrado" });
     }
@@ -774,6 +566,8 @@ router.get("/exports/:jobId", async (req, res) => {
       status: job.status,
       error: job.error,
       totalLinhas: job.result?.totalLinhas ?? null,
+      truncated: job.result?.truncated ?? false,
+      maxLinhas: job.result?.maxLinhas ?? null,
       downloadUrl:
         job.status === "completed"
           ? `/api/relatorios/exports/${job.id}/download`
@@ -787,7 +581,7 @@ router.get("/exports/:jobId", async (req, res) => {
 // GET /api/relatorios/exports/:jobId/download
 router.get("/exports/:jobId/download", async (req, res) => {
   try {
-    const job = getExportJob(req.params.jobId);
+    const job = await getExportJob(req.params.jobId);
     if (!job || !exportJobBelongsToTenant(job, req.tenantId)) {
       return res.status(404).json({ error: "Job não encontrado" });
     }

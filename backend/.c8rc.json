@@ -1,0 +1,18 @@
+{
+  "all": true,
+  "include": ["src/**/*.js"],
+  "exclude": [
+    "src/index.js",
+    "src/lib/prisma.js",
+    "src/startup/**",
+    "src/shared/http/observability.js",
+    "**/*.test.js",
+    "test/**"
+  ],
+  "reporter": ["text-summary", "text"],
+  "lines": 90,
+  "functions": 90,
+  "branches": 70,
+  "statements": 90,
+  "check-coverage": false
+}

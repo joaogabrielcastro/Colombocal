@@ -35,18 +35,21 @@ router.get("/", async (req, res) => {
     );
 
     const [
-      vendasHoje,
+      aggHoje,
       aggMes,
       titulosAgg,
-      todosClientes,
       chequesEmMaosAgg,
       totalProdutosAtivos,
+      totalClientesAtivos,
+      totalVendas,
+      totalRecebimentos,
       ultimasVendas,
       comissaoModo,
     ] = await Promise.all([
-      prisma.venda.findMany({
+      prisma.venda.aggregate({
         where: { ...tw, dataVenda: { gte: inicioDia, lte: fimDia } },
-        include: { cliente: true },
+        _sum: { valorTotal: true },
+        _count: { id: true },
       }),
       prisma.venda.aggregate({
         where: { ...tw, dataVenda: { gte: inicioMes, lte: fimMes } },
@@ -58,18 +61,19 @@ router.get("/", async (req, res) => {
         where: { ...tw, status: { in: ["aberto", "parcial"] } },
         _sum: { valorOriginal: true, valorPago: true },
       }),
-      prisma.cliente.findMany({
-        where: { ...tw, ativo: true },
-        select: { id: true, razaoSocial: true, nomeFantasia: true, telefone: true },
-      }),
       prisma.cheque.aggregate({
-        where: tw,
+        where: { ...tw, status: "ativo" },
         _sum: { valor: true },
         _count: { id: true },
       }),
       prisma.produto.count({
         where: { ...tw, ativo: true },
       }),
+      prisma.cliente.count({
+        where: { ...tw, ativo: true },
+      }),
+      prisma.venda.count({ where: tw }),
+      prisma.pagamento.count({ where: tw }),
       prisma.venda.findMany({
         where: tw,
         take: 5,
@@ -84,36 +88,47 @@ router.get("/", async (req, res) => {
       getConfig(prisma, tenantId, "COMISSAO_MODO"),
     ]);
 
-    const faturamentoHoje = vendasHoje.reduce(
-      (acc, v) => acc + parseFloat(v.valorTotal),
-      0,
-    );
-    const faturamentoMes = parseFloat(aggMes._sum.valorTotal || 0);
+    const faturamentoHoje = parseFloat(String(aggHoje._sum.valorTotal || 0));
+    const faturamentoMes = parseFloat(String(aggMes._sum.valorTotal || 0));
 
-    const aggMap = new Map(
-      titulosAgg.map((a) => [
-        a.clienteId,
-        {
-          debito: parseFloat(a._sum.valorOriginal || 0),
-          pago: parseFloat(a._sum.valorPago || 0),
-        },
-      ]),
-    );
-
-    const clientesDevendo = [];
-    for (const c of todosClientes) {
-      const agg = aggMap.get(c.id);
-      if (!agg) continue;
-      const aberto = Math.max(0, agg.debito - agg.pago);
-      if (aberto > 0.009)
-        clientesDevendo.push({ ...c, saldoTitulos: -aberto, aberto });
+    const clientesDevendoRows = [];
+    for (const a of titulosAgg) {
+      const debito = parseFloat(String(a._sum.valorOriginal || 0));
+      const pago = parseFloat(String(a._sum.valorPago || 0));
+      const aberto = Math.max(0, debito - pago);
+      if (aberto > 0.009) {
+        clientesDevendoRows.push({ clienteId: a.clienteId, aberto });
+      }
     }
-    clientesDevendo.sort((a, b) => a.saldoTitulos - b.saldoTitulos);
+    clientesDevendoRows.sort((a, b) => b.aberto - a.aberto);
 
-    const totalEmAberto = clientesDevendo.reduce(
-      (acc, c) => acc + c.aberto,
-      0,
-    );
+    const totalEmAberto = clientesDevendoRows.reduce((acc, c) => acc + c.aberto, 0);
+    const topIds = clientesDevendoRows.slice(0, 5).map((c) => c.clienteId);
+    const topClientes =
+      topIds.length === 0
+        ? []
+        : await prisma.cliente.findMany({
+            where: { tenantId, id: { in: topIds }, ativo: true },
+            select: {
+              id: true,
+              razaoSocial: true,
+              nomeFantasia: true,
+            },
+          });
+    const clienteMap = new Map(topClientes.map((c) => [c.id, c]));
+    const topClientesDevendo = topIds
+      .map((id) => {
+        const c = clienteMap.get(id);
+        const row = clientesDevendoRows.find((x) => x.clienteId === id);
+        if (!c || !row) return null;
+        return {
+          id: c.id,
+          nome: (c.nomeFantasia && String(c.nomeFantasia).trim()) || c.razaoSocial,
+          aberto: row.aberto,
+        };
+      })
+      .filter(Boolean);
+
     const totalChequesEmMaos = parseFloat(
       String(chequesEmMaosAgg._sum?.valor ?? 0),
     );
@@ -173,22 +188,24 @@ router.get("/", async (req, res) => {
     });
 
     res.json({
-      vendasHoje: vendasHoje.length,
+      vendasHoje: aggHoje._count.id,
       faturamentoHoje,
       faturamentoMes,
       quantidadeVendasMes: aggMes._count.id,
-      clientesDevendo: clientesDevendo.length,
+      clientesDevendo: clientesDevendoRows.length,
       totalEmAberto,
-      topClientesDevendo: clientesDevendo.slice(0, 5).map((c) => ({
-        id: c.id,
-        nome: (c.nomeFantasia && String(c.nomeFantasia).trim()) || c.razaoSocial,
-        aberto: c.aberto,
-      })),
+      topClientesDevendo,
       chequesRegistrados: chequesEmMaosAgg._count?.id ?? 0,
       totalChequesRegistrados: totalChequesEmMaos,
       totalProdutosAtivos,
       ultimasVendas: ultimasVendasResumo,
       faturamentoPorMes: faturamentoMeses,
+      onboarding: {
+        clientes: totalClientesAtivos,
+        produtos: totalProdutosAtivos,
+        vendas: totalVendas,
+        recebimentos: totalRecebimentos,
+      },
       regras: {
         comissaoModo: comissaoModo === "caixa" ? "caixa" : "emissao",
       },

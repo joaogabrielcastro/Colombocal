@@ -11,6 +11,7 @@ const {
 const { requireTenantUser, requireAdmin } = require("./middleware/auth");
 const { requireNavKey } = require("./middleware/navPermission");
 const { runPrismaMigrateOnStart } = require("./startup/migrateOnStart");
+const { startExportWorker, useRedisQueue } = require("./services/exportJobs");
 
 // Garante uso do engine local no ambiente de desenvolvimento
 process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
@@ -210,6 +211,15 @@ async function startServer() {
     }
     app.listen(PORT, () => {
       console.log(`✅ Servidor Colombocal rodando na porta ${PORT}`);
+      if (useRedisQueue()) {
+        void startExportWorker().catch((err) => {
+          console.error("❌ Falha ao iniciar worker de export:", err.message);
+        });
+      } else {
+        console.log(
+          "ℹ️ Exports CSV em modo memória (defina REDIS_URL + EXPORT_QUEUE_MODE=redis para fila durable).",
+        );
+      }
     });
   } catch (error) {
     console.error("❌ Falha ao validar compatibilidade do banco:", error.message);
@@ -217,31 +227,36 @@ async function startServer() {
   }
 }
 
-startServer();
+// Só inicia o servidor/handlers globais quando executado diretamente
+// (ex.: `node src/index.js`). Ao ser importado por testes, apenas exporta o app.
+if (require.main === module) {
+  startServer();
 
-process.on("unhandledRejection", (reason) => {
-  const err = reason instanceof Error ? reason : new Error(String(reason));
-  console.error(
-    JSON.stringify({
-      level: "error",
-      type: "unhandled_rejection",
-      message: err.message,
-      stack: err.stack,
-    }),
-  );
-  void sendErrorAlert(err, { source: "process_unhandled_rejection" });
-});
+  process.on("unhandledRejection", (reason) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    console.error(
+      JSON.stringify({
+        level: "error",
+        type: "unhandled_rejection",
+        message: err.message,
+        stack: err.stack,
+      }),
+    );
+    void sendErrorAlert(err, { source: "process_unhandled_rejection" });
+  });
 
-process.on("uncaughtException", (error) => {
-  console.error(
-    JSON.stringify({
-      level: "error",
-      type: "uncaught_exception",
-      message: error.message,
-      stack: error.stack,
-    }),
-  );
-  void sendErrorAlert(error, { source: "process_uncaught_exception" });
-});
+  process.on("uncaughtException", (error) => {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        type: "uncaught_exception",
+        message: error.message,
+        stack: error.stack,
+      }),
+    );
+    void sendErrorAlert(error, { source: "process_uncaught_exception" });
+  });
+}
 
 module.exports = app;
+module.exports.startServer = startServer;

@@ -5,6 +5,8 @@ const {
   parseNumberField,
   parseDateField,
   ensureArray,
+  ensureEnum,
+  validationError,
 } = require("../src/utils/validation");
 
 // parseIntField
@@ -64,6 +66,13 @@ test("parseNumberField: retorna null quando não obrigatório e vazio", () => {
   assert.equal(parseNumberField("", "campo", { required: false }), null);
 });
 
+test("parseNumberField: lança 400 quando abaixo do mínimo", () => {
+  assert.throws(
+    () => parseNumberField("-1", "valor", { min: 0 }),
+    (err) => err.statusCode === 400,
+  );
+});
+
 // parseDateField
 test("parseDateField: retorna Date para string válida", () => {
   const d = parseDateField("2024-01-15", "data");
@@ -88,6 +97,30 @@ test("parseDateField: lança 400 quando obrigatório e ausente", () => {
     () => parseDateField("", "data", { required: true }),
     (err) => err.statusCode === 400,
   );
+});
+
+test("parseDateField: aceita data-hora ISO completa", () => {
+  const d = parseDateField("2024-03-10T08:30:00.000Z", "data");
+  assert.ok(d instanceof Date);
+  assert.equal(d.toISOString(), "2024-03-10T08:30:00.000Z");
+});
+
+// ensureEnum
+test("ensureEnum: aceita valor permitido", () => {
+  assert.equal(ensureEnum("a", "campo", ["a", "b"]), "a");
+});
+
+test("ensureEnum: lança 400 para valor não permitido", () => {
+  assert.throws(
+    () => ensureEnum("c", "campo", ["a", "b"]),
+    (err) => err.statusCode === 400,
+  );
+});
+
+test("validationError: cria erro com statusCode 400", () => {
+  const err = validationError("falhou");
+  assert.equal(err.statusCode, 400);
+  assert.equal(err.message, "falhou");
 });
 
 // ensureArray

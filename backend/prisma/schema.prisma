@@ -35,7 +35,7 @@ model Tenant {
 model User {
   id              Int      @id @default(autoincrement())
   tenantId        Int
-  email           String   @unique
+  email           String
   passwordHash    String
   name            String?
   role            String   @default("member")
@@ -45,7 +45,9 @@ model User {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, email])
   @@index([tenantId])
+  @@index([email])
 }
 
 model Cliente {
@@ -108,18 +110,21 @@ model Produto {
 
 model PrecoClienteProduto {
   id        Int     @id @default(autoincrement())
+  tenantId  Int
   clienteId Int
   produtoId Int
   preco     Decimal @db.Decimal(10, 2)
 
-  cliente Cliente @relation(fields: [clienteId], references: [id])
-  produto Produto @relation(fields: [produtoId], references: [id])
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
   @@unique([clienteId, produtoId])
+  @@index([tenantId, clienteId])
 }
 
 model ComissaoClienteProduto {
   id                 Int     @id @default(autoincrement())
+  tenantId           Int
   clienteId          Int
   produtoId          Int
   comissaoPercentual Decimal @db.Decimal(5, 2)
@@ -128,6 +133,7 @@ model ComissaoClienteProduto {
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
   @@unique([clienteId, produtoId])
+  @@index([tenantId, clienteId])
 }
 
 model Motorista {

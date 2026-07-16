@@ -113,7 +113,9 @@ router.post("/register", registerLimiter, async (req, res) => {
       return res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres" });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({
+      where: { tenantId_email: { tenantId: tenant.id, email } },
+    });
     if (existing) {
       return res.status(409).json({ error: "Este e-mail já está cadastrado. Use o login." });
     }
@@ -162,10 +164,36 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(400).json({ error: "Informe e-mail e senha" });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { tenant: true },
-    });
+    const tenantSlug =
+      req.body?.tenantSlug != null ? String(req.body.tenantSlug).trim().toLowerCase() : "";
+
+    let user = null;
+    if (tenantSlug) {
+      const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+      if (!tenant) {
+        return res.status(401).json({ error: "Credenciais inválidas" });
+      }
+      user = await prisma.user.findUnique({
+        where: { tenantId_email: { tenantId: tenant.id, email } },
+        include: { tenant: true },
+      });
+    } else {
+      const matches = await prisma.user.findMany({
+        where: { email },
+        include: { tenant: true },
+        take: 5,
+      });
+      if (matches.length > 1) {
+        return res.status(400).json({
+          error: "Este e-mail existe em mais de uma organização. Informe o slug (tenantSlug).",
+          tenants: matches.map((u) => ({
+            slug: u.tenant?.slug,
+            name: u.tenant?.name,
+          })),
+        });
+      }
+      user = matches[0] || null;
+    }
     if (!user) {
       return res.status(401).json({ error: "Credenciais inválidas" });
     }

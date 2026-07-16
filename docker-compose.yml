@@ -4,6 +4,7 @@
 # - frontend: http://localhost:3010
 # - backend:  http://localhost:3011  (health: /health, DB: /ready)
 # - postgres: localhost:5432
+# - redis:    localhost:6379  (fila durable de export CSV)
 #
 # O backend roda `prisma migrate deploy` antes do `npm run dev` (banco vazio ganha schema).
 # Dados de exemplo (se existir seed nesta versão): docker compose exec backend npm run db:seed
@@ -32,6 +33,20 @@ services:
       timeout: 5s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    container_name: colombocal-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - colombocal_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   backend:
     image: node:20
     container_name: colombocal-backend-dev
@@ -41,6 +56,8 @@ services:
       NODE_ENV: development
       PORT: 3011
       DATABASE_URL: postgresql://postgres:colombocal_dev@db:5432/colombocal_dev?schema=public
+      REDIS_URL: redis://redis:6379
+      EXPORT_QUEUE_MODE: redis
       PRISMA_CLIENT_ENGINE_TYPE: library
       JWT_SECRET: dev_jwt_secret_change_me
       # /setup — mín. 8 caracteres; remova após o 1.º admin (dev local só).
@@ -71,6 +88,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     image: node:20-alpine
@@ -95,5 +114,6 @@ services:
 
 volumes:
   colombocal_pgdata:
+  colombocal_redis:
   backend_node_modules:
   frontend_node_modules:

@@ -151,4 +151,45 @@ describe("ordenarResumoRepresentantes", () => {
     const out = ordenarResumoRepresentantes(base, { key: "participacao", dir: "asc" });
     expect(out.map((x) => x.participacao)).toEqual([20, 30, 50]);
   });
+
+  it("ordena por quantidade desc", () => {
+    const out = ordenarResumoRepresentantes(base, { key: "quantidade", dir: "desc" });
+    expect(out.map((x) => x.quantidade)).toEqual([3, 2, 1]);
+  });
+});
+
+describe("montarResumoRelatorioVendas casos extras", () => {
+  it("retorna listas vazias quando data é null", () => {
+    const r = montarResumoRelatorioVendas(null);
+    expect(r.resumoRepresentantes).toEqual([]);
+    expect(r.resumoClientes).toEqual([]);
+    expect(r.resumoProdutos).toEqual([]);
+  });
+
+  it("prioriza resumoClientes e resumoProdutos da API", () => {
+    const data = makeDataSemResumo();
+    data.resumoClientes = [
+      { clienteId: 1, clienteNome: "Cli API", faturamento: 300, quantidadeVendas: 2, ticketMedio: 150 },
+    ];
+    data.resumoProdutos = [
+      {
+        produtoId: 1,
+        produtoNome: "Prod API",
+        unidade: "",
+        quantidade: 4,
+        faturamento: 400,
+        quantidadeItens: 4,
+      },
+    ];
+    const { resumoClientes, resumoProdutos } = montarResumoRelatorioVendas(data);
+    expect(resumoClientes).toEqual([{ nome: "Cli API", total: 300, quantidade: 2 }]);
+    expect(resumoProdutos[0]).toMatchObject({ nome: "Prod API", total: 400, unidade: "" });
+  });
+
+  it("participação é 0 quando faturamento total é 0", () => {
+    const data = makeDataSemResumo();
+    data.totalFaturamento = 0;
+    const { resumoRepresentantes } = montarResumoRelatorioVendas(data);
+    expect(resumoRepresentantes.every((r) => r.participacao === 0)).toBe(true);
+  });
 });

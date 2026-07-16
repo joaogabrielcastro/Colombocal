@@ -42,8 +42,8 @@ async function syncClienteFromVenda(
       where: {
         clienteId_produtoId: { clienteId, produtoId },
       },
-      update: { preco },
-      create: { clienteId, produtoId, preco },
+      update: { preco, tenantId },
+      create: { tenantId, clienteId, produtoId, preco },
     });
   }
 

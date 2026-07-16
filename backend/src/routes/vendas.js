@@ -8,7 +8,7 @@ const {
   ensureArray,
 } = require("../utils/validation");
 const { parseBody } = require("../utils/zodParse");
-const { vendaFretePatchSchema, vendaPutSchema } = require("../schemas/venda");
+const { vendaFretePatchSchema, vendaPutSchema, vendaPostSchema } = require("../schemas/venda");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const {
   syncClienteFromVenda,
@@ -18,6 +18,7 @@ const {
   calcularComissaoParaVenda,
   loadComissaoMapPorCliente,
 } = require("../services/comissaoCadastro");
+const { criarVenda } = require("../application/use-cases/criarVenda");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
 const {
   parsePagination,
@@ -370,243 +371,25 @@ router.patch("/:id", async (req, res) => {
 // POST /api/vendas - criar venda
 router.post("/", async (req, res) => {
   try {
-    const tenantId = req.tenantId;
-    const {
-      clienteId,
-      vendedorId,
-      motoristaId,
-      fretePorSaco,
-      fretePorTonelada,
-      freteRecibo,
-      freteReciboNum,
-      freteReciboData,
-      dataVenda,
-      observacoes,
-      itens,
-    } = req.body;
-
-    const clienteIdNum = parseIntField(clienteId, "clienteId", { min: 1 });
-    const vendedorIdNum = parseIntField(vendedorId, "vendedorId", { min: 1 });
-    const motoristaIdNum = parseIntField(motoristaId, "motoristaId", {
-      required: false,
-      min: 1,
-    });
-    const fretePorSacoNum =
-      parseNumberField(fretePorSaco, "fretePorSaco", { required: false, min: 0 }) ?? null;
-    const fretePorTonNum =
-      parseNumberField(fretePorTonelada, "fretePorTonelada", { required: false, min: 0 }) ?? null;
-    const dataVendaDate = parseDateField(dataVenda, "dataVenda", { required: false });
+    const body = parseBody(vendaPostSchema, req.body);
     const freteEnabled = await requestAllowsFrete(req);
-    const itensValidos = ensureArray(itens, "itens", { minLength: 1 }).map((item) => ({
-      produtoId: parseIntField(item?.produtoId, "item.produtoId", { min: 1 }),
-      quantidade: parseNumberField(item?.quantidade, "item.quantidade", { min: 0.001 }),
-      precoUnitario: parseNumberField(item?.precoUnitario, "item.precoUnitario", {
-        min: 0,
-      }),
-    }));
 
-    const valorTotal = itensValidos.reduce(
-      (acc, item) => acc + item.quantidade * item.precoUnitario,
-      0,
-    );
-    const produtos = await Promise.all(
-      itensValidos.map((item) =>
-        prisma.produto.findFirst({
-          where: { id: item.produtoId, tenantId },
-          select: { id: true, unidade: true },
-        }),
-      ),
-    );
-    const produtosPorId = new Map();
-    for (let i = 0; i < itensValidos.length; i += 1) {
-      const item = itensValidos[i];
-      const produto = produtos[i];
-      if (!produto)
-        return res
-          .status(400)
-          .json({ error: `Produto ID ${item.produtoId} não encontrado` });
-      produtosPorId.set(produto.id, produto);
-    }
-
-    const venda = await prisma.$transaction(async (tx) => {
-      const cliente = await tx.cliente.findFirst({
-        where: { id: clienteIdNum, tenantId },
-      });
-      if (!cliente) throw new Error("Cliente não encontrado");
-
-      const vendedor = await tx.vendedor.findFirst({
-        where: { id: vendedorIdNum, tenantId },
-      });
-      if (!vendedor) throw new Error("Vendedor não encontrado");
-
-      if (motoristaIdNum != null) {
-        const mot = await tx.motorista.findFirst({
-          where: { id: motoristaIdNum, tenantId },
-        });
-        if (!mot) throw new Error("Motorista não encontrado");
-      }
-
-      const comissaoMap = await loadComissaoMapPorCliente(tx, clienteIdNum);
-      const {
-        comissaoValor,
-        comissaoPercentualAplicado,
-        itensComComissao,
-      } = calcularComissaoParaVenda({
-        itens: itensValidos,
-        cliente,
-        vendedor,
-        comissaoPorProdutoMap: comissaoMap,
-      });
-      const dataEfetivaVenda = dataVendaDate || new Date();
-      const fretePorSacoAplicado = freteEnabled
-        ? fretePorSacoNum != null
-          ? fretePorSacoNum
-          : parseFloat(String(cliente.fretePadraoSaco ?? cliente.fretePadrao ?? 0))
-        : 0;
-      const fretePorTonAplicado = freteEnabled
-        ? fretePorTonNum != null
-          ? fretePorTonNum
-          : parseFloat(String(cliente.fretePadraoTonelada ?? 0))
-        : 0;
-      const freteFinal = freteEnabled
-        ? calcularFreteAutomatico(
-            itensValidos,
-            produtosPorId,
-            fretePorSacoAplicado,
-            fretePorTonAplicado,
-          )
-        : 0;
-      const freteReciboAplicado = freteEnabled && !!freteRecibo;
-
-      const ultimaNum = await tx.venda.findFirst({
-        where: { tenantId },
-        orderBy: { numeroVenda: "desc" },
-        select: { numeroVenda: true },
-      });
-      const numeroVenda = (ultimaNum?.numeroVenda ?? 0) + 1;
-
-      const novaVenda = await tx.venda.create({
-        data: {
-          tenantId,
-          numeroVenda,
-          clienteId: clienteIdNum,
-          vendedorId: vendedorIdNum,
-          motoristaId: motoristaIdNum,
-          frete: freteFinal,
-          freteTarifaSaco: fretePorSacoAplicado,
-          freteTarifaTonelada: fretePorTonAplicado,
-          freteRecibo: freteReciboAplicado,
-          freteReciboNum: freteReciboAplicado ? freteReciboNum || null : null,
-          comissaoPercentualAplicado,
-          comissaoValor,
-          valorTotal,
-          dataVenda: dataEfetivaVenda,
-          observacoes,
-          itens: {
-            create: itensComComissao.map((item) => ({
-              produtoId: item.produtoId,
-              quantidade: item.quantidade,
-              precoUnitario: item.precoUnitario,
-              subtotal: item.subtotal,
-              comissaoPercentualAplicado: item.comissaoPercentualAplicado,
-              comissaoValor: item.comissaoValor,
-            })),
-          },
-        },
-        include: { itens: true },
-      });
-
-      await tx.tituloReceber.create({
-        data: {
-          tenantId,
-          clienteId: clienteIdNum,
-          vendaId: novaVenda.id,
-          numero: `VENDA-${numeroVenda}`,
-          vencimento: addDays(dataEfetivaVenda, 30),
-          valorOriginal: valorTotal,
-          status: "aberto",
-          observacoes: `Titulo gerado automaticamente para venda #${numeroVenda}`,
-        },
-      });
-
-      if (freteFinal > 0) {
-        const rd =
-          freteReciboData != null && String(freteReciboData).trim() !== ""
-            ? parseDateField(freteReciboData, "freteReciboData")
-            : null;
-        await tx.freteMovimento.create({
-          data: {
-            tenantId,
-            vendaId: novaVenda.id,
-            clienteId: clienteIdNum,
-            valor: freteFinal,
-            reciboEmitido: freteReciboAplicado,
-            reciboNumero: freteReciboAplicado ? freteReciboNum || null : null,
-            reciboData: rd,
-            data: dataEfetivaVenda,
-            observacao: `Frete da venda #${numeroVenda}`,
-          },
-        });
-      }
-
-      await registrarAuditoria(tx, req, {
-        tenantId,
-        tipo: "VENDA_CRIADA",
-        entidade: "Venda",
-        entidadeId: novaVenda.id,
-        clienteId: clienteIdNum,
-        vendaId: novaVenda.id,
-        valor: valorTotal,
-        payload: {
-          vendedorId: vendedorIdNum,
-          comissaoPercentualAplicado,
-          frete: freteFinal,
-          fretePorSaco: fretePorSacoAplicado,
-          fretePorTonelada: fretePorTonAplicado,
-          itens: itensValidos.length,
-        },
-      });
-
-      for (const item of itensValidos) {
-        await tx.movimentacaoEstoque.create({
-          data: {
-            tenantId,
-            produtoId: item.produtoId,
-            tipo: "saida",
-            quantidade: item.quantidade,
-            vendaId: novaVenda.id,
-            observacao: `Venda #${numeroVenda}`,
-          },
-        });
-      }
-
-      const atualizarCliente = parseAtualizarCliente(req.body);
-      if (atualizarCliente) {
-        if (!freteEnabled) {
-          delete atualizarCliente.fretePadraoSaco;
-          delete atualizarCliente.fretePadraoTonelada;
-        }
-        await syncClienteFromVenda(tx, {
-          tenantId: req.tenantId,
-          clienteId: clienteIdNum,
-          ...atualizarCliente,
-        });
-      }
-
-      return novaVenda;
-    });
-
-    const vendaCompleta = await prisma.venda.findFirst({
-      where: { id: venda.id, ...tw(req) },
-      include: {
-        cliente: true,
-        vendedor: true,
-        motorista: true,
-        itens: { include: { produto: true } },
-        pagamentos: true,
-        titulos: true,
-        fretes: true,
-      },
+    const vendaCompleta = await criarVenda(prisma, {
+      tenantId: req.tenantId,
+      clienteId: body.clienteId,
+      vendedorId: body.vendedorId,
+      motoristaId: body.motoristaId ?? null,
+      fretePorSaco: body.fretePorSaco ?? null,
+      fretePorTonelada: body.fretePorTonelada ?? null,
+      freteRecibo: body.freteRecibo,
+      freteReciboNum: body.freteReciboNum,
+      freteReciboData: body.freteReciboData,
+      dataVenda: body.dataVenda,
+      observacoes: body.observacoes,
+      itens: body.itens,
+      freteEnabled,
+      atualizarClienteBody: body.atualizarCliente ?? null,
+      req,
     });
 
     res.status(201).json(vendaCompleta);
@@ -665,24 +448,18 @@ router.put("/:id", async (req, res) => {
       0,
     );
 
-    const produtos = await Promise.all(
-      itensValidos.map((item) =>
-        prisma.produto.findFirst({
-          where: { id: item.produtoId, tenantId },
-          select: { id: true, unidade: true },
-        }),
-      ),
-    );
-    const produtosPorId = new Map();
-    for (let i = 0; i < itensValidos.length; i += 1) {
-      const item = itensValidos[i];
-      const produto = produtos[i];
-      if (!produto) {
+    const produtoIds = [...new Set(itensValidos.map((i) => i.produtoId))];
+    const produtos = await prisma.produto.findMany({
+      where: { tenantId, id: { in: produtoIds } },
+      select: { id: true, unidade: true },
+    });
+    const produtosPorId = new Map(produtos.map((p) => [p.id, p]));
+    for (const item of itensValidos) {
+      if (!produtosPorId.has(item.produtoId)) {
         return res
           .status(400)
           .json({ error: `Produto ID ${item.produtoId} não encontrado` });
       }
-      produtosPorId.set(produto.id, produto);
     }
 
     const snapshotAntes = {
@@ -714,7 +491,7 @@ router.put("/:id", async (req, res) => {
         if (!mot) throw new Error("Motorista não encontrado");
       }
 
-      const comissaoMap = await loadComissaoMapPorCliente(tx, clienteIdNum);
+      const comissaoMap = await loadComissaoMapPorCliente(tx, clienteIdNum, tenantId);
       const {
         comissaoValor,
         comissaoPercentualAplicado,
@@ -882,7 +659,9 @@ router.put("/:id", async (req, res) => {
         },
       });
 
-      const atualizarCliente = parseAtualizarCliente(req.body);
+      const atualizarCliente = parseAtualizarCliente({
+        atualizarCliente: body.atualizarCliente,
+      });
       if (atualizarCliente) {
         if (!freteEnabled) {
           delete atualizarCliente.fretePadraoSaco;

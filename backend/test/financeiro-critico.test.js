@@ -76,3 +76,65 @@ test("reset financeiro total remove vendas e titulos", async () => {
     "Deve remover pagamentos gerais no modo total (escopo tenant)",
   );
 });
+
+test("reset financeiro padrão quita títulos e cria ajustes para saldo devedor", async () => {
+  const ajustesCriados = [];
+  let tituloAtualizado = false;
+  const tx = {
+    tituloReceber: {
+      count: async () => 5,
+      deleteMany: async () => {
+        throw new Error("não deve remover títulos no modo padrão");
+      },
+    },
+    pagamento: {
+      count: async () => 1,
+      deleteMany: async () => ({ count: 1 }),
+      groupBy: async () => [{ clienteId: 1, _sum: { valor: "200" } }],
+      create: async ({ data }) => {
+        ajustesCriados.push(data);
+        return { id: ajustesCriados.length, ...data };
+      },
+    },
+    cheque: {
+      count: async () => 2,
+      deleteMany: async () => ({ count: 2 }),
+    },
+    venda: {
+      deleteMany: async () => {
+        throw new Error("não deve remover vendas no modo padrão");
+      },
+      groupBy: async () => [
+        { clienteId: 1, _sum: { valorTotal: "1000" } },
+        { clienteId: 2, _sum: { valorTotal: "0" } },
+      ],
+    },
+    cliente: {
+      findMany: async () => [{ id: 1 }, { id: 2 }],
+    },
+    $executeRaw: async () => {
+      tituloAtualizado = true;
+    },
+  };
+  const prisma = { $transaction: async (fn) => fn(tx) };
+
+  const result = await executarResetFinanceiroLegacy(prisma, { tenantId: 1 });
+
+  assert.equal(tituloAtualizado, true);
+  assert.equal(result.titulosAlterados, 5);
+  assert.equal(result.chequesRemovidos, 2);
+  assert.equal(result.titulosRemovidos, 0);
+  assert.equal(result.vendasRemovidas, 0);
+  // cliente 1: débito 1000 - crédito 200 = 800 → cria ajuste; cliente 2: sem débito
+  assert.equal(result.ajustesCriados, 1);
+  assert.equal(ajustesCriados.length, 1);
+  assert.equal(ajustesCriados[0].valor, 800);
+  assert.equal(ajustesCriados[0].tipo, "transferencia");
+});
+
+test("reset financeiro lança sem tenantId", async () => {
+  await assert.rejects(
+    () => executarResetFinanceiroLegacy({}, {}),
+    /tenantId obrigatório/,
+  );
+});

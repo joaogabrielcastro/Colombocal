@@ -85,18 +85,19 @@ async function createTenantWithAdmin({
     throw httpError(409, "Já existe uma organização com este slug");
   }
 
+  const tenant = await prisma.tenant.create({
+    data: { name: validated.tenantName, slug },
+  });
+
   const dupEmail = await prisma.user.findUnique({
-    where: { email: validated.email },
+    where: { tenantId_email: { tenantId: tenant.id, email: validated.email } },
   });
   if (dupEmail) {
+    await prisma.tenant.delete({ where: { id: tenant.id } }).catch(() => {});
     throw httpError(409, "Este e-mail já está cadastrado");
   }
 
   const passwordHash = await bcrypt.hash(validated.password, 12);
-
-  const tenant = await prisma.tenant.create({
-    data: { name: validated.tenantName, slug },
-  });
 
   const user = await prisma.user.create({
     data: {

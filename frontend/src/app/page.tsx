@@ -11,6 +11,7 @@ import {
   ArrowPathIcon,
   UserGroupIcon,
   ChartBarIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { VendaOrdem } from "@/components/VendaOrdem";
@@ -44,6 +45,38 @@ interface DashboardData {
     vendedor: { nome: string };
   }[];
   faturamentoPorMes: { mes: string; total: number }[];
+  onboarding?: {
+    clientes: number;
+    produtos: number;
+    vendas: number;
+    recebimentos: number;
+  };
+}
+
+interface OnboardingData {
+  clientes: number;
+  produtos: number;
+  vendas: number;
+  recebimentos: number;
+}
+
+const onboardingVazio: OnboardingData = {
+  clientes: 0,
+  produtos: 0,
+  vendas: 0,
+  recebimentos: 0,
+};
+
+function totalDaResposta(value: unknown) {
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === "object") {
+    const data = value as Record<string, unknown>;
+    if (typeof data.total === "number") return data.total;
+    for (const key of ["clientes", "produtos", "vendas", "pagamentos", "cheques"]) {
+      if (Array.isArray(data[key])) return data[key].length;
+    }
+  }
+  return 0;
 }
 
 function StatCard({
@@ -135,12 +168,30 @@ function StatusVenda({ quitada, saldoOrdem }: { quitada?: boolean; saldoOrdem?: 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onboarding, setOnboarding] = useState<OnboardingData>(onboardingVazio);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
       const d = await api.get<DashboardData>("/dashboard");
       setData(d);
+      if (d.onboarding) {
+        setOnboarding(d.onboarding);
+      } else {
+        const [clientes, produtos, vendas, recebimentos] = await Promise.all([
+          api.get<unknown>("/clientes?take=1"),
+          api.get<unknown>("/produtos?take=1"),
+          api.get<unknown>("/vendas?take=1"),
+          api.get<unknown>("/pagamentos?take=1").catch(() => api.get<unknown>("/cheques?take=1")),
+        ]);
+        setOnboarding({
+          clientes: totalDaResposta(clientes),
+          produtos: totalDaResposta(produtos),
+          vendas: totalDaResposta(vendas),
+          recebimentos: totalDaResposta(recebimentos),
+        });
+      }
     } catch (e) {
       setData(null);
       reportApiError(e, {
@@ -155,6 +206,12 @@ export default function DashboardPage() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  useEffect(() => {
+    setOnboardingDismissed(
+      window.localStorage.getItem("colombocal_onboarding_dismissed") === "true",
+    );
+  }, []);
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -177,6 +234,13 @@ export default function DashboardPage() {
   }
 
   const d = data;
+  const etapasOnboarding = [
+    { label: "Ter pelo menos 1 cliente", concluida: onboarding.clientes > 0, href: "/clientes/novo" },
+    { label: "Ter pelo menos 1 produto", concluida: onboarding.produtos > 0, href: "/produtos/novo" },
+    { label: "Registrar 1 venda", concluida: onboarding.vendas > 0, href: "/vendas/nova" },
+    { label: "Registrar 1 recebimento", concluida: onboarding.recebimentos > 0, href: "/financeiro/novo" },
+  ];
+  const onboardingConcluido = etapasOnboarding.every((etapa) => etapa.concluida);
   const dataFormatada = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
     year: "numeric",
@@ -207,6 +271,51 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {!onboardingDismissed && !onboardingConcluido ? (
+        <section className="card mb-6 border-blue-100 bg-blue-50/40 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-gray-900">Primeiros passos</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Complete estas etapas para começar a usar o Colombocal.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="text-gray-400 hover:text-gray-700"
+              aria-label="Dispensar primeiros passos"
+              onClick={() => {
+                window.localStorage.setItem("colombocal_onboarding_dismissed", "true");
+                setOnboardingDismissed(true);
+              }}
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+          <ol className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {etapasOnboarding.map((etapa, index) => (
+              <li key={etapa.label}>
+                <Link
+                  href={etapa.href}
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
+                    etapa.concluida
+                      ? "border-green-200 bg-green-50 text-green-800"
+                      : "border-white bg-white text-gray-700 hover:border-blue-200"
+                  }`}
+                >
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                    etapa.concluida ? "bg-green-600 text-white" : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {etapa.concluida ? "✓" : index + 1}
+                  </span>
+                  {etapa.label}
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
 
       <FluxoOperacional />
 

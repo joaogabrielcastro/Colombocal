@@ -116,7 +116,9 @@ router.post("/first-admin", async (req, res) => {
       });
     }
 
-    const dup = await prisma.user.findUnique({ where: { email } });
+    const dup = await prisma.user.findUnique({
+      where: { tenantId_email: { tenantId: tenant.id, email } },
+    });
     if (dup) {
       return res.status(409).json({ error: "Este e-mail já está cadastrado" });
     }

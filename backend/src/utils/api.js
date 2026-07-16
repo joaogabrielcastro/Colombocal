@@ -54,7 +54,7 @@ function friendlyErrorMessage(error) {
 }
 
 function handleRouteError(res, error) {
-  let status = error?.httpStatus || error?.statusCode;
+  let status = error?.httpStatus || error?.statusCode || error?.status;
   if (!status && error?.code === "P2002") status = 409;
   if (!status) status = 500;
   const payload = { error: friendlyErrorMessage(error) };

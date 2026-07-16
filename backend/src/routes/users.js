@@ -57,7 +57,9 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Papel inválido (use admin ou member)" });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({
+      where: { tenantId_email: { tenantId: req.tenantId, email } },
+    });
     if (existing) {
       return res.status(409).json({ error: "Este e-mail já está em uso" });
     }

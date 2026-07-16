@@ -19,7 +19,13 @@ async function requestAllowsFrete(req) {
   return tenantAllowsFrete(slug);
 }
 
+/** Limpa o cache de slug por tenant (uso em testes ao recriar tenants). */
+function clearTenantSlugCache() {
+  slugByTenantId.clear();
+}
+
 module.exports = {
   getTenantSlug,
   requestAllowsFrete,
+  clearTenantSlugCache,
 };

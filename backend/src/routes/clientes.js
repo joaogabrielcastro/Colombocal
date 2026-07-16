@@ -111,7 +111,7 @@ router.get("/:id/precos", async (req, res) => {
       ...(take != null ? { take } : {}),
     });
     const precosEspeciais = await prisma.precoClienteProduto.findMany({
-      where: { clienteId: id },
+      where: { tenantId: req.tenantId, clienteId: id },
     });
     const precoMap = new Map(
       precosEspeciais.map((row) => [row.produtoId, row.preco]),
@@ -152,7 +152,7 @@ router.get("/:id/comissoes", async (req, res) => {
       orderBy: { nome: "asc" },
     });
     const comissoesEspeciais = await prisma.comissaoClienteProduto.findMany({
-      where: { clienteId: id },
+      where: { tenantId: req.tenantId, clienteId: id },
     });
     const comissaoMap = new Map(
       comissoesEspeciais.map((row) => [row.produtoId, row.comissaoPercentual]),
@@ -424,13 +424,18 @@ router.put("/:id/precos", async (req, res) => {
     for (const p of precos) {
       if (p.preco === null || p.preco === "") {
         await prisma.precoClienteProduto.deleteMany({
-          where: { clienteId, produtoId: p.produtoId },
+          where: { tenantId: req.tenantId, clienteId, produtoId: p.produtoId },
         });
       } else {
         await prisma.precoClienteProduto.upsert({
           where: { clienteId_produtoId: { clienteId, produtoId: p.produtoId } },
-          update: { preco: p.preco },
-          create: { clienteId, produtoId: p.produtoId, preco: p.preco },
+          update: { preco: p.preco, tenantId: req.tenantId },
+          create: {
+            tenantId: req.tenantId,
+            clienteId,
+            produtoId: p.produtoId,
+            preco: p.preco,
+          },
         });
       }
     }
@@ -454,15 +459,16 @@ router.put("/:id/comissoes", async (req, res) => {
     for (const c of comissoes) {
       if (c.comissaoPercentual === null || c.comissaoPercentual === "") {
         await prisma.comissaoClienteProduto.deleteMany({
-          where: { clienteId, produtoId: c.produtoId },
+          where: { tenantId: req.tenantId, clienteId, produtoId: c.produtoId },
         });
       } else {
         await prisma.comissaoClienteProduto.upsert({
           where: {
             clienteId_produtoId: { clienteId, produtoId: c.produtoId },
           },
-          update: { comissaoPercentual: c.comissaoPercentual },
+          update: { comissaoPercentual: c.comissaoPercentual, tenantId: req.tenantId },
           create: {
+            tenantId: req.tenantId,
             clienteId,
             produtoId: c.produtoId,
             comissaoPercentual: c.comissaoPercentual,

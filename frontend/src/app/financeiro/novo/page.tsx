@@ -217,7 +217,27 @@ function RegistrarRecebimentoForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validarBase()) return;
+    const dinheiroInformado =
+      dinheiro.valor.trim() !== "" || dinheiro.observacoes.trim() !== "";
+    const pixInformado = pix.valor.trim() !== "" || pix.observacoes.trim() !== "";
+    const podeCompletarSaldo =
+      !!vendaSelecionada &&
+      !chequeItens.length &&
+      ((dinheiroInformado && !pixInformado && valorDinheiro === 0) ||
+        (pixInformado && !dinheiroInformado && valorPix === 0));
+    const valorDinheiroFinal =
+      podeCompletarSaldo && dinheiroInformado ? saldoVenda : valorDinheiro;
+    const valorPixFinal = podeCompletarSaldo && pixInformado ? saldoVenda : valorPix;
+    const totalGeralFinal = totalCheques + valorDinheiroFinal + valorPixFinal;
+
+    if (!clienteId || !vendaId) {
+      setErro(!clienteId ? "Selecione o cliente" : "Selecione a ordem da venda");
+      return;
+    }
+    if (totalGeralFinal < 0.01) {
+      setErro("Informe ao menos um cheque, valor em dinheiro ou PIX");
+      return;
+    }
 
     setSalvando(true);
     setErro("");
@@ -225,7 +245,7 @@ function RegistrarRecebimentoForm() {
       const body: Record<string, unknown> = {
         clienteId: parseInt(clienteId, 10),
         vendaId: parseInt(vendaId, 10),
-        ...(excedente > 0 ? { trocoTipo } : {}),
+        ...(Math.max(0, totalGeralFinal - saldoVenda) > 0 ? { trocoTipo } : {}),
       };
 
       if (chequesValidos.length > 0) {
@@ -241,17 +261,17 @@ function RegistrarRecebimentoForm() {
         }));
       }
 
-      if (valorDinheiro > 0) {
+      if (valorDinheiroFinal > 0) {
         body.dinheiro = {
-          valor: valorDinheiro,
+          valor: valorDinheiroFinal,
           data: dinheiro.data,
           observacoes: dinheiro.observacoes || undefined,
         };
       }
 
-      if (valorPix > 0) {
+      if (valorPixFinal > 0) {
         body.pix = {
-          valor: valorPix,
+          valor: valorPixFinal,
           data: pix.data,
           observacoes: pix.observacoes || undefined,
         };

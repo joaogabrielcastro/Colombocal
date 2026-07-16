@@ -2,7 +2,7 @@
 import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
-import { NovaVendaForm } from "../../nova/page";
+import { NovaVendaForm } from "@/features/vendas/components/NovaVendaForm";
 
 function EditarVendaInner() {
   const { id } = useParams<{ id: string }>();
