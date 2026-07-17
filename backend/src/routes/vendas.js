@@ -159,7 +159,11 @@ router.get("/", async (req, res) => {
           titulos: true,
           fretes: true,
         },
-        orderBy: { dataVenda: "desc" },
+        orderBy: [
+          { dataVenda: "desc" },
+          { numeroVenda: "desc" },
+          { id: "desc" },
+        ],
         take,
         skip,
       }),

@@ -208,7 +208,7 @@ function FinanceiroPageContent() {
   const totalValorFiltrado = resumo?.total != null ? resumo.total : null;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const subtitle = "Histórico de cheques registrados";
+  const subtitle = "Histórico de cheques (PIX e dinheiro aparecem na ordem da venda)";
 
   return (
     <ListScaffold

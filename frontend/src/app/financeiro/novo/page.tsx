@@ -102,6 +102,19 @@ function RegistrarRecebimentoForm() {
     setChequeItens((prev) => (prev.length > 0 ? prev : [chequeVazio()]));
   }, []);
 
+  const avisoSemSaldo = (v: Venda) => {
+    const saldo = Math.max(0, parseFloat(String(v.saldoEmAbertoTitulos ?? 0)));
+    if (saldo >= 0.01) return false;
+    const clienteNome =
+      v.cliente?.nomeFantasia?.trim() ||
+      v.cliente?.razaoSocial ||
+      "este cliente";
+    toast.warning(
+      `Ordem ${vendaOrdemTexto(v)} já está quitada — não há nada a receber de ${clienteNome}.`,
+    );
+    return true;
+  };
+
   const buscarPorOrdem = useCallback(async (raw?: string) => {
     const termo = (raw ?? ordemInput).trim().replace(/^#/, "");
     if (!termo) {
@@ -113,7 +126,9 @@ function RegistrarRecebimentoForm() {
     try {
       const v = await api.get<Venda>(`/vendas/por-ordem/${encodeURIComponent(termo)}`);
       aplicarVenda(v);
-      toast.success(`Ordem ${vendaOrdemTexto(v)} encontrada.`);
+      if (!avisoSemSaldo(v)) {
+        toast.success(`Ordem ${vendaOrdemTexto(v)} encontrada.`);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Venda não encontrada";
       setErro(msg);
@@ -301,7 +316,16 @@ function RegistrarRecebimentoForm() {
             : "Recebimento registrado com sucesso.",
         );
       }
-      router.push("/financeiro");
+      // PIX/dinheiro não entram na lista de cheques — abre a venda para ver a baixa
+      const soCheques =
+        (resp.resumo?.cheques ?? 0) > 0 &&
+        (resp.resumo?.dinheiro ?? 0) <= 0 &&
+        (resp.resumo?.pix ?? 0) <= 0;
+      if (soCheques) {
+        router.push("/financeiro");
+      } else {
+        router.push(`/vendas/${vendaId}`);
+      }
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : "Erro ao registrar recebimento");
       setSalvando(false);
@@ -401,7 +425,13 @@ function RegistrarRecebimentoForm() {
         </div>
 
         {vendaSelecionada ? (
-          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+          <div
+            className={`mt-4 rounded-lg border p-4 ${
+              saldoVenda < 0.01
+                ? "border-amber-200 bg-amber-50"
+                : "border-blue-100 bg-blue-50/60"
+            }`}
+          >
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="text-sm text-gray-600">Venda selecionada:</span>
               <VendaOrdem venda={vendaSelecionada} size="sm" />
@@ -411,12 +441,20 @@ function RegistrarRecebimentoForm() {
                 Total: <strong>{formatMoney(vendaSelecionada.valorTotal)}</strong>
               </p>
               <p>
-                Em aberto: <strong className="text-amber-800">{formatMoney(saldoVenda)}</strong>
+                Em aberto:{" "}
+                <strong className={saldoVenda < 0.01 ? "text-amber-900" : "text-amber-800"}>
+                  {formatMoney(saldoVenda)}
+                </strong>
               </p>
               <p>
                 Data: {new Date(vendaSelecionada.dataVenda).toLocaleDateString("pt-BR")}
               </p>
             </div>
+            {saldoVenda < 0.01 ? (
+              <p className="mt-3 text-sm font-medium text-amber-900">
+                Esta ordem já está quitada — não há nada a receber neste cliente para esta venda.
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

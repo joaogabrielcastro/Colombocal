@@ -334,71 +334,76 @@ function VendasPageContent() {
             />
           </div>
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full table-fixed min-w-[720px]">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="table-header w-24 bg-slate-50">Ordem</th>
-                <th className="table-header">Data</th>
+                <th className="table-header w-16 bg-slate-50">Ordem</th>
+                <th className="table-header w-24">Data</th>
                 <th className="table-header">Cliente</th>
-                <th className="table-header">Vendedor</th>
-                <th className="table-header">Motorista</th>
-                <th className="table-header">Itens</th>
+                <th className="table-header w-28">Vendedor</th>
+                <th className="table-header w-28">Motorista</th>
+                <th className="table-header w-14 text-center">Itens</th>
                 {freteEnabled ? (
                   <>
-                <th className="table-header">Frete</th>
-                <th className="table-header">Frete pago</th>
+                <th className="table-header w-24">Frete</th>
+                <th className="table-header w-28">Frete pago</th>
                   </>
                 ) : null}
-                <th className="table-header">Total</th>
-                <th className="table-header"></th>
+                <th className="table-header w-28 text-right">Total</th>
+                <th className="table-header w-44">Ações</th>
               </tr>
             </thead>
             <tbody>
               {vendas.map((v) => (
                 <tr key={v.id} className="table-row">
-                  <VendaOrdemCell venda={v} />
-                  <td className="table-cell">{formatDate(v.dataVenda)}</td>
+                  <VendaOrdemCell venda={v} size="sm" />
+                  <td className="table-cell whitespace-nowrap">{formatDate(v.dataVenda)}</td>
                   <td className="table-cell">
-                    <p className="font-medium">
+                    <p className="font-medium truncate" title={v.cliente.nomeFantasia || v.cliente.razaoSocial}>
                       {v.cliente.nomeFantasia || v.cliente.razaoSocial}
                     </p>
-                    <p className="text-xs text-gray-400">{v.cliente.cidade}</p>
+                    {v.cliente.cidade ? (
+                      <p className="text-xs text-gray-400 truncate">{v.cliente.cidade}</p>
+                    ) : null}
                   </td>
-                  <td className="table-cell">{v.vendedor.nome}</td>
-                  <td className="table-cell">{v.motorista?.nome || '-'}</td>
+                  <td className="table-cell truncate">{v.vendedor.nome}</td>
+                  <td className="table-cell truncate">{v.motorista?.nome || '-'}</td>
                   <td className="table-cell text-center">
                     {v.itens?.length || 0}
                   </td>
                   {freteEnabled ? (
                     <>
-                  <td className="table-cell">{formatMoney(v.frete)}</td>
-                  <td className="table-cell text-xs text-gray-600 max-w-[10rem]">
+                  <td className="table-cell whitespace-nowrap">{formatMoney(v.frete)}</td>
+                  <td className="table-cell text-xs text-gray-600 truncate">
                     {formatFreteReciboLinha(v)}
                   </td>
                     </>
                   ) : null}
-                  <td className="table-cell font-semibold text-green-700">
+                  <td className="table-cell font-semibold text-green-700 text-right whitespace-nowrap">
                     {formatMoney(v.valorTotal)}
                   </td>
                   <td className="table-cell">
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                       <Link
                         href={`/vendas/${v.id}`}
-                        className="text-blue-600 hover:underline text-sm font-medium"
+                        className="text-blue-600 hover:underline font-medium"
                       >
                         Ver
                       </Link>
+                      <span className="text-gray-300">·</span>
                       <Link
                         href={`/vendas/nova?clienteId=${v.clienteId}`}
-                        className="text-xs text-green-700 hover:underline"
+                        className="text-green-700 hover:underline"
                       >
-                        Nova venda
+                        Nova
                       </Link>
+                      <span className="text-gray-300">·</span>
                       <Link
-                        href={`/clientes/${v.clienteId}?aba=cheques`}
-                        className="text-xs text-gray-600 hover:underline"
+                        href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}`}
+                        className="text-gray-600 hover:underline"
                       >
-                        Cobrar cliente
+                        Cobrar
                       </Link>
                     </div>
                   </td>
@@ -408,18 +413,19 @@ function VendasPageContent() {
             <tfoot>
               <tr className="bg-gray-50 border-t-2 border-gray-200">
                 <td
-                  colSpan={8}
+                  colSpan={freteEnabled ? 8 : 6}
                   className="px-4 py-3 text-sm font-semibold text-right text-gray-600"
                 >
                   Subtotal (só esta página):
                 </td>
-                <td className="px-4 py-3 font-bold text-green-700">
+                <td className="px-4 py-3 font-bold text-green-700 text-right whitespace-nowrap">
                   {formatMoney(subtotalPagina)}
                 </td>
                 <td></td>
               </tr>
             </tfoot>
           </table>
+          </div>
         )}
       </div>
       <div className="mt-4 flex items-center justify-between text-sm text-gray-600">

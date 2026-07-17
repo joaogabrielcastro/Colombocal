@@ -89,7 +89,6 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [etapa, setEtapa] = useState(1);
 
   useEffect(() => {
     api.get<Vendedor[]>("/vendedores?take=1").then((arr) => {
@@ -456,22 +455,6 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     }
   };
 
-  const continuar = () => {
-    if (etapa === 1 && (!clienteId || !vendedorId)) {
-      setErro("Selecione cliente e vendedor");
-      return;
-    }
-    if (
-      etapa === 2 &&
-      itens.filter((i) => i.produtoId && i.quantidade && i.precoUnitario).length === 0
-    ) {
-      setErro("Adicione pelo menos um produto");
-      return;
-    }
-    setErro("");
-    setEtapa((atual) => Math.min(3, atual + 1));
-  };
-
   const fecharSyncDialog = () => {
     setSyncDialogOpen(false);
     setSyncDialogDiff(null);
@@ -543,25 +526,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         </div>
       )}
 
-      <div className="mb-4 flex items-center gap-2 text-sm">
-        {[1, 2, 3].map((numero) => (
-          <button
-            key={numero}
-            type="button"
-            onClick={() => numero < etapa && setEtapa(numero)}
-            className={`flex items-center gap-2 ${numero <= etapa ? "text-blue-700" : "text-gray-400"}`}
-            aria-current={numero === etapa ? "step" : undefined}
-          >
-            <span className={`flex h-7 w-7 items-center justify-center rounded-full font-semibold ${
-              numero === etapa ? "bg-blue-600 text-white" : numero < etapa ? "bg-blue-100" : "bg-gray-100"
-            }`}>{numero}</span>
-            <span className="hidden sm:inline">{numero === 1 ? "Dados" : numero === 2 ? "Produtos" : "Revisão"}</span>
-          </button>
-        ))}
-      </div>
-
       <form onSubmit={handleSubmit} className="space-y-4">
-        {etapa === 1 ? (
         <div className="card p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Dados da Venda</h2>
           {cli != null && com != null && (
@@ -698,9 +663,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             </div>
           </div>
         </div>
-        ) : null}
 
-        {etapa === 2 ? (
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Produtos</h2>
@@ -806,10 +769,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             </tbody>
           </table>
         </div>
-        ) : null}
 
-        {etapa === 3 ? (
-        <>
         <div className="card p-5">
           <div className="flex justify-end">
             <div className="w-72 space-y-2">
@@ -835,30 +795,17 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             </div>
           </div>
         </div>
-        </>
-        ) : null}
 
         <div className="flex gap-3">
-          {etapa > 1 ? (
-            <button type="button" className="btn-secondary" onClick={() => setEtapa((atual) => atual - 1)}>
-              Voltar
-            </button>
-          ) : null}
-          {etapa < 3 ? (
-            <button type="button" className="btn-primary" onClick={continuar}>
-              Continuar
-            </button>
-          ) : (
-            <button type="submit" disabled={salvando} className="btn-primary">
-              {salvando
-                ? isEdit
-                  ? "Salvando..."
-                  : "Registrando..."
-                : isEdit
-                  ? "Salvar alterações"
-                  : "Registrar Venda"}
-            </button>
-          )}
+          <button type="submit" disabled={salvando} className="btn-primary">
+            {salvando
+              ? isEdit
+                ? "Salvando..."
+                : "Registrando..."
+              : isEdit
+                ? "Salvar alterações"
+                : "Registrar Venda"}
+          </button>
           <Link
             href={isEdit && editId ? `/vendas/${editId}` : "/vendas"}
             className="btn-secondary"
