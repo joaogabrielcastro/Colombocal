@@ -149,4 +149,87 @@ router.get("/integridade-tenant", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/auditoria/diagnose-tenants
+ * Resumo de todos os tenants no banco saas_colombocal (somente leitura).
+ * Só admin — útil no Coolify sem acesso SSH local ao Postgres.
+ */
+router.get("/diagnose-tenants", async (req, res) => {
+  try {
+    if (req.authUser?.role !== "admin") {
+      return res.status(403).json({ error: "Apenas administradores" });
+    }
+
+    const tenants = await prisma.tenant.findMany({
+      orderBy: { id: "asc" },
+      select: { id: true, name: true, slug: true },
+    });
+
+    const report = [];
+    for (const t of tenants) {
+      const [clientes, vendas, users, cruzados, amostraClientes, amostraVendas] =
+        await Promise.all([
+          prisma.cliente.count({ where: { tenantId: t.id } }),
+          prisma.venda.count({ where: { tenantId: t.id } }),
+          prisma.user.count({ where: { tenantId: t.id } }),
+          prisma.$queryRaw`
+            SELECT COUNT(*)::int AS c
+            FROM "Venda" v
+            INNER JOIN "Cliente" c ON c.id = v."clienteId"
+            WHERE v."tenantId" = ${t.id} AND c."tenantId" <> ${t.id}
+          `,
+          prisma.cliente.findMany({
+            where: { tenantId: t.id },
+            orderBy: { id: "asc" },
+            take: 5,
+            select: { id: true, razaoSocial: true, nomeFantasia: true },
+          }),
+          prisma.venda.findMany({
+            where: { tenantId: t.id },
+            orderBy: { dataVenda: "desc" },
+            take: 5,
+            select: {
+              id: true,
+              numeroVenda: true,
+              cliente: {
+                select: { id: true, razaoSocial: true, tenantId: true },
+              },
+            },
+          }),
+        ]);
+
+      const nCruz =
+        Array.isArray(cruzados) && cruzados[0] != null ? Number(cruzados[0].c) : 0;
+
+      report.push({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        users,
+        clientes,
+        vendas,
+        vendasComClienteDeOutroTenant: nCruz,
+        amostraClientes,
+        amostraVendas: amostraVendas.map((v) => ({
+          id: v.id,
+          numeroVenda: v.numeroVenda,
+          clienteId: v.cliente?.id,
+          clienteNome: v.cliente?.razaoSocial,
+          clienteTenantId: v.cliente?.tenantId,
+          mismatch: v.cliente != null && v.cliente.tenantId !== t.id,
+        })),
+      });
+    }
+
+    res.json({
+      database: "saas_colombocal",
+      readOnly: true,
+      sessionTenantId: req.tenantId,
+      tenants: report,
+    });
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
 module.exports = router;

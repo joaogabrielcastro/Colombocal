@@ -1,8 +1,17 @@
 /**
  * Diagnóstico multi-tenant (somente leitura — não apaga nada).
  *
- * Uso (pasta backend, com DATABASE_URL do Coolify/produção se quiser):
- *   node scripts/diagnose-tenants.js
+ * O DATABASE_URL do .env local costuma apontar para o hostname INTERNO do Coolify
+ * (ex.: postgresql-database-…), que só funciona DENTRO do servidor/container.
+ *
+ * Opções:
+ *   1) No Coolify → serviço backend → Terminal:
+ *        npm run tenant:diagnose
+ *      (já usa o banco saas_colombocal do container)
+ *
+ *   2) Com URL pública/externa do Postgres:
+ *        set DATABASE_URL=postgresql://USER:SENHA@HOST:5432/saas_colombocal?schema=public
+ *        npm run tenant:diagnose
  */
 const path = require("path");
 
@@ -15,6 +24,16 @@ require("dotenv").config({
 const { prisma } = require("../src/lib/prisma");
 
 async function main() {
+  const url = process.env.DATABASE_URL || "";
+  const dbMatch = url.match(/\/([^/?]+)(\?|$)/);
+  const dbName = dbMatch ? dbMatch[1] : "(desconhecido)";
+  console.log(`\nConectando… database=${dbName}`);
+  if (/postgresql-database-/.test(url) && !/localhost|127\.0\.0\.1/.test(url)) {
+    console.log(
+      "(Se falhar com 'Can't reach database', rode este comando no Terminal do Coolify no container do backend.)",
+    );
+  }
+
   const tenants = await prisma.tenant.findMany({
     orderBy: { id: "asc" },
     select: { id: true, name: true, slug: true },
