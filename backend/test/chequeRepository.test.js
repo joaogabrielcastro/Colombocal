@@ -59,6 +59,7 @@ test("createCheque: reintenta ao colidir numeroOrdem (array e string)", async ()
   let calls = 0;
   const db = {
     cheque: {
+      aggregate: async () => ({ _max: { numeroOrdem: null } }),
       create: async ({ data }) => {
         calls++;
         if (calls === 1) throw p2002(["numeroOrdem"]);

@@ -88,7 +88,7 @@ async function registrarRecebimentoComposto(prisma, payload) {
             status: "registrado",
             observacoes: item.observacoes ?? null,
           },
-          { numeroOrdem: nextNumeroOrdem++ },
+          { numeroOrdem: nextNumeroOrdem++, useSavepoint: true },
         );
 
         await createPagamento(tx, {

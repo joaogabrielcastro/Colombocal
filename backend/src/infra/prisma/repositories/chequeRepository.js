@@ -15,6 +15,27 @@ function isNumeroOrdemConflict(error) {
   return false;
 }
 
+/** Em transaction Postgres, P2002 aborta o bloco — savepoint permite retry. */
+async function withSavepoint(db, name, fn, enabled) {
+  if (!enabled || typeof db.$executeRawUnsafe !== "function") {
+    return fn();
+  }
+
+  await db.$executeRawUnsafe(`SAVEPOINT ${name}`);
+  try {
+    const result = await fn();
+    await db.$executeRawUnsafe(`RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch (error) {
+    try {
+      await db.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT ${name}`);
+    } catch {
+      /* ignore */
+    }
+    throw error;
+  }
+}
+
 async function createCheque(db, data, options = {}) {
   const tenantId = data.tenantId;
   if (tenantId == null) {
@@ -25,15 +46,24 @@ async function createCheque(db, data, options = {}) {
     options.numeroOrdem != null
       ? options.numeroOrdem
       : await getNextNumeroOrdem(db, tenantId);
+  // Só use savepoint quando o caller já está em prisma.$transaction
+  const useSavepoint = options.useSavepoint === true;
 
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
-      return await db.cheque.create({
-        data: { ...rest, tenantId, numeroOrdem },
-      });
+      return await withSavepoint(
+        db,
+        `cheque_ordem_${attempt}`,
+        () =>
+          db.cheque.create({
+            data: { ...rest, tenantId, numeroOrdem },
+          }),
+        useSavepoint,
+      );
     } catch (error) {
       if (isNumeroOrdemConflict(error) && attempt < 7) {
-        numeroOrdem += 1;
+        const next = await getNextNumeroOrdem(db, tenantId);
+        numeroOrdem = Math.max(next, numeroOrdem + 1);
         continue;
       }
       throw error;

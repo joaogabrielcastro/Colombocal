@@ -51,21 +51,25 @@ async function registrarCheque(prisma, payload) {
       }
     }
 
-    const novoCheque = await createCheque(tx, {
-      tenantId,
-      clienteId: payload.clienteId,
-      vendaId: payload.vendaId ?? null,
-      valor: payload.valor,
-      emitenteNome: payload.emitenteNome ?? null,
-      banco: payload.banco ?? null,
-      numero: payload.numero ?? null,
-      agencia: payload.agencia ?? null,
-      conta: payload.conta ?? null,
-      dataRecebimento: dataPagamento,
-      dataCompensacao: dataPagamento,
-      status: "registrado",
-      observacoes: payload.observacoes ?? null,
-    });
+    const novoCheque = await createCheque(
+      tx,
+      {
+        tenantId,
+        clienteId: payload.clienteId,
+        vendaId: payload.vendaId ?? null,
+        valor: payload.valor,
+        emitenteNome: payload.emitenteNome ?? null,
+        banco: payload.banco ?? null,
+        numero: payload.numero ?? null,
+        agencia: payload.agencia ?? null,
+        conta: payload.conta ?? null,
+        dataRecebimento: dataPagamento,
+        dataCompensacao: dataPagamento,
+        status: "registrado",
+        observacoes: payload.observacoes ?? null,
+      },
+      { useSavepoint: true },
+    );
 
     await createPagamento(tx, {
       tenantId,

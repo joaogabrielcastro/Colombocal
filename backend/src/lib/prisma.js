@@ -44,6 +44,15 @@ async function ensureDatabaseCompat() {
     CREATE INDEX IF NOT EXISTS "FinanceiroEvento_tenantId_userId_createdAt_idx"
       ON "FinanceiroEvento"("tenantId", "userId", "createdAt")
   `);
+
+  // Cheque.numeroOrdem é único por tenant — remove índice global legado se existir
+  await prisma.$executeRawUnsafe(`
+    DROP INDEX IF EXISTS "Cheque_numeroOrdem_key"
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "Cheque_tenantId_numeroOrdem_key"
+      ON "Cheque"("tenantId", "numeroOrdem")
+  `);
 }
 
 module.exports = { prisma, ensureDatabaseCompat };
