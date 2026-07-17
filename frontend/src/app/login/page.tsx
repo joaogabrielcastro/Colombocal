@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api, { ApiError } from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
+import { setTenantFeaturesCache } from '@/lib/tenant-features-cache';
 import { reportApiError } from '@/lib/report-api-error';
 import BrandLogo from '@/components/BrandLogo';
 
@@ -17,6 +19,7 @@ type TenantsResponse = {
 };
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
@@ -44,16 +47,26 @@ export default function LoginPage() {
     try {
       const res = await api.post<{
         token: string;
-        user: { email: string; name: string | null };
-        tenant: { name: string };
+        user: { email: string; name: string | null; tenantId: number };
+        tenant: { id: number; name: string; slug?: string };
+        features?: { clienteCpf?: boolean; frete?: boolean };
       }>('/auth/login', {
         email: email.trim().toLowerCase(),
         password,
         ...(tenantSlug ? { tenantSlug } : {}),
       });
       setAuthToken(res.token);
-      // Reload completo evita cache React Query / features do tenant anterior
-      window.location.assign('/');
+      if (res.features) {
+        setTenantFeaturesCache(
+          {
+            clienteCpf: !!res.features.clienteCpf,
+            frete: !!res.features.frete,
+          },
+          res.user.tenantId ?? res.tenant.id,
+        );
+      }
+      router.replace('/');
+      router.refresh();
     } catch (err) {
       if (err instanceof ApiError && err.status === 400) {
         const body = err.body as { code?: string; tenants?: LoginTenant[] } | undefined;

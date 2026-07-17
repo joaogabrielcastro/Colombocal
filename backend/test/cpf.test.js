@@ -37,20 +37,27 @@ test("tenantAllowsClienteCpf: respeita CLIENT_CPF_TENANT_SLUGS", () => {
   }
 });
 
-test("tenantAllowsFrete: requinte sem frete por padrão", () => {
-  assert.equal(tenantAllowsFrete("requinte"), false);
-  assert.equal(tenantAllowsFrete("default"), true);
-  assert.equal(tenantAllowsFrete(""), true);
-  assert.equal(tenantAllowsFrete(null), true);
+test("tenantAllowsFrete: default/colombocal sempre com frete", () => {
+  const prev = process.env.NO_FRETE_TENANT_SLUGS;
+  process.env.NO_FRETE_TENANT_SLUGS = "default,colombocal,requinte";
+  try {
+    assert.equal(tenantAllowsFrete("default"), true);
+    assert.equal(tenantAllowsFrete("colombocal"), true);
+    assert.equal(tenantAllowsFrete("requinte"), false);
+  } finally {
+    if (prev === undefined) delete process.env.NO_FRETE_TENANT_SLUGS;
+    else process.env.NO_FRETE_TENANT_SLUGS = prev;
+  }
 });
 
-test("tenantAllowsClienteCpf: false sem env e para slug vazio", () => {
+test("tenantAllowsClienteCpf: requinte com CPF por padrão", () => {
   const prev = process.env.CLIENT_CPF_TENANT_SLUGS;
   delete process.env.CLIENT_CPF_TENANT_SLUGS;
   try {
-    assert.equal(tenantAllowsClienteCpf("requinte"), false);
+    assert.equal(tenantAllowsClienteCpf("requinte"), true);
+    assert.equal(tenantAllowsClienteCpf("default"), false);
     assert.equal(tenantAllowsClienteCpf(""), false);
-    assert.deepEqual(getClientCpfTenantSlugs(), []);
+    assert.deepEqual(getClientCpfTenantSlugs(), ["requinte"]);
   } finally {
     if (prev !== undefined) process.env.CLIENT_CPF_TENANT_SLUGS = prev;
   }

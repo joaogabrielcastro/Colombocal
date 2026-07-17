@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import BrandLogo from '@/components/BrandLogo';
-import { getAuthToken } from '@/lib/auth-token';
+import { AUTH_SESSION_EVENT, getAuthTenantId, getAuthToken } from '@/lib/auth-token';
 
 /**
  * Por omissão exige JWT: rotas internas redirecionam para /login sem token.
@@ -30,6 +30,19 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isPublicShell = isLogin || isSetup || isCadastro;
 
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
+  const [sessionKey, setSessionKey] = useState(() => `tenant-${getAuthTenantId() ?? 'none'}`);
+
+  useEffect(() => {
+    const refreshSessionKey = () => {
+      setSessionKey(`tenant-${getAuthTenantId() ?? 'none'}-${Date.now()}`);
+    };
+    window.addEventListener(AUTH_SESSION_EVENT, refreshSessionKey);
+    window.addEventListener('storage', refreshSessionKey);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, refreshSessionKey);
+      window.removeEventListener('storage', refreshSessionKey);
+    };
+  }, []);
 
   useEffect(() => {
     if (isPublicShell) {
@@ -66,7 +79,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div key={sessionKey} className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">{children}</main>
     </div>

@@ -19,7 +19,7 @@ import {
   filterReportsForSidebar,
   hasVisibleReports,
 } from '@/lib/navigation';
-import { clearAuthToken, getAuthToken } from '@/lib/auth-token';
+import { AUTH_SESSION_EVENT, clearAuthToken, getAuthToken } from '@/lib/auth-token';
 import api from '@/lib/api';
 import BrandLogo from '@/components/BrandLogo';
 
@@ -40,21 +40,32 @@ export default function Sidebar() {
   const { freteEnabled } = useTenantFeatures();
 
   useEffect(() => {
-    if (!getAuthToken()) {
-      setMe(null);
-      setTenant(null);
-      return;
-    }
-    api
-      .get<{ user: MeUser; tenant?: MeTenant }>('/auth/me')
-      .then((r) => {
-        setMe(r.user);
-        setTenant(r.tenant ?? null);
-      })
-      .catch(() => {
+    let cancelled = false;
+    const loadMe = () => {
+      if (!getAuthToken()) {
         setMe(null);
         setTenant(null);
-      });
+        return;
+      }
+      api
+        .get<{ user: MeUser; tenant?: MeTenant }>('/auth/me')
+        .then((r) => {
+          if (cancelled) return;
+          setMe(r.user);
+          setTenant(r.tenant ?? null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMe(null);
+          setTenant(null);
+        });
+    };
+    loadMe();
+    window.addEventListener(AUTH_SESSION_EVENT, loadMe);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AUTH_SESSION_EVENT, loadMe);
+    };
   }, []);
 
   const isAdmin = me?.role === 'admin';

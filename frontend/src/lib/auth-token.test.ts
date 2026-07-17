@@ -13,6 +13,7 @@ import {
 
 afterEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   clearTenantFeaturesCache();
 });
 
@@ -29,9 +30,9 @@ describe("auth-token", () => {
   });
 
   it("limpa cache de features ao trocar sessão", () => {
-    setTenantFeaturesCache({ clienteCpf: true, frete: false });
+    setTenantFeaturesCache({ clienteCpf: true, frete: false }, 1);
     setAuthToken("novo");
-    expect(getTenantFeaturesCache()).toBeNull();
+    expect(getTenantFeaturesCache(1)).toBeNull();
   });
 
   it("lê tid do JWT para isolamento de cache", () => {

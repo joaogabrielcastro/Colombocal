@@ -236,6 +236,10 @@ router.post("/login", loginLimiter, async (req, res) => {
         name: user.tenant.name,
         slug: user.tenant.slug,
       },
+      features: {
+        clienteCpf: tenantAllowsClienteCpf(user.tenant.slug),
+        frete: tenantAllowsFrete(user.tenant.slug),
+      },
     });
   } catch (e) {
     handleRouteError(res, e);

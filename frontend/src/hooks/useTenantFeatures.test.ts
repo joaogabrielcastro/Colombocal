@@ -9,6 +9,7 @@ vi.mock("@/lib/api", () => ({
 beforeEach(() => {
   apiGet.mockReset();
   vi.resetModules();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -20,31 +21,36 @@ describe("fetchTenantFeatures", () => {
     apiGet.mockResolvedValue({ features: { clienteCpf: true, frete: false } });
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
-    const f = await fetchTenantFeatures();
+    const f = await fetchTenantFeatures(true);
     expect(f).toEqual({ clienteCpf: true, frete: false });
   });
 
-  it("frete assume true quando ausente", async () => {
+  it("frete false quando ausente (não assume Colombocal)", async () => {
     apiGet.mockResolvedValue({ features: {} });
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
-    const f = await fetchTenantFeatures();
-    expect(f).toEqual({ clienteCpf: false, frete: true });
+    const f = await fetchTenantFeatures(true);
+    expect(f).toEqual({ clienteCpf: false, frete: false });
   });
 
   it("usa defaults quando a API falha", async () => {
     apiGet.mockRejectedValue(new Error("500"));
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
-    const f = await fetchTenantFeatures();
-    expect(f).toEqual({ clienteCpf: false, frete: true });
+    const f = await fetchTenantFeatures(true);
+    expect(f).toEqual({ clienteCpf: false, frete: false });
   });
 
   it("reaproveita cache em chamadas subsequentes", async () => {
-    apiGet.mockResolvedValue({ features: { clienteCpf: true, frete: true } });
+    const payload = btoa(JSON.stringify({ tid: 1, sub: 1 }));
+    localStorage.setItem("colombocal_auth_token", `hdr.${payload}.sig`);
+    apiGet.mockResolvedValue({
+      features: { clienteCpf: true, frete: true },
+      user: { tenantId: 1 },
+    });
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
-    await fetchTenantFeatures();
+    await fetchTenantFeatures(true);
     await fetchTenantFeatures();
     expect(apiGet).toHaveBeenCalledTimes(1);
   });

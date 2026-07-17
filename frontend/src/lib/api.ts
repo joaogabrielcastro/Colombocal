@@ -87,8 +87,9 @@ export async function apiFetch<T>(path: string, options?: FetchOptions): Promise
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(`${API_BASE}${path}`, {
-        headers: mergeAuthHeaders(options?.headers),
         ...options,
+        cache: options?.cache ?? 'no-store',
+        headers: mergeAuthHeaders(options?.headers),
       });
       const text = await res.text();
       const parsed = await parseJsonSafe(text);

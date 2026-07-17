@@ -1,13 +1,15 @@
 function getClientCpfTenantSlugs() {
+  /** Padrão: Requinte cadastra cliente por CPF (igual ao histórico do produto). */
+  const defaults = ["requinte"];
   const multi = process.env.CLIENT_CPF_TENANT_SLUGS;
   if (multi && String(multi).trim()) {
-    const slugs = String(multi)
+    const fromEnv = String(multi)
       .split(/[,;]/)
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
-    if (slugs.length > 0) return [...new Set(slugs)];
+    return [...new Set([...defaults, ...fromEnv])];
   }
-  return [];
+  return defaults;
 }
 
 /** Tenants sem módulo de frete (padrão: requinte). Env: NO_FRETE_TENANT_SLUGS */
@@ -31,7 +33,10 @@ function tenantAllowsClienteCpf(slug) {
 
 function tenantAllowsFrete(slug) {
   if (!slug) return true;
-  return !getNoFreteTenantSlugs().includes(String(slug).trim().toLowerCase());
+  const s = String(slug).trim().toLowerCase();
+  // Colombocal / tenant padrão: frete sempre disponível (não bloqueia por env acidental)
+  if (s === "default" || s === "colombocal") return true;
+  return !getNoFreteTenantSlugs().includes(s);
 }
 
 module.exports = {
