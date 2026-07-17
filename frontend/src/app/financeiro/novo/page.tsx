@@ -138,14 +138,28 @@ function RegistrarRecebimentoForm() {
   }, [aplicarVenda, ordemInput]);
 
   useEffect(() => {
-    if (preOrdem) void buscarPorOrdem(preOrdem);
-    else if (preVendaId && !preClienteId) {
-      api
-        .get<Venda>(`/vendas/${preVendaId}`)
-        .then(aplicarVenda)
-        .catch(() => {});
+    let cancelled = false;
+    if (preOrdem) {
+      void buscarPorOrdem(preOrdem);
+      return;
     }
-  }, [preOrdem, preVendaId, preClienteId, aplicarVenda, buscarPorOrdem]);
+    if (!preVendaId) return;
+
+    // Cobrar da lista de vendas manda clienteId + vendaId — precisa carregar a ordem
+    // e já abrir uma linha de cheque (aplicarVenda).
+    api
+      .get<Venda>(`/vendas/${preVendaId}`)
+      .then((v) => {
+        if (cancelled) return;
+        aplicarVenda(v);
+        avisoSemSaldo(v);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [preOrdem, preVendaId, aplicarVenda, buscarPorOrdem]);
 
   const loadClienteOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({ ativo: "true", busca: q, take: "40" });
@@ -406,11 +420,19 @@ function RegistrarRecebimentoForm() {
             label="Ordem da venda *"
             value={vendaId}
             onChange={(id) => {
-              setVendaId(id);
               const v =
                 vendas.find((x) => String(x.id) === id) ??
                 (vendaExtra && String(vendaExtra.id) === id ? vendaExtra : null);
-              setVendaExtra(v ?? null);
+              if (v) {
+                aplicarVenda(v);
+                return;
+              }
+              setVendaId(id);
+              setChequeItens((prev) => (prev.length > 0 ? prev : [chequeVazio()]));
+              api
+                .get<Venda>(`/vendas/${id}`)
+                .then(aplicarVenda)
+                .catch(() => setVendaExtra(null));
             }}
             loadOptions={loadVendaOptions}
             loadLabelById={loadVendaLabelById}

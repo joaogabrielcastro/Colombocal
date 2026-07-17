@@ -345,6 +345,23 @@ export default function VendaDetailPage() {
             <VendaOrdem venda={venda} link={false} size="xl" />
           </h1>
           <p className="text-gray-500 text-sm">{formatDate(venda.dataVenda)}</p>
+          <p className="text-sm mt-1">
+            <span className="text-gray-500">Recebido: </span>
+            <strong className="text-green-700">{formatMoney(totalRecebidoLiquido)}</strong>
+            <span className="text-gray-400"> · </span>
+            <span className="text-gray-500">Saldo: </span>
+            <strong className={saldoVenda >= 0 ? "text-green-700" : "text-red-600"}>
+              {formatMoney(saldoVenda)}
+              {saldoVenda >= 0 ? " quitado" : " a receber"}
+            </strong>
+            {(venda.pagamentos?.length ?? 0) > 0 ? (
+              <span className="text-gray-400">
+                {" "}
+                · {venda.pagamentos!.length} recebimento
+                {venda.pagamentos!.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </p>
         </div>
         <button onClick={imprimirOrdemServico} className="btn-secondary">
           <PrinterIcon className="w-4 h-4" />
@@ -624,13 +641,26 @@ export default function VendaDetailPage() {
       </div>
 
       <div className="card p-5 mb-4">
-        <h3 className="font-semibold text-gray-900 mb-2">
-          Baixas nesta ordem (pagamentos vinculados)
-        </h3>
-        <p className="text-sm text-gray-500 mb-3">
-          Recebido líquido: {formatMoney(totalRecebidoLiquido)}
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-semibold text-gray-900">
+              Recebimentos nesta ordem
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Cheque, dinheiro e PIX vinculados a esta venda.
+            </p>
+          </div>
+          <Link
+            href={`/financeiro/novo?clienteId=${venda.clienteId}&vendaId=${venda.id}&ordem=${venda.numeroVenda ?? venda.id}`}
+            className="btn-primary text-sm"
+          >
+            Registrar recebimento
+          </Link>
+        </div>
+        <p className="text-sm text-gray-600 mb-3">
+          Recebido líquido: <strong>{formatMoney(totalRecebidoLiquido)}</strong>
           {totalTrocoVenda > 0 ? ` • Troco devolvido: ${formatMoney(totalTrocoVenda)}` : ""}
-          {" • "}Saldo desta ordem:{" "}
+          {" • "}Saldo:{" "}
           <span
             className={
               saldoVenda >= 0 ? "text-green-700 font-semibold" : "text-red-600 font-semibold"
@@ -642,13 +672,14 @@ export default function VendaDetailPage() {
         </p>
         {temBaixas ? (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
-            Para cancelar ou editar a venda, estorne todas as baixas abaixo (cheques
-            e trocos inclusos).
+            Para cancelar ou editar a venda, estorne todas as baixas abaixo.
           </p>
         ) : null}
-        {venda.pagamentos && venda.pagamentos.length > 0 ? (
+        {(venda.pagamentos?.length ?? 0) === 0 && chequesSemPagamento.length === 0 ? (
+          <p className="text-gray-400 text-sm">Nenhum recebimento registrado nesta ordem.</p>
+        ) : (
           <ul className="divide-y divide-gray-100 text-sm">
-            {venda.pagamentos.map((p) => {
+            {(venda.pagamentos ?? []).map((p) => {
               const isCheque = String(p.tipo || "").toLowerCase() === "cheque";
               const chequeId = p.chequeId ?? p.cheque?.id;
               const estornoKind: "cheque" | "pagamento" =
@@ -657,69 +688,84 @@ export default function VendaDetailPage() {
                 estornoKind === "cheque" ? Number(chequeId) : p.id;
               const chequeInfo =
                 isCheque && p.cheque
-                  ? ` #${p.cheque.numeroOrdem}${p.cheque.banco ? ` · ${p.cheque.banco}` : ""}`
+                  ? ` #${p.cheque.numeroOrdem}${p.cheque.banco ? ` · ${p.cheque.banco}` : ""}${
+                      p.cheque.numero ? ` · nº ${p.cheque.numero}` : ""
+                    }`
                   : "";
+              const tipo = String(p.tipo || "").toLowerCase();
+              const badgeClass =
+                tipo === "cheque"
+                  ? "bg-violet-100 text-violet-800"
+                  : tipo === "dinheiro"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : tipo === "transferencia"
+                      ? "bg-sky-100 text-sky-800"
+                      : tipo.startsWith("troco_")
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-gray-100 text-gray-700";
               return (
-              <li
-                key={p.id}
-                className="py-2 flex flex-wrap items-center justify-between gap-2"
-              >
-                <span className="text-gray-700 flex items-center gap-2 flex-wrap">
-                  <span className="font-medium">{labelTipoPagamento(p.tipo)}</span>
-                  {chequeInfo ? (
-                    <span className="text-gray-500">{chequeInfo}</span>
-                  ) : null}
-                  <span className="text-gray-400">• {formatDate(p.data)}</span>
-                  {String(p.tipo || "").toLowerCase().startsWith("troco_") && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
-                      Troco
+                <li
+                  key={`pag-${p.id}`}
+                  className="py-2.5 flex flex-wrap items-center justify-between gap-2"
+                >
+                  <span className="text-gray-700 flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${badgeClass}`}
+                    >
+                      {labelTipoPagamento(p.tipo)}
                     </span>
-                  )}
-                </span>
-                <div className="flex items-center gap-3 ml-auto">
-                  <span
-                    className={`font-medium ${parseFloat(String(p.valor)) >= 0 ? "text-green-700" : "text-amber-700"}`}
-                  >
-                    {parseFloat(String(p.valor)) >= 0 ? "+" : ""}
-                    {formatMoney(p.valor)}
+                    {chequeInfo ? (
+                      <span className="text-gray-500">{chequeInfo}</span>
+                    ) : null}
+                    {p.observacoes && !isCheque ? (
+                      <span className="text-gray-400 truncate max-w-[14rem]">
+                        {p.observacoes}
+                      </span>
+                    ) : null}
+                    <span className="text-gray-400">• {formatDate(p.data)}</span>
                   </span>
-                  <button
-                    type="button"
-                    className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
-                    disabled={estornandoId != null}
-                    onClick={() =>
-                      setConfirmEstorno({
-                        kind: estornoKind,
-                        id: estornoAlvoId,
-                        label:
-                          estornoKind === "cheque"
-                            ? `o cheque${chequeInfo}`
-                            : `o pagamento (${labelTipoPagamento(p.tipo)} · ${formatMoney(p.valor)})`,
-                      })
-                    }
-                  >
-                    {estornandoId === estornoAlvoId ? "Estornando…" : "Estornar"}
-                  </button>
-                </div>
-              </li>
-            );
+                  <div className="flex items-center gap-3 ml-auto">
+                    <span
+                      className={`font-medium ${parseFloat(String(p.valor)) >= 0 ? "text-green-700" : "text-amber-700"}`}
+                    >
+                      {parseFloat(String(p.valor)) >= 0 ? "+" : ""}
+                      {formatMoney(p.valor)}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                      disabled={estornandoId != null}
+                      onClick={() =>
+                        setConfirmEstorno({
+                          kind: estornoKind,
+                          id: estornoAlvoId,
+                          label:
+                            estornoKind === "cheque"
+                              ? `o cheque${chequeInfo}`
+                              : `o pagamento (${labelTipoPagamento(p.tipo)} · ${formatMoney(p.valor)})`,
+                        })
+                      }
+                    >
+                      {estornandoId === estornoAlvoId ? "Estornando…" : "Estornar"}
+                    </button>
+                  </div>
+                </li>
+              );
             })}
-          </ul>
-        ) : (
-          <p className="text-gray-400 text-sm">Nenhum pagamento vinculado.</p>
-        )}
-
-        {chequesSemPagamento.length > 0 ? (
-          <ul className="mt-3 pt-3 border-t border-gray-100 divide-y divide-gray-100 text-sm">
             {chequesSemPagamento.map((ch) => (
               <li
-                key={ch.id}
-                className="py-2 flex flex-wrap items-center justify-between gap-2"
+                key={`ch-${ch.id}`}
+                className="py-2.5 flex flex-wrap items-center justify-between gap-2"
               >
-                <span className="text-gray-700">
-                  Cheque #{ch.numeroOrdem}
-                  {ch.banco ? ` · ${ch.banco}` : ""}
-                  {ch.numero ? ` nº ${ch.numero}` : ""}
+                <span className="text-gray-700 flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-violet-100 text-violet-800">
+                    Cheque
+                  </span>
+                  <span className="text-gray-500">
+                    #{ch.numeroOrdem}
+                    {ch.banco ? ` · ${ch.banco}` : ""}
+                    {ch.numero ? ` nº ${ch.numero}` : ""}
+                  </span>
                 </span>
                 <div className="flex items-center gap-3 ml-auto">
                   <span className="font-medium text-green-700">
@@ -743,19 +789,7 @@ export default function VendaDetailPage() {
               </li>
             ))}
           </ul>
-        ) : null}
-
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <Link
-            href={`/financeiro/novo?clienteId=${venda.clienteId}&vendaId=${venda.id}&ordem=${venda.numeroVenda ?? venda.id}`}
-            className="btn-primary inline-flex"
-          >
-            Registrar recebimento (dinheiro, PIX ou cheque)
-          </Link>
-          <p className="text-xs text-gray-500 mt-2">
-            Todas as baixas são feitas na tela Financeiro, com a ordem já preenchida.
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );

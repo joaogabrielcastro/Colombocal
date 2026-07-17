@@ -20,25 +20,92 @@ function tw(req) {
 // GET /api/pagamentos
 router.get("/", async (req, res) => {
   try {
-    const { clienteId, vendaId } = req.query;
+    const { clienteId, vendaId, tipo, dataInicio, dataFim, cliente, ordem } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 100,
       maxTake: 500,
     });
-    const where = { ...tw(req) };
-    if (clienteId) where.clienteId = parseInt(clienteId);
-    if (vendaId) where.vendaId = parseInt(vendaId);
-    const [pagamentos, total] = await Promise.all([
+    const and = [{ ...tw(req) }];
+    if (clienteId) and.push({ clienteId: parseInt(String(clienteId), 10) });
+    if (vendaId) and.push({ vendaId: parseInt(String(vendaId), 10) });
+    if (tipo && String(tipo).trim()) {
+      const t = String(tipo).trim().toLowerCase();
+      if (t === "pix") and.push({ tipo: "transferencia" });
+      else and.push({ tipo: t });
+    }
+    if (dataInicio || dataFim) {
+      const dr = {};
+      if (dataInicio) dr.gte = new Date(String(dataInicio));
+      if (dataFim) {
+        const fim = new Date(String(dataFim));
+        fim.setHours(23, 59, 59, 999);
+        dr.lte = fim;
+      }
+      and.push({ data: dr });
+    }
+    if (cliente && String(cliente).trim()) {
+      const term = String(cliente).trim();
+      and.push({
+        cliente: {
+          OR: [
+            { nomeFantasia: { contains: term, mode: "insensitive" } },
+            { razaoSocial: { contains: term, mode: "insensitive" } },
+            { cnpj: { contains: term } },
+          ],
+        },
+      });
+    }
+    if (ordem != null && String(ordem).trim() !== "") {
+      const n = parseInt(String(ordem).replace(/^#/, "").trim(), 10);
+      if (!Number.isNaN(n) && n > 0) {
+        and.push({
+          OR: [{ vendaId: n }, { venda: { numeroVenda: n } }],
+        });
+      }
+    }
+    const where = and.length === 1 ? and[0] : { AND: and };
+    const includeResumo =
+      req.query.resumo === "1" || req.query.resumo === "true";
+
+    const queries = [
       prisma.pagamento.findMany({
         where,
-        include: { cliente: true, cheque: true, venda: true },
+        include: {
+          cliente: true,
+          cheque: true,
+          venda: { select: { id: true, numeroVenda: true, dataVenda: true, valorTotal: true } },
+        },
         orderBy: { data: "desc" },
         take,
         skip,
       }),
       prisma.pagamento.count({ where }),
-    ]);
+    ];
+    if (includeResumo) {
+      queries.push(
+        prisma.pagamento.aggregate({
+          where,
+          _sum: { valor: true },
+          _count: { id: true },
+        }),
+      );
+    }
+
+    const results = await Promise.all(queries);
+    const pagamentos = results[0];
+    const total = results[1];
     setPaginationHeaders(res, { total, take, skip });
+
+    if (includeResumo) {
+      const agg = results[2];
+      return res.json({
+        items: pagamentos,
+        resumo: {
+          count: agg._count?.id ?? 0,
+          total: parseFloat(String(agg._sum?.valor ?? 0)),
+        },
+      });
+    }
     res.json(pagamentos);
   } catch (error) {
     handleRouteError(res, error);

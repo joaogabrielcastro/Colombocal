@@ -2,10 +2,13 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import {
   formatMoney,
   formatDate,
+  type Cheque,
+  type Pagamento,
 } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import * as XLSX from "xlsx";
@@ -13,12 +16,33 @@ import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import { ExportActions } from "@/components/ui/export-actions";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { ListScaffold } from "@/components/ui/list-scaffold";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useChequesQuery } from "@/features/cheques/hooks/useChequesQuery";
+import { usePagamentosQuery } from "@/features/financeiro/hooks/usePagamentosQuery";
+import api from "@/lib/api";
+import { reportApiError } from "@/lib/report-api-error";
+import { toast } from "sonner";
+
+type AbaFinanceiro = "recebimentos" | "cheques";
+
+function labelTipoPagamento(tipo: string) {
+  const t = tipo.toLowerCase();
+  if (t === "dinheiro") return "Dinheiro";
+  if (t === "transferencia") return "PIX";
+  if (t === "cheque") return "Cheque";
+  if (t.startsWith("troco_dinheiro")) return "Troco (dinheiro)";
+  if (t.startsWith("troco_transferencia")) return "Troco (PIX)";
+  return tipo;
+}
 
 function FinanceiroPageContent() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const pageSize = 20;
+  const [aba, setAba] = useState<AbaFinanceiro>(
+    () => (searchParams.get("aba") === "cheques" ? "cheques" : "recebimentos"),
+  );
   const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
   const [dataInicio, setDataInicio] = useState(searchParams.get("dataInicio") || "");
   const [dataFim, setDataFim] = useState(searchParams.get("dataFim") || "");
@@ -37,7 +61,11 @@ function FinanceiroPageContent() {
   const ordemInicial = searchParams.get("ordem") || "";
   const [ordemInput, setOrdemInput] = useState(ordemInicial);
   const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
-  const { data, isLoading: loading } = useChequesQuery({
+  const [tipoFiltro, setTipoFiltro] = useState(searchParams.get("tipo") || "");
+  const [chequeParaEstornar, setChequeParaEstornar] = useState<Cheque | null>(null);
+  const [pagamentoParaEstornar, setPagamentoParaEstornar] = useState<Pagamento | null>(null);
+  const [estornando, setEstornando] = useState(false);
+  const chequesQuery = useChequesQuery({
     dataInicio,
     dataFim,
     cliente: clienteFiltro,
@@ -50,9 +78,22 @@ function FinanceiroPageContent() {
     page,
     pageSize,
   });
-  const cheques = data?.cheques ?? [];
-  const resumo = data?.resumo ?? null;
-  const total = data?.total ?? 0;
+  const pagamentosQuery = usePagamentosQuery({
+    dataInicio,
+    dataFim,
+    cliente: clienteFiltro,
+    ordem: ordemFiltro,
+    tipo: tipoFiltro,
+    page,
+    pageSize,
+  });
+  const cheques = chequesQuery.data?.cheques ?? [];
+  const pagamentos = pagamentosQuery.data?.pagamentos ?? [];
+  const loading = aba === "cheques" ? chequesQuery.isLoading : pagamentosQuery.isLoading;
+  const resumo =
+    aba === "cheques" ? chequesQuery.data?.resumo ?? null : pagamentosQuery.data?.resumo ?? null;
+  const total =
+    aba === "cheques" ? chequesQuery.data?.total ?? 0 : pagamentosQuery.data?.total ?? 0;
   const aplicarFiltros = () => {
     setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
     setClienteFiltro(clienteInput.trim());
@@ -114,6 +155,8 @@ function FinanceiroPageContent() {
     }
     const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
     if (ordemTrim) params.set("ordem", ordemTrim);
+    if (aba === "recebimentos" && tipoFiltro) params.set("tipo", tipoFiltro);
+    if (aba === "cheques") params.set("aba", "cheques");
     if (page > 1) params.set("page", String(page));
     router.replace(`/financeiro${params.toString() ? `?${params.toString()}` : ""}`);
   }, [
@@ -126,6 +169,8 @@ function FinanceiroPageContent() {
     valorMinFiltro,
     valorMaxFiltro,
     ordemFiltro,
+    tipoFiltro,
+    aba,
     page,
   ]);
 
@@ -208,9 +253,57 @@ function FinanceiroPageContent() {
   const totalValorFiltrado = resumo?.total != null ? resumo.total : null;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const subtitle = "Histórico de cheques (PIX e dinheiro aparecem na ordem da venda)";
+  const confirmarEstorno = async () => {
+    if (chequeParaEstornar) {
+      setEstornando(true);
+      try {
+        await api.delete(`/cheques/${chequeParaEstornar.id}`);
+        toast.success(`Cheque #${chequeParaEstornar.numeroOrdem} estornado`);
+        setChequeParaEstornar(null);
+        await queryClient.invalidateQueries({ queryKey: ["cheques"] });
+        await queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+      } catch (e) {
+        reportApiError(e, { title: "Não foi possível estornar o cheque" });
+      } finally {
+        setEstornando(false);
+      }
+      return;
+    }
+    if (!pagamentoParaEstornar) return;
+    setEstornando(true);
+    try {
+      const isCheque =
+        String(pagamentoParaEstornar.tipo).toLowerCase() === "cheque" &&
+        (pagamentoParaEstornar.chequeId || pagamentoParaEstornar.cheque?.id);
+      if (isCheque) {
+        const chequeId = Number(
+          pagamentoParaEstornar.chequeId ?? pagamentoParaEstornar.cheque?.id,
+        );
+        await api.delete(`/cheques/${chequeId}`);
+        toast.success("Cheque estornado");
+      } else {
+        await api.delete(`/pagamentos/${pagamentoParaEstornar.id}`);
+        toast.success(
+          `${labelTipoPagamento(pagamentoParaEstornar.tipo)} estornado`,
+        );
+      }
+      setPagamentoParaEstornar(null);
+      await queryClient.invalidateQueries({ queryKey: ["cheques"] });
+      await queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível estornar o recebimento" });
+    } finally {
+      setEstornando(false);
+    }
+  };
+
+  const subtitle =
+    aba === "recebimentos"
+      ? "Todos os recebimentos (cheque, PIX e dinheiro) com a ordem vinculada"
+      : "Histórico detalhado de cheques";
 
   return (
+    <>
     <ListScaffold
       title="Financeiro"
       subtitle={subtitle}
@@ -378,19 +471,50 @@ function FinanceiroPageContent() {
       )}
       content={(
         <>
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            className={`px-3 py-1.5 text-sm rounded-lg font-medium ${
+              aba === "recebimentos"
+                ? "bg-blue-600 text-white"
+                : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}
+            onClick={() => {
+              setAba("recebimentos");
+              setPage(1);
+            }}
+          >
+            Todos os recebimentos
+          </button>
+          <button
+            type="button"
+            className={`px-3 py-1.5 text-sm rounded-lg font-medium ${
+              aba === "cheques"
+                ? "bg-blue-600 text-white"
+                : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}
+            onClick={() => {
+              setAba("cheques");
+              setPage(1);
+            }}
+          >
+            Só cheques
+          </button>
+        </div>
         {!loading && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
             <p className="text-slate-600">
               Resultado dos filtros:{" "}
               {total > 0 ? (
                 <span className="font-semibold text-slate-900">
-                  {total} cheque{total === 1 ? "" : "s"}
-                  {totalValorFiltrado != null && totalValorFiltrado > 0
+                  {total} {aba === "cheques" ? "cheque" : "recebimento"}
+                  {total === 1 ? "" : "s"}
+                  {totalValorFiltrado != null
                     ? ` · ${formatMoney(totalValorFiltrado)}`
                     : ""}
                 </span>
               ) : (
-                <span className="text-slate-400">nenhum cheque</span>
+                <span className="text-slate-400">nenhum registro</span>
               )}
             </p>
           </div>
@@ -400,6 +524,104 @@ function FinanceiroPageContent() {
           <div className="p-4">
             <TableListSkeleton rows={12} cols={8} />
           </div>
+        ) : aba === "recebimentos" ? (
+          pagamentos.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">
+              Nenhum recebimento encontrado
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="table-header w-24">Tipo</th>
+                  <th className="table-header">Cliente</th>
+                  <th className="table-header w-28 bg-slate-50">Venda</th>
+                  <th className="table-header">Detalhe</th>
+                  <th className="table-header">Valor</th>
+                  <th className="table-header">Data</th>
+                  <th className="table-header w-36">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagamentos.map((p) => {
+                  const tipo = String(p.tipo || "").toLowerCase();
+                  const isCheque = tipo === "cheque";
+                  return (
+                    <tr key={p.id} className="table-row">
+                      <td className="table-cell">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                            isCheque
+                              ? "bg-violet-100 text-violet-800"
+                              : tipo === "dinheiro"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : tipo === "transferencia"
+                                  ? "bg-sky-100 text-sky-800"
+                                  : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {labelTipoPagamento(p.tipo)}
+                        </span>
+                      </td>
+                      <td className="table-cell">
+                        {p.cliente ? (
+                          <Link
+                            href={`/clientes/${p.clienteId}`}
+                            className="font-medium text-blue-600 hover:underline"
+                          >
+                            {p.cliente.nomeFantasia || p.cliente.razaoSocial}
+                          </Link>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="table-cell">
+                        {p.venda ? (
+                          <VendaOrdem venda={p.venda} size="sm" prefix="Venda" />
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </td>
+                      <td className="table-cell text-sm text-gray-600">
+                        {isCheque && p.cheque
+                          ? `#${p.cheque.numeroOrdem}${p.cheque.banco ? ` · ${p.cheque.banco}` : ""}${
+                              p.cheque.numero ? ` · nº ${p.cheque.numero}` : ""
+                            }`
+                          : p.observacoes || "-"}
+                      </td>
+                      <td className="table-cell font-semibold">
+                        {formatMoney(p.valor)}
+                      </td>
+                      <td className="table-cell">{formatDate(p.data)}</td>
+                      <td className="table-cell">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                          {p.venda ? (
+                            <>
+                              <Link
+                                href={`/vendas/${p.venda.id}`}
+                                className="text-blue-600 hover:underline font-medium"
+                              >
+                                Ver venda
+                              </Link>
+                              <span className="text-gray-300">·</span>
+                            </>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                            disabled={estornando}
+                            onClick={() => setPagamentoParaEstornar(p)}
+                          >
+                            Estornar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )
         ) : cheques.length === 0 ? (
           <div className="p-8 text-center text-gray-400">
             Nenhum cheque encontrado
@@ -408,13 +630,14 @@ function FinanceiroPageContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="table-header w-16">Ordem</th>
+                <th className="table-header w-16">Cheque</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Banco / Nº</th>
                 <th className="table-header">Emitente</th>
-                <th className="table-header w-28 bg-slate-50">Ordem</th>
+                <th className="table-header w-28 bg-slate-50">Venda</th>
                 <th className="table-header">Valor</th>
                 <th className="table-header">Data</th>
+                <th className="table-header w-36">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -452,6 +675,36 @@ function FinanceiroPageContent() {
                   </td>
                   <td className="table-cell">
                     {formatDate(c.dataRecebimento)}
+                  </td>
+                  <td className="table-cell">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                      {c.venda ? (
+                        <>
+                          <Link
+                            href={`/vendas/${c.venda.id}`}
+                            className="text-blue-600 hover:underline font-medium"
+                          >
+                            Ver venda
+                          </Link>
+                          <span className="text-gray-300">·</span>
+                          <Link
+                            href={`/financeiro/novo?clienteId=${c.clienteId}&vendaId=${c.venda.id}&ordem=${c.venda.numeroVenda ?? c.venda.id}`}
+                            className="text-green-700 hover:underline"
+                          >
+                            Cobrar
+                          </Link>
+                          <span className="text-gray-300">·</span>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                        disabled={estornando}
+                        onClick={() => setChequeParaEstornar(c)}
+                      >
+                        Estornar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -492,6 +745,37 @@ function FinanceiroPageContent() {
       </div>
       )}
     />
+    <ConfirmDialog
+      open={chequeParaEstornar != null || pagamentoParaEstornar != null}
+      title="Estornar recebimento?"
+      description={
+        chequeParaEstornar
+          ? `Cheque #${chequeParaEstornar.numeroOrdem} · ${formatMoney(chequeParaEstornar.valor)}${
+              chequeParaEstornar.venda
+                ? ` · ${vendaOrdemTexto(chequeParaEstornar.venda)}`
+                : ""
+            }\n\nO valor volta para o saldo em aberto da venda.`
+          : pagamentoParaEstornar
+            ? `${labelTipoPagamento(pagamentoParaEstornar.tipo)} · ${formatMoney(pagamentoParaEstornar.valor)}${
+                pagamentoParaEstornar.venda
+                  ? ` · ${vendaOrdemTexto(pagamentoParaEstornar.venda)}`
+                  : ""
+              }\n\nO valor volta para o saldo em aberto da venda.`
+            : undefined
+      }
+      confirmText={estornando ? "Estornando…" : "Estornar"}
+      cancelText="Cancelar"
+      tone="danger"
+      busy={estornando}
+      onConfirm={() => void confirmarEstorno()}
+      onCancel={() => {
+        if (!estornando) {
+          setChequeParaEstornar(null);
+          setPagamentoParaEstornar(null);
+        }
+      }}
+    />
+    </>
   );
 }
 

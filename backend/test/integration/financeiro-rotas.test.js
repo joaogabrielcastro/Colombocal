@@ -209,6 +209,15 @@ test("POST /api/recebimentos compõe cheque + dinheiro + pix", async () => {
   assert.equal(res.body.totalGeral, 80);
   const cheques = await prisma.cheque.findMany({ where: { clienteId: ctx.cliente.id } });
   assert.equal(cheques.length, 1);
+  assert.equal(cheques[0].vendaId, ctx.venda.id);
+
+  const pagamentos = await prisma.pagamento.findMany({
+    where: { vendaId: ctx.venda.id },
+    orderBy: { id: "asc" },
+  });
+  assert.equal(pagamentos.length, 3);
+  const tipos = pagamentos.map((p) => p.tipo).sort();
+  assert.deepEqual(tipos, ["cheque", "dinheiro", "transferencia"]);
 });
 
 test("POST /api/recebimentos vazio é rejeitado", async () => {

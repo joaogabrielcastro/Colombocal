@@ -137,16 +137,25 @@ router.get("/", async (req, res) => {
       }
     }
     if (busca) {
-      where.cliente = {
-        tenantId: req.tenantId,
-        OR: [
-          { razaoSocial: { contains: busca, mode: "insensitive" } },
-          { nomeFantasia: { contains: busca, mode: "insensitive" } },
-          { cnpj: { contains: busca } },
-          { telefone: { contains: busca } },
-          { cidade: { contains: busca, mode: "insensitive" } },
-        ],
-      };
+      const buscaTrim = String(busca).trim();
+      // Digitar só "#7" ou "7" na busca geral também filtra pela ordem
+      if (/^#?\d+$/.test(buscaTrim) && !ordem) {
+        const ordemWhere = wherePorOrdem(buscaTrim, req.tenantId);
+        if (ordemWhere) {
+          Object.assign(where, ordemWhere);
+        }
+      } else {
+        where.cliente = {
+          tenantId: req.tenantId,
+          OR: [
+            { razaoSocial: { contains: buscaTrim, mode: "insensitive" } },
+            { nomeFantasia: { contains: buscaTrim, mode: "insensitive" } },
+            { cnpj: { contains: buscaTrim } },
+            { telefone: { contains: buscaTrim } },
+            { cidade: { contains: buscaTrim, mode: "insensitive" } },
+          ],
+        };
+      }
     }
     const [vendas, total, somaAgg] = await Promise.all([
       prisma.venda.findMany({
@@ -256,7 +265,11 @@ router.get("/:id", async (req, res) => {
       venda.pagamentos.length === 0 &&
       venda.cheques.length === 0 &&
       !tituloComPagamento;
-    res.json({ ...venda, podeEditar });
+    res.json({
+      ...venda,
+      podeEditar,
+      saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(venda),
+    });
   } catch (error) {
     handleRouteError(res, error);
   }

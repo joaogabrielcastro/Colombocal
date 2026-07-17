@@ -40,6 +40,8 @@ function VendasPageContent() {
   );
   const [buscaInput, setBuscaInput] = useState(searchParams.get('busca') || '');
   const [buscaRapida, setBuscaRapida] = useState(searchParams.get('busca') || '');
+  const [ordemInput, setOrdemInput] = useState(searchParams.get('ordem') || '');
+  const [ordemFiltro, setOrdemFiltro] = useState(searchParams.get('ordem') || '');
   const [dataInicio, setDataInicio] = useState(
     searchParams.get('dataInicio') || '',
   );
@@ -83,6 +85,8 @@ function VendasPageContent() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (buscaRapida) params.set('busca', buscaRapida);
+    const ordemTrim = ordemFiltro.replace(/^#/, '').trim();
+    if (ordemTrim) params.set('ordem', ordemTrim);
     if (dataInicio) params.set('dataInicio', dataInicio);
     if (dataFim) params.set('dataFim', dataFim);
     if (vendedorId) params.set('vendedorId', vendedorId);
@@ -123,6 +127,7 @@ function VendasPageContent() {
     };
   }, [
     buscaRapida,
+    ordemFiltro,
     dataInicio,
     dataFim,
     vendedorId,
@@ -142,12 +147,15 @@ function VendasPageContent() {
   const aplicarBuscaJa = () => {
     const next = buscaInput.trim();
     setBuscaRapida(next);
+    setOrdemFiltro(ordemInput.replace(/^#/, '').trim());
     setPage(1);
   };
 
   const limparFiltros = () => {
     setBuscaInput('');
     setBuscaRapida('');
+    setOrdemInput('');
+    setOrdemFiltro('');
     setDataInicio('');
     setDataFim('');
     setVendedorId('');
@@ -203,6 +211,25 @@ function VendasPageContent() {
               onChange={(e) => setBuscaInput(e.target.value)}
               className="input-field"
               placeholder="Nome, fantasia, CNPJ, cidade…"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Ordem (#)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={ordemInput}
+              onChange={(e) => setOrdemInput(e.target.value.replace(/^#/, ''))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  aplicarBuscaJa();
+                }
+              }}
+              className="input-field font-mono"
+              placeholder="ex: 7 ou #7"
             />
           </div>
           <div>
@@ -351,11 +378,24 @@ function VendasPageContent() {
                   </>
                 ) : null}
                 <th className="table-header w-28 text-right">Total</th>
+                <th className="table-header w-28">Status</th>
                 <th className="table-header w-44">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {vendas.map((v) => (
+              {vendas.map((v) => {
+                const saldo = Math.max(
+                  0,
+                  parseFloat(String(v.saldoEmAbertoTitulos ?? 0)),
+                );
+                const total = parseFloat(String(v.valorTotal ?? 0));
+                const status =
+                  saldo < 0.01
+                    ? "quitado"
+                    : saldo + 0.01 < total
+                      ? "parcial"
+                      : "em aberto";
+                return (
                 <tr key={v.id} className="table-row">
                   <VendaOrdemCell venda={v} size="sm" />
                   <td className="table-cell whitespace-nowrap">{formatDate(v.dataVenda)}</td>
@@ -384,6 +424,21 @@ function VendasPageContent() {
                     {formatMoney(v.valorTotal)}
                   </td>
                   <td className="table-cell">
+                    {status === "quitado" ? (
+                      <span className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                        Quitado
+                      </span>
+                    ) : status === "parcial" ? (
+                      <span className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                        Parcial · {formatMoney(saldo)}
+                      </span>
+                    ) : (
+                      <span className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">
+                        Em aberto
+                      </span>
+                    )}
+                  </td>
+                  <td className="table-cell">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                       <Link
                         href={`/vendas/${v.id}`}
@@ -400,7 +455,7 @@ function VendasPageContent() {
                       </Link>
                       <span className="text-gray-300">·</span>
                       <Link
-                        href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}`}
+                        href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
                         className="text-gray-600 hover:underline"
                       >
                         Cobrar
@@ -408,12 +463,13 @@ function VendasPageContent() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t-2 border-gray-200">
                 <td
-                  colSpan={freteEnabled ? 8 : 6}
+                  colSpan={freteEnabled ? 9 : 7}
                   className="px-4 py-3 text-sm font-semibold text-right text-gray-600"
                 >
                   Subtotal (só esta página):

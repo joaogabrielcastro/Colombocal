@@ -216,6 +216,7 @@ export interface Pagamento {
   data: string;
   chequeId?: number | null;
   observacoes?: string;
+  cliente?: Cliente;
   cheque?: {
     id: number;
     numeroOrdem?: number;
