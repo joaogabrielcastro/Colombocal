@@ -9,6 +9,11 @@ vi.mock("@/lib/api", () => ({
 import { useChequesQuery } from "./useChequesQuery";
 import { createQueryWrapper } from "@/test-utils/reactQuery";
 
+function setTestJwt(tenantId: number) {
+  const payload = btoa(JSON.stringify({ tid: tenantId, sub: 1 }));
+  localStorage.setItem("colombocal_auth_token", `hdr.${payload}.sig`);
+}
+
 const filtros = {
   dataInicio: "2026-01-01",
   dataFim: "2026-12-31",
@@ -23,7 +28,11 @@ const filtros = {
   pageSize: 25,
 };
 
-beforeEach(() => getWithMeta.mockReset());
+beforeEach(() => {
+  getWithMeta.mockReset();
+  localStorage.clear();
+  setTestJwt(1);
+});
 
 describe("useChequesQuery", () => {
   it("normaliza payload em array", async () => {

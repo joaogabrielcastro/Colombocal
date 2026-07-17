@@ -10,6 +10,11 @@ import { useRelatorioVendasQuery } from "./useRelatorioVendasQuery";
 import { createQueryWrapper } from "@/test-utils/reactQuery";
 import type { RelatorioVendasParams } from "../types";
 
+function setTestJwt(tenantId: number) {
+  const payload = btoa(JSON.stringify({ tid: tenantId, sub: 1 }));
+  localStorage.setItem("colombocal_auth_token", `hdr.${payload}.sig`);
+}
+
 const params: RelatorioVendasParams = {
   dataInicio: "2026-01-01",
   dataFim: "2026-12-31",
@@ -19,7 +24,11 @@ const params: RelatorioVendasParams = {
   produtoId: "5",
 };
 
-beforeEach(() => apiFetchWithMeta.mockReset());
+beforeEach(() => {
+  apiFetchWithMeta.mockReset();
+  localStorage.clear();
+  setTestJwt(1);
+});
 
 describe("useRelatorioVendasQuery", () => {
   it("não busca quando enabled é false", async () => {

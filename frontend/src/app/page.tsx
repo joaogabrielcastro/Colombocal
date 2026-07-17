@@ -18,6 +18,7 @@ import { VendaOrdem } from "@/components/VendaOrdem";
 import { FluxoOperacional } from "@/components/FluxoOperacional";
 import { DashboardFaturamentoChart } from "@/components/DashboardFaturamentoChart";
 import api from "@/lib/api";
+import { tenantStorageKey } from "@/lib/auth-token";
 import { DashboardSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { reportApiError } from "@/lib/report-api-error";
@@ -209,7 +210,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setOnboardingDismissed(
-      window.localStorage.getItem("colombocal_onboarding_dismissed") === "true",
+      window.localStorage.getItem(tenantStorageKey("colombocal_onboarding_dismissed")) === "true",
     );
   }, []);
 
@@ -286,7 +287,10 @@ export default function DashboardPage() {
               className="text-gray-400 hover:text-gray-700"
               aria-label="Dispensar primeiros passos"
               onClick={() => {
-                window.localStorage.setItem("colombocal_onboarding_dismissed", "true");
+                window.localStorage.setItem(
+                  tenantStorageKey("colombocal_onboarding_dismissed"),
+                  "true",
+                );
                 setOnboardingDismissed(true);
               }}
             >

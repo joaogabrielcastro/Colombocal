@@ -31,6 +31,12 @@ export function getAuthTenantId(): number | null {
   }
 }
 
+/** Prefixa chaves de preferências no storage com o tenant atual (ex.: "colombocal_x:t2"). */
+export function tenantStorageKey(base: string): string {
+  const tid = getAuthTenantId();
+  return tid != null ? `${base}:t${tid}` : base;
+}
+
 export function setAuthToken(token: string) {
   window.localStorage.setItem(STORAGE_KEY, token);
   notifyAuthSessionChange();

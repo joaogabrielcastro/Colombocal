@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { FLUXO_VENDA_PASSOS } from "@/lib/help-texts";
+import { tenantStorageKey } from "@/lib/auth-token";
 
 const STORAGE_KEY = "colombocal_fluxo_guia_oculto";
 
@@ -11,7 +12,7 @@ export function FluxoOperacional() {
   const [oculto, setOculto] = useState(true);
 
   useEffect(() => {
-    setOculto(localStorage.getItem(STORAGE_KEY) === "1");
+    setOculto(localStorage.getItem(tenantStorageKey(STORAGE_KEY)) === "1");
   }, []);
 
   if (oculto) return null;
@@ -30,7 +31,7 @@ export function FluxoOperacional() {
         <button
           type="button"
           onClick={() => {
-            localStorage.setItem(STORAGE_KEY, "1");
+            localStorage.setItem(tenantStorageKey(STORAGE_KEY), "1");
             setOculto(true);
           }}
           className="text-gray-400 hover:text-gray-600 p-1 rounded"
