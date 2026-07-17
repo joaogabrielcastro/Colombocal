@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { formatMoney, type Produto } from "@/lib/utils";
 import api from "@/lib/api";
@@ -9,7 +10,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ListScaffold } from "@/components/ui/list-scaffold";
 import { reportApiError } from "@/lib/report-api-error";
 
-export default function ProdutosPage() {
+function ProdutosPageContent() {
+  const searchParams = useSearchParams();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<null | Produto>(null);
@@ -37,6 +39,15 @@ export default function ProdutosPage() {
   useEffect(() => {
     carregar();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("novo") === "1") {
+      setMostrarForm(true);
+      setEditando(null);
+      setForm({ unidade: "ton" });
+      setErro("");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,7 +171,7 @@ export default function ProdutosPage() {
                             disabled={deletingId === p.id}
                             className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {deletingId === p.id ? "Excluindo..." : "Excluir"}
+                            {deletingId === p.id ? "Inativando..." : "Inativar"}
                           </button>
                         </div>
                       </td>
@@ -262,5 +273,19 @@ export default function ProdutosPage() {
         onConfirm={() => void confirmarExclusao()}
       />
     </>
+  );
+}
+
+export default function ProdutosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6">
+          <TableListSkeleton rows={8} cols={4} />
+        </div>
+      }
+    >
+      <ProdutosPageContent />
+    </Suspense>
   );
 }

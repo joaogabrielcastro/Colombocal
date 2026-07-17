@@ -1,12 +1,18 @@
 'use client';
+
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '@/lib/api';
 import type { Vendedor } from '@/lib/utils';
-import SearchableSelect from '@/components/SearchableSelect';
 import { useTenantFeatures } from '@/hooks/useTenantFeatures';
+import { isValidCpf, isValidCnpjDigits } from '@/lib/document-validation';
+import {
+  ClienteForm,
+  type ClienteFormState,
+  type TipoPessoa,
+} from '@/features/clientes/components/ClienteForm';
 
 interface CnpjData {
   cnpj: string;
@@ -18,9 +24,7 @@ interface CnpjData {
   endereco: string;
 }
 
-type TipoPessoa = 'PF' | 'PJ';
-
-const initialForm = {
+const initialForm: ClienteFormState = {
   cpf: '',
   cnpj: '',
   razaoSocial: '',
@@ -40,7 +44,7 @@ export default function NovoClientePage() {
   const router = useRouter();
   const { clienteCpfEnabled: permiteCpf, freteEnabled } = useTenantFeatures();
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>('PJ');
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState<ClienteFormState>(initialForm);
   const [cnpjBusca, setCnpjBusca] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -98,33 +102,46 @@ export default function NovoClientePage() {
     e.preventDefault();
     setSalvando(true);
     setErro('');
+
+    if (tipoPessoa === 'PF') {
+      if (!isValidCpf(form.cpf ?? '')) {
+        setErro('CPF inválido. Verifique os dígitos.');
+        setSalvando(false);
+        return;
+      }
+    } else if (!isValidCnpjDigits(form.cnpj ?? '')) {
+      setErro('CNPJ deve ter 14 dígitos.');
+      setSalvando(false);
+      return;
+    }
+
     try {
       const payload: Record<string, unknown> = {
         tipoPessoa,
-        razaoSocial: form.razaoSocial.trim(),
-        nomeFantasia: form.nomeFantasia.trim() || null,
-        telefone: form.telefone.trim() || null,
-        cidade: form.cidade.trim() || null,
-        estado: form.estado.trim() || null,
-        endereco: form.endereco.trim() || null,
-        observacoes: form.observacoes.trim() || null,
+        razaoSocial: (form.razaoSocial ?? '').trim(),
+        nomeFantasia: (form.nomeFantasia ?? '').trim() || null,
+        telefone: (form.telefone ?? '').trim() || null,
+        cidade: (form.cidade ?? '').trim() || null,
+        estado: (form.estado ?? '').trim() || null,
+        endereco: (form.endereco ?? '').trim() || null,
+        observacoes: (form.observacoes ?? '').trim() || null,
         ...(freteEnabled
           ? {
-              fretePadraoSaco: parseFloat(form.fretePadraoSaco || '0'),
-              fretePadraoTonelada: parseFloat(form.fretePadraoTonelada || '0'),
+              fretePadraoSaco: parseFloat(String(form.fretePadraoSaco || '0')),
+              fretePadraoTonelada: parseFloat(String(form.fretePadraoTonelada || '0')),
             }
           : {}),
-        vendedorId: form.vendedorId ? parseInt(form.vendedorId, 10) : undefined,
+        vendedorId: form.vendedorId ? parseInt(String(form.vendedorId), 10) : undefined,
         comissaoFixaPercentual:
-          form.comissaoFixaPercentual !== ''
-            ? parseFloat(form.comissaoFixaPercentual.replace(',', '.'))
+          form.comissaoFixaPercentual !== '' && form.comissaoFixaPercentual != null
+            ? parseFloat(String(form.comissaoFixaPercentual).replace(',', '.'))
             : undefined,
       };
 
       if (tipoPessoa === 'PF') {
-        payload.cpf = form.cpf.replace(/\D/g, '');
+        payload.cpf = String(form.cpf ?? '').replace(/\D/g, '');
       } else {
-        payload.cnpj = form.cnpj.replace(/\D/g, '');
+        payload.cnpj = String(form.cnpj ?? '').replace(/\D/g, '');
       }
 
       const cliente = await api.post<{ id: number }>('/clientes', payload);
@@ -134,15 +151,6 @@ export default function NovoClientePage() {
       setSalvando(false);
     }
   };
-
-  const set =
-    (field: keyof typeof form) =>
-    (
-      e: React.ChangeEvent<
-        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-      >,
-    ) =>
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -160,176 +168,25 @@ export default function NovoClientePage() {
         </div>
       </div>
 
-      {erro && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{erro}</div>
-      )}
-
-      {permiteCpf ? (
-        <div className="card p-5 mb-5">
-          <h2 className="font-semibold text-gray-900 mb-3">Tipo de cliente</h2>
-          <div className="flex flex-wrap gap-4">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="radio"
-                name="tipoPessoa"
-                checked={tipoPessoa === 'PF'}
-                onChange={() => setTipoPessoa('PF')}
-              />
-              Pessoa física (CPF)
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="radio"
-                name="tipoPessoa"
-                checked={tipoPessoa === 'PJ'}
-                onChange={() => setTipoPessoa('PJ')}
-              />
-              Pessoa jurídica (CNPJ)
-            </label>
-          </div>
-        </div>
-      ) : null}
-
-      {!isPf ? (
-        <div className="card p-5 mb-5">
-          <h2 className="font-semibold text-gray-900 mb-3">Busca por CNPJ</h2>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="00.000.000/0000-00"
-              value={cnpjBusca}
-              onChange={(e) => setCnpjBusca(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleBuscarCNPJ())}
-              className="input-field flex-1"
-              maxLength={18}
-            />
-            <button type="button" onClick={handleBuscarCNPJ} disabled={buscando} className="btn-primary">
-              <MagnifyingGlassIcon className="w-4 h-4" />
-              {buscando ? 'Buscando...' : 'Buscar'}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <form onSubmit={handleSubmit} className="card p-5">
-        <h2 className="font-semibold text-gray-900 mb-4">Dados do Cliente</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {isPf ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">CPF *</label>
-              <input
-                required
-                value={form.cpf}
-                onChange={set('cpf')}
-                className="input-field"
-                placeholder="000.000.000-00"
-                maxLength={14}
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ *</label>
-              <input
-                required
-                value={form.cnpj}
-                onChange={set('cnpj')}
-                className="input-field"
-                placeholder="00000000000000"
-              />
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-            <input value={form.telefone} onChange={set('telefone')} className="input-field" placeholder="(XX) XXXXX-XXXX" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {isPf ? 'Nome completo *' : 'Razão Social *'}
-            </label>
-            <input required value={form.razaoSocial} onChange={set('razaoSocial')} className="input-field" />
-          </div>
-          {!isPf ? (
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
-              <input value={form.nomeFantasia} onChange={set('nomeFantasia')} className="input-field" />
-            </div>
-          ) : null}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-            <input value={form.cidade} onChange={set('cidade')} className="input-field" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-            <input value={form.estado} onChange={set('estado')} className="input-field" placeholder="SP" maxLength={2} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label>
-            <input value={form.endereco} onChange={set('endereco')} className="input-field" />
-          </div>
-          {freteEnabled ? (
-          <>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Frete padrão por saco (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.fretePadraoSaco}
-              onChange={set('fretePadraoSaco')}
-              className="input-field"
-              placeholder="0,00"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Frete padrão por tonelada (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.fretePadraoTonelada}
-              onChange={set('fretePadraoTonelada')}
-              className="input-field"
-              placeholder="0,00"
-            />
-          </div>
-          </>
-          ) : null}
-          <div>
-            <SearchableSelect
-              label="Vendedor do cliente"
-              value={form.vendedorId}
-              onChange={(id) => setForm((p) => ({ ...p, vendedorId: id }))}
-              loadOptions={loadVendedorOptions}
-              loadLabelById={loadVendedorLabelById}
-              minChars={0}
-              placeholder="Nenhum — digite para buscar vendedor"
-              emptyHint="Lista os primeiros vendedores ativos; refine digitando o nome."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Comissão fixa (%)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.comissaoFixaPercentual}
-              onChange={set('comissaoFixaPercentual')}
-              className="input-field"
-              placeholder="Opcional — sobrescreve o % do vendedor"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-            <textarea value={form.observacoes} onChange={set('observacoes')} className="input-field" rows={3} />
-          </div>
-        </div>
-        <div className="flex gap-3 mt-5">
-          <button type="submit" disabled={salvando} className="btn-primary">
-            {salvando ? 'Salvando...' : 'Salvar Cliente'}
-          </button>
-          <Link href="/clientes" className="btn-secondary">Cancelar</Link>
-        </div>
-      </form>
+      <ClienteForm
+        mode="create"
+        form={form}
+        setForm={setForm}
+        freteEnabled={freteEnabled}
+        permiteCpf={permiteCpf}
+        tipoPessoa={tipoPessoa}
+        setTipoPessoa={setTipoPessoa}
+        cnpjBusca={cnpjBusca}
+        setCnpjBusca={setCnpjBusca}
+        buscandoCnpj={buscando}
+        onBuscarCnpj={() => void handleBuscarCNPJ()}
+        loadVendedorOptions={loadVendedorOptions}
+        loadVendedorLabelById={loadVendedorLabelById}
+        erro={erro}
+        salvando={salvando}
+        onSubmit={handleSubmit}
+        footerExtra={<Link href="/clientes" className="btn-secondary">Cancelar</Link>}
+      />
     </div>
   );
 }

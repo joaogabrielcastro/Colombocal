@@ -169,7 +169,7 @@ export default function ClientesPage() {
                         disabled={deletingId === c.id}
                         className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {deletingId === c.id ? "Excluindo..." : "Excluir"}
+                        {deletingId === c.id ? "Inativando..." : "Inativar"}
                       </button>
                     </div>
                   </td>

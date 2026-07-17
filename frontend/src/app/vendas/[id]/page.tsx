@@ -654,7 +654,7 @@ export default function VendaDetailPage() {
             href={`/financeiro/novo?clienteId=${venda.clienteId}&vendaId=${venda.id}&ordem=${venda.numeroVenda ?? venda.id}`}
             className="btn-primary text-sm"
           >
-            Registrar recebimento
+            Receber pagamento
           </Link>
         </div>
         <p className="text-sm text-gray-600 mb-3">

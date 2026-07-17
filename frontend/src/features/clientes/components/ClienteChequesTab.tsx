@@ -20,7 +20,7 @@ export function ClienteChequesTab({ clienteId, cheques, filtroChqIni, filtroChqF
     <div className="card overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2">
         <h3 className="font-semibold text-gray-900">Cheques do Cliente</h3>
-        <Link href={`/financeiro/novo?clienteId=${clienteId}`} className="btn-primary text-sm">+ Novo Cheque</Link>
+        <Link href={`/financeiro/novo?clienteId=${clienteId}`} className="btn-primary text-sm">+ Receber pagamento</Link>
       </div>
       <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap gap-3 items-end">
         <div><label className="block text-xs text-gray-500 mb-1">De</label><input type="date" value={filtroChqIni} onChange={(e) => setFiltroChqIni(e.target.value)} className="input-field text-sm" /></div>

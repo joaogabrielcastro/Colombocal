@@ -7,7 +7,7 @@ const { prisma } = require("../lib/prisma");
 const { signAuthToken, requireTenantUser } = require("../middleware/auth");
 const { handleRouteError } = require("../utils/api");
 const { normalizeNavPermissions } = require("../constants/navPermissions");
-const { tenantAllowsClienteCpf, tenantAllowsFrete } = require("../constants/tenantFeatures");
+const { getTenantFeatures } = require("../services/tenantFeaturesResolver");
 const {
   loadRegistrationTenants,
   resolveRegistrationTenantSlug,
@@ -214,6 +214,11 @@ router.post("/login", loginLimiter, async (req, res) => {
     matched.sort((a, b) => a.id - b.id);
     const user = matched[0];
     const token = signAuthToken(user);
+    const features = await getTenantFeatures(
+      prisma,
+      user.tenantId,
+      user.tenant.slug,
+    );
     res.json({
       token,
       user: {
@@ -228,10 +233,7 @@ router.post("/login", loginLimiter, async (req, res) => {
         name: user.tenant.name,
         slug: user.tenant.slug,
       },
-      features: {
-        clienteCpf: tenantAllowsClienteCpf(user.tenant.slug),
-        frete: tenantAllowsFrete(user.tenant.slug),
-      },
+      features,
     });
   } catch (e) {
     handleRouteError(res, e);
@@ -248,6 +250,11 @@ router.get("/me", requireTenantUser, async (req, res) => {
     if (!user || user.tenantId !== req.tenantId) {
       return res.status(404).json({ error: "Usuário não encontrado" });
     }
+    const features = await getTenantFeatures(
+      prisma,
+      user.tenantId,
+      user.tenant.slug,
+    );
     res.json({
       user: {
         id: user.id,
@@ -262,10 +269,7 @@ router.get("/me", requireTenantUser, async (req, res) => {
         name: user.tenant.name,
         slug: user.tenant.slug,
       },
-      features: {
-        clienteCpf: tenantAllowsClienteCpf(user.tenant.slug),
-        frete: tenantAllowsFrete(user.tenant.slug),
-      },
+      features,
     });
   } catch (e) {
     handleRouteError(res, e);

@@ -13,11 +13,11 @@ export const FLUXO_VENDA_PASSOS = [
   },
   {
     passo: 3,
-    titulo: "Recebimento",
-    descricao: "Registre dinheiro, PIX ou cheque na tela Financeiro.",
+    titulo: "Receber",
+    descricao: "Registre dinheiro, PIX ou cheque em Recebimentos.",
     href: "/financeiro/novo",
   },
 ] as const;
 
 export const CHEQUES_HEADER =
-  "Ao salvar, o valor abate o saldo do cliente na hora (como dinheiro ou PIX). Vincule à venda quando houver parcela em aberto.";
+  "Ao salvar, o valor abate o saldo do cliente na hora (como dinheiro ou PIX). Vincule à venda quando houver valor em aberto.";

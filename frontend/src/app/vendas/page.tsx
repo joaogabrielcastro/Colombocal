@@ -6,6 +6,8 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '@heroicons/react/24/outline';
 import { VendaOrdemCell } from '@/components/VendaOrdem';
 import {
@@ -54,6 +56,15 @@ function VendasPageContent() {
   );
   const [valorMin, setValorMin] = useState(searchParams.get('valorMin') || '');
   const [valorMax, setValorMax] = useState(searchParams.get('valorMax') || '');
+  const [clienteId, setClienteId] = useState(searchParams.get('clienteId') || '');
+  const [maisFiltrosAbertos, setMaisFiltrosAbertos] = useState(() =>
+    Boolean(
+      searchParams.get('vendedorId') ||
+        searchParams.get('motoristaId') ||
+        searchParams.get('valorMin') ||
+        searchParams.get('valorMax'),
+    ),
+  );
   const buscaAnteriorRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -93,6 +104,7 @@ function VendasPageContent() {
     if (motoristaId) params.set('motoristaId', motoristaId);
     if (valorMin.trim()) params.set('valorMin', valorMin.trim());
     if (valorMax.trim()) params.set('valorMax', valorMax.trim());
+    if (clienteId) params.set('clienteId', clienteId);
     params.set('take', String(pageSize));
     params.set('skip', String((page - 1) * pageSize));
     if (page > 1) params.set('page', String(page));
@@ -134,6 +146,7 @@ function VendasPageContent() {
     motoristaId,
     valorMin,
     valorMax,
+    clienteId,
     page,
     router,
   ]);
@@ -162,6 +175,7 @@ function VendasPageContent() {
     setMotoristaId('');
     setValorMin('');
     setValorMax('');
+    setClienteId('');
     setPage(1);
     router.replace('/vendas');
   };
@@ -200,8 +214,26 @@ function VendasPageContent() {
         </Link>
       </div>
 
+      {clienteId ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
+          <span>
+            Filtrando vendas do cliente #{clienteId}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setClienteId('');
+              setPage(1);
+            }}
+            className="font-medium text-blue-700 hover:underline"
+          >
+            Limpar filtro de cliente
+          </button>
+        </div>
+      ) : null}
+
       <FilterBar className="p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="md:col-span-2">
             <label className="block text-xs text-gray-500 mb-1">
               Busca (cliente, CNPJ, cidade…)
@@ -258,78 +290,98 @@ function VendasPageContent() {
               className="input-field"
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Vendedor</label>
-            <select
-              value={vendedorId}
-              onChange={(e) => {
-                setVendedorId(e.target.value);
-                setPage(1);
-              }}
-              className="input-field"
-            >
-              <option value="">Todos</option>
-              {vendedores.map((v) => (
-                <option key={v.id} value={String(v.id)}>
-                  {v.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Motorista</label>
-            <select
-              value={motoristaId}
-              onChange={(e) => {
-                setMotoristaId(e.target.value);
-                setPage(1);
-              }}
-              className="input-field"
-            >
-              <option value="">Todos</option>
-              {motoristas.map((m) => (
-                <option key={m.id} value={String(m.id)}>
-                  {m.nome}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
+        <div>
+          <button
+            type="button"
+            onClick={() => setMaisFiltrosAbertos((open) => !open)}
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900"
+          >
+            {maisFiltrosAbertos ? (
+              <ChevronUpIcon className="w-4 h-4" />
+            ) : (
+              <ChevronDownIcon className="w-4 h-4" />
+            )}
+            Mais filtros
+          </button>
+        </div>
+        {maisFiltrosAbertos ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Vendedor</label>
+                <select
+                  value={vendedorId}
+                  onChange={(e) => {
+                    setVendedorId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field"
+                >
+                  <option value="">Todos</option>
+                  {vendedores.map((v) => (
+                    <option key={v.id} value={String(v.id)}>
+                      {v.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Motorista</label>
+                <select
+                  value={motoristaId}
+                  onChange={(e) => {
+                    setMotoristaId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field"
+                >
+                  <option value="">Todos</option>
+                  {motoristas.map((m) => (
+                    <option key={m.id} value={String(m.id)}>
+                      {m.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Valor mín. (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorMin}
+                  onChange={(e) => {
+                    setValorMin(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Valor máx. (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorMax}
+                  onChange={(e) => {
+                    setValorMax(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field"
+                  placeholder="—"
+                />
+              </div>
+            </div>
+          </>
+        ) : null}
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="w-36">
-            <label className="block text-xs text-gray-500 mb-1">
-              Valor mín. (R$)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={valorMin}
-              onChange={(e) => {
-                setValorMin(e.target.value);
-                setPage(1);
-              }}
-              className="input-field"
-              placeholder="0"
-            />
-          </div>
-          <div className="w-36">
-            <label className="block text-xs text-gray-500 mb-1">
-              Valor máx. (R$)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={valorMax}
-              onChange={(e) => {
-                setValorMax(e.target.value);
-                setPage(1);
-              }}
-              className="input-field"
-              placeholder="—"
-            />
-          </div>
           <button type="button" onClick={aplicarBuscaJa} className="btn-primary">
             <MagnifyingGlassIcon className="w-4 h-4" /> Aplicar busca
           </button>
@@ -458,7 +510,7 @@ function VendasPageContent() {
                         href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
                         className="text-gray-600 hover:underline"
                       >
-                        Cobrar
+                        Receber
                       </Link>
                     </div>
                   </td>

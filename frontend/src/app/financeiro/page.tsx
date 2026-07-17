@@ -65,6 +65,7 @@ function FinanceiroPageContent() {
   const [chequeParaEstornar, setChequeParaEstornar] = useState<Cheque | null>(null);
   const [pagamentoParaEstornar, setPagamentoParaEstornar] = useState<Pagamento | null>(null);
   const [estornando, setEstornando] = useState(false);
+  const [maisFiltros, setMaisFiltros] = useState(false);
   const chequesQuery = useChequesQuery({
     dataInicio,
     dataFim,
@@ -305,16 +306,16 @@ function FinanceiroPageContent() {
   return (
     <>
     <ListScaffold
-      title="Financeiro"
+      title="Recebimentos"
       subtitle={subtitle}
       actions={(
         <Link href="/financeiro/novo" className="btn-primary">
-          <PlusIcon className="w-4 h-4" /> Registrar recebimento
+          <PlusIcon className="w-4 h-4" /> Receber pagamento
         </Link>
       )}
       filters={(
-        <FilterBar className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <FilterBar className="p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Cliente</label>
             <input
@@ -325,6 +326,54 @@ function FinanceiroPageContent() {
               placeholder="Nome fantasia, razão ou CNPJ"
             />
           </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Ordem / venda
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={ordemInput}
+              onChange={(e) => setOrdemInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  aplicarFiltros();
+                }
+              }}
+              className="input-field font-mono"
+              placeholder="ex: 1520 ou #1520"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Data Início
+            </label>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Data Fim</label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="input-field"
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          className="text-sm text-blue-600 hover:underline"
+          onClick={() => setMaisFiltros((v) => !v)}
+        >
+          {maisFiltros ? "Ocultar filtros avançados" : "Mais filtros"}
+        </button>
+        {maisFiltros ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Emitente</label>
             <input
@@ -357,49 +406,6 @@ function FinanceiroPageContent() {
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Ordem / venda
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={ordemInput}
-              onChange={(e) => setOrdemInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  aplicarFiltros();
-                }
-              }}
-              className="input-field font-mono"
-              placeholder="ex: 1520 ou #1520"
-            />
-            <p className="text-[10px] text-gray-400 mt-0.5">
-              Nº ordem do cheque ou ID da venda
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end mt-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Data Início
-            </label>
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Data Fim</label>
-            <input
-              type="date"
-              value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
               Valor mínimo
             </label>
             <input
@@ -427,7 +433,8 @@ function FinanceiroPageContent() {
             />
           </div>
         </div>
-        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        ) : null}
+        <div className="mt-2 pt-3 border-t border-gray-100 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -527,7 +534,12 @@ function FinanceiroPageContent() {
         ) : aba === "recebimentos" ? (
           pagamentos.length === 0 ? (
             <div className="p-8 text-center text-gray-400">
-              Nenhum recebimento encontrado
+              <p className="font-medium text-gray-600">Nenhum recebimento encontrado</p>
+              <p className="text-sm mt-1">
+                {clienteFiltro || ordemFiltro || dataInicio || dataFim
+                  ? "Nenhum resultado para estes filtros. Tente limpar os filtros."
+                  : "Ainda não há recebimentos. Clique em Receber pagamento para registrar o primeiro."}
+              </p>
             </div>
           ) : (
             <table className="w-full">
@@ -691,7 +703,7 @@ function FinanceiroPageContent() {
                             href={`/financeiro/novo?clienteId=${c.clienteId}&vendaId=${c.venda.id}&ordem=${c.venda.numeroVenda ?? c.venda.id}`}
                             className="text-green-700 hover:underline"
                           >
-                            Cobrar
+                            Receber
                           </Link>
                           <span className="text-gray-300">·</span>
                         </>

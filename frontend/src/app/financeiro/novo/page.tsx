@@ -28,8 +28,6 @@ type ChequeLinha = {
   valor: string;
   banco: string;
   numero: string;
-  agencia: string;
-  conta: string;
   dataRecebimento: string;
   observacoes: string;
 };
@@ -39,8 +37,6 @@ const chequeVazio = (): ChequeLinha => ({
   valor: "",
   banco: "",
   numero: "",
-  agencia: "",
-  conta: "",
   dataRecebimento: localDateInputValue(),
   observacoes: "",
 });
@@ -82,6 +78,9 @@ function RegistrarRecebimentoForm() {
     observacoes: "",
   });
   const [trocoTipo, setTrocoTipo] = useState<"dinheiro" | "transferencia">("dinheiro");
+  const [contextoTravado, setContextoTravado] = useState(
+    () => !!(preVendaId || preOrdem),
+  );
 
   const { vendas } = useVendasEmAberto(clienteId);
 
@@ -99,8 +98,17 @@ function RegistrarRecebimentoForm() {
     setClienteId(String(v.clienteId));
     setVendaId(String(v.id));
     setOrdemInput(String(v.numeroVenda ?? v.id));
-    setChequeItens((prev) => (prev.length > 0 ? prev : [chequeVazio()]));
   }, []);
+
+  const trocarVenda = () => {
+    setContextoTravado(false);
+    setVendaId("");
+    setVendaExtra(null);
+    setOrdemInput("");
+    setChequeItens([]);
+    setDinheiro({ valor: "", data: localDateInputValue(), observacoes: "" });
+    setPix({ valor: "", data: localDateInputValue(), observacoes: "" });
+  };
 
   const avisoSemSaldo = (v: Venda) => {
     const saldo = Math.max(0, parseFloat(String(v.saldoEmAbertoTitulos ?? 0)));
@@ -145,8 +153,7 @@ function RegistrarRecebimentoForm() {
     }
     if (!preVendaId) return;
 
-    // Cobrar da lista de vendas manda clienteId + vendaId — precisa carregar a ordem
-    // e já abrir uma linha de cheque (aplicarVenda).
+    // Cobrar da lista de vendas manda clienteId + vendaId — precisa carregar a ordem.
     api
       .get<Venda>(`/vendas/${preVendaId}`)
       .then((v) => {
@@ -228,21 +235,12 @@ function RegistrarRecebimentoForm() {
   const excedente = Math.max(0, totalGeral - saldoVenda);
   const restante = Math.max(0, saldoVenda - totalGeral);
 
-  const validarBase = () => {
-    if (!clienteId) {
-      setErro("Selecione o cliente");
-      return false;
-    }
-    if (!vendaId) {
-      setErro("Selecione a ordem da venda");
-      return false;
-    }
-    if (totalGeral < 0.01) {
-      setErro("Informe ao menos um cheque, valor em dinheiro ou PIX");
-      return false;
-    }
-    return true;
-  };
+  const mostrarSugestaoSaldo =
+    !!vendaSelecionada &&
+    saldoVenda > 0 &&
+    !dinheiro.valor.trim() &&
+    !pix.valor.trim() &&
+    chequeItens.length === 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,8 +281,6 @@ function RegistrarRecebimentoForm() {
           valor: i.valor,
           banco: i.banco || undefined,
           numero: i.numero || undefined,
-          agencia: i.agencia || undefined,
-          conta: i.conta || undefined,
           dataRecebimento: i.dataRecebimento,
           observacoes: i.observacoes || undefined,
         }));
@@ -357,7 +353,7 @@ function RegistrarRecebimentoForm() {
           <ArrowLeftIcon className="w-4 h-4" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Registrar recebimento</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Receber pagamento</h1>
           <p className="text-gray-500 text-sm mt-1">
             Cheque, dinheiro e PIX na mesma baixa — preencha tudo e registre uma vez só.
           </p>
@@ -370,123 +366,149 @@ function RegistrarRecebimentoForm() {
         </div>
       )}
 
-      <div className="card p-5 mb-4" data-enter-nav="container">
-        <p className="text-sm font-semibold text-gray-900 mb-3">1. Localizar a venda</p>
-        <div className="flex flex-wrap gap-2 mb-4">
-          <div className="flex-1 min-w-[12rem]">
-            <label className="block text-xs text-gray-500 mb-1">Buscar pela ordem (#)</label>
-            <input
-              className="input-field font-mono"
-              placeholder="Ex.: 278 ou #278"
-              value={ordemInput}
-              data-enter-nav="skip"
-              onChange={(e) => setOrdemInput(e.target.value.replace(/^#/, ""))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void buscarPorOrdem();
-                }
-              }}
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={buscandoOrdem}
-              onClick={() => void buscarPorOrdem()}
-            >
-              <MagnifyingGlassIcon className="w-4 h-4" />
-              {buscandoOrdem ? "Buscando…" : "Buscar ordem"}
+      {contextoTravado && vendaSelecionada && (preVendaId || preOrdem) ? (
+        <div className="card p-4 mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <VendaOrdem venda={vendaSelecionada} size="sm" />
+              <span className="text-gray-400">·</span>
+              <span className="font-medium text-gray-900">
+                {vendaSelecionada.cliente?.nomeFantasia?.trim() ||
+                  vendaSelecionada.cliente?.razaoSocial ||
+                  "Cliente"}
+              </span>
+              {saldoVenda > 0 ? (
+                <>
+                  <span className="text-gray-400">·</span>
+                  <span className="text-amber-800">
+                    Em aberto: <strong>{formatMoney(saldoVenda)}</strong>
+                  </span>
+                </>
+              ) : null}
+            </div>
+            <button type="button" className="text-sm text-blue-600 hover:underline" onClick={trocarVenda}>
+              Trocar venda
             </button>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SearchableSelect
-            label="Cliente *"
-            value={clienteId}
-            onChange={(id) => {
-              setClienteId(id);
-              setVendaId("");
-              setVendaExtra(null);
-            }}
-            loadOptions={loadClienteOptions}
-            loadLabelById={loadClienteLabelById}
-            minChars={2}
-            emptyHint="Digite parte do nome, fantasia ou CNPJ."
-          />
-          <SearchableSelect
-            label="Ordem da venda *"
-            value={vendaId}
-            onChange={(id) => {
-              const v =
-                vendas.find((x) => String(x.id) === id) ??
-                (vendaExtra && String(vendaExtra.id) === id ? vendaExtra : null);
-              if (v) {
-                aplicarVenda(v);
-                return;
-              }
-              setVendaId(id);
-              setChequeItens((prev) => (prev.length > 0 ? prev : [chequeVazio()]));
-              api
-                .get<Venda>(`/vendas/${id}`)
-                .then(aplicarVenda)
-                .catch(() => setVendaExtra(null));
-            }}
-            loadOptions={loadVendaOptions}
-            loadLabelById={loadVendaLabelById}
-            selectedLabel={vendaSelecionada ? vendaOptionLabel(vendaSelecionada) : undefined}
-            minChars={0}
-            disabled={!clienteId}
-            placeholder={
-              clienteId ? "Escolha a ordem ou busque acima pelo #" : "Busque pela ordem ou selecione o cliente"
-            }
-            emptyHint="Vendas com saldo em aberto deste cliente."
-          />
-        </div>
-
-        {vendaSelecionada ? (
-          <div
-            className={`mt-4 rounded-lg border p-4 ${
-              saldoVenda < 0.01
-                ? "border-amber-200 bg-amber-50"
-                : "border-blue-100 bg-blue-50/60"
-            }`}
-          >
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-sm text-gray-600">Venda selecionada:</span>
-              <VendaOrdem venda={vendaSelecionada} size="sm" />
+      ) : (
+        <div className="card p-5 mb-4" data-enter-nav="container">
+          <p className="text-sm font-semibold text-gray-900 mb-3">1. Localizar a venda</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <div className="flex-1 min-w-[12rem]">
+              <label className="block text-xs text-gray-500 mb-1">Buscar pela ordem (#)</label>
+              <input
+                className="input-field font-mono"
+                placeholder="Ex.: 278 ou #278"
+                value={ordemInput}
+                data-enter-nav="skip"
+                onChange={(e) => setOrdemInput(e.target.value.replace(/^#/, ""))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void buscarPorOrdem();
+                  }
+                }}
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <p>
-                Total: <strong>{formatMoney(vendaSelecionada.valorTotal)}</strong>
-              </p>
-              <p>
-                Em aberto:{" "}
-                <strong className={saldoVenda < 0.01 ? "text-amber-900" : "text-amber-800"}>
-                  {formatMoney(saldoVenda)}
-                </strong>
-              </p>
-              <p>
-                Data: {new Date(vendaSelecionada.dataVenda).toLocaleDateString("pt-BR")}
-              </p>
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={buscandoOrdem}
+                onClick={() => void buscarPorOrdem()}
+              >
+                <MagnifyingGlassIcon className="w-4 h-4" />
+                {buscandoOrdem ? "Buscando…" : "Buscar ordem"}
+              </button>
             </div>
-            {saldoVenda < 0.01 ? (
-              <p className="mt-3 text-sm font-medium text-amber-900">
-                Esta ordem já está quitada — não há nada a receber neste cliente para esta venda.
-              </p>
-            ) : null}
           </div>
-        ) : null}
-      </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SearchableSelect
+              label="Cliente *"
+              value={clienteId}
+              onChange={(id) => {
+                setClienteId(id);
+                setVendaId("");
+                setVendaExtra(null);
+              }}
+              loadOptions={loadClienteOptions}
+              loadLabelById={loadClienteLabelById}
+              minChars={2}
+              emptyHint="Digite parte do nome, fantasia ou CNPJ."
+            />
+            <SearchableSelect
+              label="Ordem da venda *"
+              value={vendaId}
+              onChange={(id) => {
+                const v =
+                  vendas.find((x) => String(x.id) === id) ??
+                  (vendaExtra && String(vendaExtra.id) === id ? vendaExtra : null);
+                if (v) {
+                  aplicarVenda(v);
+                  return;
+                }
+                setVendaId(id);
+                api
+                  .get<Venda>(`/vendas/${id}`)
+                  .then(aplicarVenda)
+                  .catch(() => setVendaExtra(null));
+              }}
+              loadOptions={loadVendaOptions}
+              loadLabelById={loadVendaLabelById}
+              selectedLabel={vendaSelecionada ? vendaOptionLabel(vendaSelecionada) : undefined}
+              minChars={0}
+              disabled={!clienteId}
+              placeholder={
+                clienteId ? "Escolha a ordem ou busque acima pelo #" : "Busque pela ordem ou selecione o cliente"
+              }
+              emptyHint="Vendas com saldo em aberto deste cliente."
+            />
+          </div>
+
+          {vendaSelecionada ? (
+            <div
+              className={`mt-4 rounded-lg border p-4 ${
+                saldoVenda < 0.01
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-blue-100 bg-blue-50/60"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-sm text-gray-600">Venda selecionada:</span>
+                <VendaOrdem venda={vendaSelecionada} size="sm" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <p>
+                  Total: <strong>{formatMoney(vendaSelecionada.valorTotal)}</strong>
+                </p>
+                <p>
+                  Em aberto:{" "}
+                  <strong className={saldoVenda < 0.01 ? "text-amber-900" : "text-amber-800"}>
+                    {formatMoney(saldoVenda)}
+                  </strong>
+                </p>
+                <p>
+                  Data: {new Date(vendaSelecionada.dataVenda).toLocaleDateString("pt-BR")}
+                </p>
+              </div>
+              {saldoVenda < 0.01 ? (
+                <p className="mt-3 text-sm font-medium text-amber-900">
+                  Esta ordem já está quitada — não há nada a receber neste cliente para esta venda.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {vendaSelecionada ? (
           <HelpCallout variant="tip">
             Nesta tela você combina as formas de pagamento: ex. R$ 100 em cheque + R$ 325 em
             dinheiro. Preencha cheque, dinheiro e/ou PIX abaixo e clique em{" "}
-            <strong>Registrar recebimento</strong> uma única vez.
+            <strong>Receber pagamento</strong> uma única vez.
           </HelpCallout>
         ) : null}
 
@@ -509,6 +531,29 @@ function RegistrarRecebimentoForm() {
               </div>
             ) : null}
           </div>
+
+          {mostrarSugestaoSaldo ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() =>
+                  setPix((p) => ({ ...p, valor: saldoVenda.toFixed(2) }))
+                }
+              >
+                Receber saldo restante ({formatMoney(saldoVenda)}) em PIX
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() =>
+                  setDinheiro((p) => ({ ...p, valor: saldoVenda.toFixed(2) }))
+                }
+              >
+                em dinheiro
+              </button>
+            </div>
+          ) : null}
 
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -670,7 +715,7 @@ function RegistrarRecebimentoForm() {
 
         <div className="flex gap-3">
           <button type="submit" disabled={salvando} className="btn-primary">
-            {salvando ? "Registrando…" : "Registrar recebimento"}
+            {salvando ? "Registrando…" : "Receber pagamento"}
           </button>
           <Link href="/financeiro" className="btn-secondary">
             Cancelar

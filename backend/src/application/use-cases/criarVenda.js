@@ -1,6 +1,9 @@
 const { AppError } = require("../../shared/errors/appError");
 const { registrarAuditoria } = require("../../services/financeiroEventos");
 const {
+  upsertFreteMovimentoFromVenda,
+} = require("../../services/syncFreteMovimentoVenda");
+const {
   syncClienteFromVenda,
   parseAtualizarCliente,
 } = require("../../services/syncClienteFromVenda");
@@ -213,24 +216,16 @@ async function criarVenda(prisma, payload) {
     });
 
     if (freteFinal > 0) {
-      const rd =
-        freteReciboData != null && String(freteReciboData).trim() !== ""
-          ? freteReciboData instanceof Date
-            ? freteReciboData
-            : new Date(freteReciboData)
-          : null;
-      await tx.freteMovimento.create({
-        data: {
-          tenantId,
-          vendaId: novaVenda.id,
-          clienteId,
-          valor: freteFinal,
-          reciboEmitido: freteReciboAplicado,
-          reciboNumero: freteReciboAplicado ? freteReciboNum || null : null,
-          reciboData: rd && !Number.isNaN(rd.getTime()) ? rd : null,
-          data: dataEfetivaVenda,
-          observacao: `Frete da venda #${numeroVenda}`,
-        },
+      await upsertFreteMovimentoFromVenda(tx, {
+        tenantId,
+        vendaId: novaVenda.id,
+        clienteId,
+        freteValor: freteFinal,
+        freteRecibo: freteReciboAplicado,
+        freteReciboNum: freteReciboAplicado ? freteReciboNum || null : null,
+        freteReciboData: freteReciboData,
+        dataVenda: dataEfetivaVenda,
+        numeroVenda,
       });
     }
 

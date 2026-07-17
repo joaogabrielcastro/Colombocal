@@ -16,7 +16,16 @@ import { ClienteEditForm } from "@/features/clientes/components/ClienteEditForm"
 import { useClienteDetail } from "@/features/clientes/hooks/useClienteDetail";
 import type { ClienteAba } from "@/features/clientes/types";
 
-const abas: ClienteAba[] = ["conta", "cheques", "precos", "comissoes", "editar"];
+const abasPrincipais: ClienteAba[] = ["conta", "cheques", "editar"];
+const abasAvancadas: ClienteAba[] = ["precos", "comissoes"];
+
+function labelAba(tab: ClienteAba, chequesCount: number) {
+  if (tab === "conta") return "Recebimentos";
+  if (tab === "cheques") return `Cheques (${chequesCount})`;
+  if (tab === "precos") return "Preços Especiais";
+  if (tab === "comissoes") return "Comissões";
+  return "Editar Cliente";
+}
 
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +37,7 @@ export default function ClienteDetailPage() {
 
   useEffect(() => {
     const abaUrl = searchParams.get("aba");
-    if (abas.includes(abaUrl as ClienteAba)) setAba(abaUrl as ClienteAba);
+    if ([...abasPrincipais, ...abasAvancadas].includes(abaUrl as ClienteAba)) setAba(abaUrl as ClienteAba);
   }, [searchParams]);
 
   const selecionarAba = (tab: ClienteAba) => {
@@ -47,11 +56,44 @@ export default function ClienteDetailPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <ClienteHeader cliente={detail.conta.cliente} clienteId={id} />
-      <ClienteResumoFinanceiro conta={detail.conta} clienteId={id} />
-      <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
-        {abas.map((tab) => <button key={tab} type="button" onClick={() => selecionarAba(tab)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${aba === tab ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
-          {tab === "conta" ? "Conta Corrente" : tab === "cheques" ? `Cheques (${detail.cheques.length})` : tab === "precos" ? "Preços Especiais" : tab === "comissoes" ? "Comissões" : "Editar Cliente"}
-        </button>)}
+      <ClienteResumoFinanceiro
+        conta={detail.conta}
+        clienteId={id}
+        reconciliando={detail.reconciliando}
+        onReconciliar={() => void detail.handleReconciliarRecebiveis()}
+      />
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+          {abasPrincipais.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => selecionarAba(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                aba === tab ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              {labelAba(tab, detail.cheques.length)}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-gray-400 hidden sm:inline">Avançado:</span>
+        <div className="flex gap-1 bg-gray-50 p-1 rounded-lg w-fit border border-gray-100">
+          {abasAvancadas.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => selecionarAba(tab)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                aba === tab
+                  ? "bg-white shadow text-gray-800"
+                  : "text-gray-400 hover:text-gray-700"
+              }`}
+            >
+              {labelAba(tab, detail.cheques.length)}
+            </button>
+          ))}
+        </div>
       </div>
       {aba === "conta" && <ClienteContaTab conta={detail.conta} clienteId={id} freteEnabled={freteEnabled} fretesPendentes={detail.fretesPendentes} pgFreteTipo={detail.pgFreteTipo} setPgFreteTipo={detail.setPgFreteTipo} pgFreteData={detail.pgFreteData} setPgFreteData={detail.setPgFreteData} pagandoFreteId={detail.pagandoFreteId} onPagarFrete={(frete) => void detail.handlePagarFrete(frete)} />}
       {aba === "cheques" && <ClienteChequesTab clienteId={id} cheques={detail.cheques} filtroChqIni={detail.filtroChqIni} filtroChqFim={detail.filtroChqFim} buscaChq={detail.buscaChq} setFiltroChqIni={detail.setFiltroChqIni} setFiltroChqFim={detail.setFiltroChqFim} setBuscaChq={detail.setBuscaChq} onFiltrar={() => void detail.carregarCheques()} />}

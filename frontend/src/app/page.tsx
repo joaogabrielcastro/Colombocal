@@ -10,12 +10,10 @@ import {
   PlusIcon,
   ArrowPathIcon,
   UserGroupIcon,
-  ChartBarIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { VendaOrdem } from "@/components/VendaOrdem";
-import { FluxoOperacional } from "@/components/FluxoOperacional";
 import { DashboardFaturamentoChart } from "@/components/DashboardFaturamentoChart";
 import api from "@/lib/api";
 import { tenantStorageKey } from "@/lib/auth-token";
@@ -237,7 +235,7 @@ export default function DashboardPage() {
   const d = data;
   const etapasOnboarding = [
     { label: "Ter pelo menos 1 cliente", concluida: onboarding.clientes > 0, href: "/clientes/novo" },
-    { label: "Ter pelo menos 1 produto", concluida: onboarding.produtos > 0, href: "/produtos/novo" },
+    { label: "Ter pelo menos 1 produto", concluida: onboarding.produtos > 0, href: "/produtos?novo=1" },
     { label: "Registrar 1 venda", concluida: onboarding.vendas > 0, href: "/vendas/nova" },
     { label: "Registrar 1 recebimento", concluida: onboarding.recebimentos > 0, href: "/financeiro/novo" },
   ];
@@ -321,29 +319,23 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
-      <FluxoOperacional />
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <QuickAction
-          href="/vendas/nova"
-          icon={ShoppingCartIcon}
-          label="Nova venda"
-          desc="Registre produtos e gere a ordem (#)"
-          primary
-        />
-        <QuickAction
-          href="/financeiro/novo"
-          icon={BanknotesIcon}
-          label="Registrar recebimento"
-          desc="Dinheiro, PIX ou cheque na mesma tela"
-        />
-        <QuickAction
-          href="/relatorios/financeiro"
-          icon={ChartBarIcon}
-          label="Quem está devendo"
-          desc="Veja saldos em aberto por cliente"
-        />
-      </div>
+      {(onboardingDismissed || onboardingConcluido) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          <QuickAction
+            href="/vendas/nova"
+            icon={ShoppingCartIcon}
+            label="Nova venda"
+            desc="Registre produtos e gere a ordem (#)"
+            primary
+          />
+          <QuickAction
+            href="/financeiro/novo"
+            icon={BanknotesIcon}
+            label="Receber pagamento"
+            desc="Dinheiro, PIX ou cheque na mesma tela"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard
@@ -376,10 +368,10 @@ export default function DashboardPage() {
               ? "bg-orange-100 text-orange-600"
               : "bg-gray-100 text-gray-500"
           }
-          href="/relatorios/financeiro"
+          href="/contas-a-receber"
         />
         <StatCard
-          title="Cheques registrados"
+          title="Cheques"
           value={String(d.chequesRegistrados)}
           sub={`Total: ${formatMoney(d.totalChequesRegistrados)}`}
           icon={BanknotesIcon}
@@ -421,7 +413,7 @@ export default function DashboardPage() {
               <p className="text-xs text-gray-500 mt-0.5">Maiores saldos em aberto</p>
             </div>
             <Link
-              href="/relatorios/financeiro"
+              href="/contas-a-receber"
               className="text-blue-600 text-xs hover:underline whitespace-nowrap"
             >
               Ver todos

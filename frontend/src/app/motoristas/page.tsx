@@ -117,7 +117,7 @@ export default function MotoristasPage() {
                             disabled={deletingId === m.id}
                             className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {deletingId === m.id ? 'Excluindo...' : 'Excluir'}
+                            {deletingId === m.id ? 'Inativando...' : 'Inativar'}
                           </button>
                         </div>
                       </td>

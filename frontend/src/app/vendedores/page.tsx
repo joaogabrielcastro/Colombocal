@@ -188,7 +188,7 @@ export default function VendedoresPage() {
                             disabled={deletingId === v.id}
                             className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {deletingId === v.id ? "Excluindo..." : "Excluir"}
+                            {deletingId === v.id ? "Inativando..." : "Inativar"}
                           </button>
                         </div>
                       </td>

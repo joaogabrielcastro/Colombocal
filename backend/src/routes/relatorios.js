@@ -25,7 +25,8 @@ const relatorioNavByPrefix = [
   ["/vendas", "rel_vendas"],
   ["/comissoes", "rel_comissoes"],
   ["/financeiro", "rel_financeiro"],
-  ["/titulos", "rel_titulos"],
+  // Hub Contas a receber: visão por título usa a mesma permissão
+  ["/titulos", "rel_financeiro"],
 ];
 
 router.use((req, res, next) => {

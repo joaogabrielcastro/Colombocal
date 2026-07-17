@@ -62,7 +62,8 @@ router.get("/", async (req, res) => {
         _sum: { valorOriginal: true, valorPago: true },
       }),
       prisma.cheque.aggregate({
-        where: { ...tw, status: "ativo" },
+        // Novos cheques nascem como "registrado"; "ativo" era legado.
+        where: { ...tw, status: { in: ["registrado", "ativo"] } },
         _sum: { valor: true },
         _count: { id: true },
       }),

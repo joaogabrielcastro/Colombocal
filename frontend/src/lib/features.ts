@@ -1,10 +1,11 @@
 /**
- * Modo piloto / menu compacto: itens com `advancedOnly` em `lib/navigation.ts` somem da barra
- * principal e ficam em "Avançado" (motoristas, vendedores; relatório Títulos em análise).
- * Frete não tem item próprio: cadastro na venda; listagem histórica em /fretes (link na tela Vendas).
+ * Menu operacional enxuto: Início, Clientes, Vendas, Recebimentos (+ Relatórios).
+ * Cadastros auxiliares (produtos, vendedores, motoristas, fretes, auditoria, usuários)
+ * ficam em Configurações (`configOnly` em navigation.ts).
  *
- * Docker: NEXT_PUBLIC_UI_HIDE_ADVANCED=true (compose já define).
- * Local: crie frontend/.env.local com NEXT_PUBLIC_UI_HIDE_ADVANCED=false para menu cheio.
+ * `UI_HIDE_ADVANCED` ainda esconde relatórios/itens `advancedOnly` restantes.
+ * Docker: NEXT_PUBLIC_UI_HIDE_ADVANCED=true
+ * Local: frontend/.env.local com NEXT_PUBLIC_UI_HIDE_ADVANCED=false
  */
 export const UI_HIDE_ADVANCED =
   process.env.NEXT_PUBLIC_UI_HIDE_ADVANCED === 'true';

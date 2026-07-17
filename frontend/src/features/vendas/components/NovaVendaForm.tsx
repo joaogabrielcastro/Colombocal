@@ -89,6 +89,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [mostrarDetalhes, setMostrarDetalhes] = useState(isEdit);
 
   useEffect(() => {
     api.get<Vendedor[]>("/vendedores?take=1").then((arr) => {
@@ -375,7 +376,6 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       vendedorId: parseInt(vendedorId, 10),
       motoristaId: motoristaId ? parseInt(motoristaId, 10) : null,
       freteRecibo,
-      freteReciboNum: null,
       freteReciboData: freteRecibo ? freteReciboData : null,
       fretePorSaco: Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0,
       fretePorTonelada: Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0,
@@ -540,7 +540,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                 " (padrão do vendedor)"}
             </p>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="space-y-4">
             <SearchableSelect
               label="Cliente"
               value={clienteId}
@@ -550,117 +550,140 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
               minChars={2}
               placeholder="Nome, fantasia, CNPJ ou cidade…"
             />
-            <SearchableSelect
-              label="Vendedor"
-              value={vendedorId}
-              onChange={setVendedorId}
-              loadOptions={loadVendedorOptions}
-              loadLabelById={loadVendedorLabel}
-              minChars={0}
-              placeholder="Digite para buscar vendedor…"
-            />
-            <SearchableSelect
-              label="Motorista"
-              value={motoristaId}
-              onChange={setMotoristaId}
-              loadOptions={loadMotoristaOptions}
-              minChars={0}
-              placeholder="Nome do motorista (opcional)…"
-            />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Data da Venda
-              </label>
-              <input
-                type="date"
-                value={dataVenda}
-                onChange={(e) => setDataVenda(e.target.value)}
-                className="input-field"
-              />
-            </div>
-            {freteEnabled ? (
-              <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Frete (R$) — cobrado à parte
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={frete}
-                className="input-field"
-                placeholder="0,00"
-                readOnly
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Calculado automaticamente por unidade e quantidade.
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tarifa frete por saco (R$)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={fretePorSaco}
-                onChange={(e) => setFretePorSaco(e.target.value)}
-                className="input-field"
-                placeholder="Ex.: 5,00"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tarifa frete por tonelada (R$)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={fretePorTonelada}
-                onChange={(e) => setFretePorTonelada(e.target.value)}
-                className="input-field"
-                placeholder="Ex.: 120,00"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pagamento do frete
-              </label>
-              <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={freteRecibo}
-                  onChange={(e) => setFreteRecibo(e.target.checked)}
-                  className="w-4 h-4 rounded"
-                />
-                <span className="text-sm text-gray-700">
-                  Frete pago
+
+            {freteEnabled && !mostrarDetalhes ? (
+              <p className="text-sm text-gray-600">
+                Frete calculado:{" "}
+                <span className="font-semibold text-gray-900">
+                  {formatMoney(freteVal)}
                 </span>
-              </label>
-              {freteRecibo && (
-                <input
-                  type="date"
-                  value={freteReciboData}
-                  onChange={(e) => setFreteReciboData(e.target.value)}
-                  className="input-field mt-2"
-                />
-              )}
-            </div>
-              </>
+                <span className="text-gray-400 text-xs ml-1">
+                  (tarifas padrão do cliente)
+                </span>
+              </p>
             ) : null}
-            <div className="xl:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Observações
-              </label>
-              <input
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                className="input-field"
-              />
-            </div>
+
+            {!mostrarDetalhes ? (
+              <button
+                type="button"
+                className="text-sm text-blue-600 hover:underline"
+                onClick={() => setMostrarDetalhes(true)}
+              >
+                Adicionar detalhes (vendedor, frete, data…)
+              </button>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <SearchableSelect
+                  label="Vendedor"
+                  value={vendedorId}
+                  onChange={setVendedorId}
+                  loadOptions={loadVendedorOptions}
+                  loadLabelById={loadVendedorLabel}
+                  minChars={0}
+                  placeholder="Digite para buscar vendedor…"
+                />
+                <SearchableSelect
+                  label="Motorista"
+                  value={motoristaId}
+                  onChange={setMotoristaId}
+                  loadOptions={loadMotoristaOptions}
+                  minChars={0}
+                  placeholder="Nome do motorista (opcional)…"
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data da Venda
+                  </label>
+                  <input
+                    type="date"
+                    value={dataVenda}
+                    onChange={(e) => setDataVenda(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+                {freteEnabled ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Frete (R$) — cobrado à parte
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={frete}
+                        className="input-field"
+                        placeholder="0,00"
+                        readOnly
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        Calculado automaticamente por unidade e quantidade.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tarifa frete por saco (R$)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={fretePorSaco}
+                        onChange={(e) => setFretePorSaco(e.target.value)}
+                        className="input-field"
+                        placeholder="Ex.: 5,00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tarifa frete por tonelada (R$)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={fretePorTonelada}
+                        onChange={(e) => setFretePorTonelada(e.target.value)}
+                        className="input-field"
+                        placeholder="Ex.: 120,00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Pagamento do frete
+                      </label>
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={freteRecibo}
+                          onChange={(e) => setFreteRecibo(e.target.checked)}
+                          className="w-4 h-4 rounded"
+                        />
+                        <span className="text-sm text-gray-700">Frete pago</span>
+                      </label>
+                      {freteRecibo && (
+                        <input
+                          type="date"
+                          value={freteReciboData}
+                          onChange={(e) => setFreteReciboData(e.target.value)}
+                          className="input-field mt-2"
+                        />
+                      )}
+                    </div>
+                  </>
+                ) : null}
+                <div className="xl:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Observações
+                  </label>
+                  <input
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

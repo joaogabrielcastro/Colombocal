@@ -21,6 +21,9 @@ const {
 const { criarVenda } = require("../application/use-cases/criarVenda");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
 const {
+  upsertFreteMovimentoFromVenda,
+} = require("../services/syncFreteMovimentoVenda");
+const {
   parsePagination,
   setPaginationHeaders,
   handleRouteError,
@@ -310,51 +313,28 @@ router.patch("/:id", async (req, res) => {
         data: dataVenda,
       });
 
-      const fretes = await tx.freteMovimento.findMany({
-        where: { vendaId: id, tenantId },
-        orderBy: { id: "asc" },
-      });
+      const freteValor =
+        b.frete !== undefined ? parseFloat(String(b.frete)) : parseFloat(String(v.frete));
+      const freteReciboVal =
+        b.freteRecibo !== undefined ? !!b.freteRecibo : !!v.freteRecibo;
+      const freteReciboNumVal =
+        b.freteReciboNum !== undefined ? b.freteReciboNum || null : v.freteReciboNum;
+      const freteReciboDataVal =
+        b.freteReciboData !== undefined
+          ? dataFreteReciboParaPrisma(b.freteReciboData)
+          : undefined;
 
-      if (fretes.length > 0) {
-        const primeiro = fretes[0];
-        const fmData = {};
-        if (b.frete !== undefined) fmData.valor = b.frete;
-        if (b.freteRecibo !== undefined) fmData.reciboEmitido = !!b.freteRecibo;
-        if (b.freteReciboNum !== undefined)
-          fmData.reciboNumero = b.freteReciboNum || null;
-        if (b.freteReciboData !== undefined) {
-          fmData.reciboData = dataFreteReciboParaPrisma(b.freteReciboData);
-        }
-        if (Object.keys(fmData).length > 0) {
-          await tx.freteMovimento.update({
-            where: { id: primeiro.id },
-            data: fmData,
-          });
-        }
-      } else if (parseFloat(String(v.frete)) > 0) {
-        const valorFrete =
-          dataVenda.frete != null
-            ? parseFloat(String(dataVenda.frete))
-            : parseFloat(String(v.frete));
-        if (valorFrete > 0) {
-          await tx.freteMovimento.create({
-            data: {
-              tenantId,
-              vendaId: id,
-              clienteId: v.clienteId,
-              valor: valorFrete,
-              reciboEmitido: !!v.freteRecibo,
-              reciboNumero: v.freteReciboNum || null,
-              reciboData:
-                b.freteReciboData !== undefined
-                  ? dataFreteReciboParaPrisma(b.freteReciboData)
-                  : null,
-              data: v.dataVenda,
-              observacao: `Frete venda #${id} (edição)`,
-            },
-          });
-        }
-      }
+      await upsertFreteMovimentoFromVenda(tx, {
+        tenantId,
+        vendaId: id,
+        clienteId: v.clienteId,
+        freteValor,
+        freteRecibo: freteReciboVal,
+        freteReciboNum: freteReciboNumVal,
+        freteReciboData: freteReciboDataVal,
+        dataVenda: v.dataVenda,
+        observacaoPrefix: "Frete venda",
+      });
 
       await registrarAuditoria(tx, req, {
         tenantId,
@@ -618,10 +598,6 @@ router.put("/:id", async (req, res) => {
         });
       }
 
-      const fretes = await tx.freteMovimento.findMany({
-        where: { vendaId: id, tenantId },
-        orderBy: { id: "asc" },
-      });
       const rd =
         body.freteReciboData !== undefined
           ? body.freteReciboData != null && String(body.freteReciboData).trim() !== ""
@@ -629,33 +605,17 @@ router.put("/:id", async (req, res) => {
             : null
           : undefined;
 
-      if (freteFinal > 0) {
-        const fmData = {
-          clienteId: clienteIdNum,
-          valor: freteFinal,
-          reciboEmitido: freteReciboAplicado,
-          reciboNumero: freteReciboNum,
-          data: dataEfetivaVenda,
-        };
-        if (rd !== undefined) fmData.reciboData = rd;
-        if (fretes.length > 0) {
-          await tx.freteMovimento.update({
-            where: { id: fretes[0].id },
-            data: fmData,
-          });
-        } else {
-          await tx.freteMovimento.create({
-            data: {
-              tenantId,
-              vendaId: id,
-              observacao: `Frete da venda #${numeroVenda}`,
-              ...fmData,
-            },
-          });
-        }
-      } else if (fretes.length > 0) {
-        await tx.freteMovimento.deleteMany({ where: { vendaId: id, tenantId } });
-      }
+      await upsertFreteMovimentoFromVenda(tx, {
+        tenantId,
+        vendaId: id,
+        clienteId: clienteIdNum,
+        freteValor: freteFinal,
+        freteRecibo: freteReciboAplicado,
+        freteReciboNum: freteReciboNum,
+        freteReciboData: rd,
+        dataVenda: dataEfetivaVenda,
+        numeroVenda,
+      });
 
       await registrarAuditoria(tx, req, {
         tenantId,

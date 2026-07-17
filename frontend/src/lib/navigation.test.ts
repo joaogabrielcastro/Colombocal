@@ -30,27 +30,49 @@ describe("filterMainNavForSidebar", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, true, { isAdmin: true });
     expect(out.some((i) => i.advancedOnly)).toBe(false);
   });
+  it("esconde itens de configuração do menu principal", () => {
+    const out = filterMainNavForSidebar(MAIN_NAV, false, { isAdmin: true });
+    expect(out.some((i) => i.configOnly)).toBe(false);
+    expect(out.map((i) => i.href)).toEqual(["/", "/clientes", "/vendas", "/financeiro"]);
+  });
   it("esconde itens adminOnly para não-admin", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, false, { isAdmin: false });
     expect(out.some((i) => i.adminOnly)).toBe(false);
   });
-  it("mostra adminOnly para admin", () => {
-    const out = filterMainNavForSidebar(MAIN_NAV, false, { isAdmin: true });
-    expect(out.some((i) => i.adminOnly)).toBe(true);
-  });
-  it("filtra por navPermissions", () => {
+  it("filtra por navPermissions com alias cheques → financeiro", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, false, {
       isAdmin: false,
-      navPermissions: ["clientes"],
+      navPermissions: ["cheques"],
     });
-    expect(out.every((i) => i.navKey === "clientes")).toBe(true);
+    expect(out.some((i) => i.navKey === "financeiro")).toBe(true);
   });
 });
 
 describe("advancedMainNavItems / advancedReportItems", () => {
-  it("retorna apenas itens avançados", () => {
-    expect(advancedMainNavItems(MAIN_NAV).every((i) => i.advancedOnly)).toBe(true);
-    expect(advancedReportItems(REPORT_NAV).every((i) => i.advancedOnly)).toBe(true);
+  it("retorna apenas itens avançados (não configuração)", () => {
+    expect(advancedMainNavItems(MAIN_NAV).every((i) => i.advancedOnly && !i.configOnly)).toBe(
+      true,
+    );
+    const advancedReports = advancedReportItems(REPORT_NAV);
+    expect(advancedReports.every((i) => i.advancedOnly)).toBe(true);
+  });
+});
+
+describe("REPORT_NAV Contas a receber unificado", () => {
+  it("tem uma entrada de contas a receber e nenhuma de títulos separada", () => {
+    expect(REPORT_NAV.filter((i) => i.navKey === "rel_financeiro")).toHaveLength(1);
+    expect(REPORT_NAV.some((i) => i.href.includes("/titulos"))).toBe(false);
+  });
+});
+
+describe("canAccessNavKey alias rel_titulos", () => {
+  it("rel_titulos legado libera Contas a receber", () => {
+    expect(
+      canAccessNavKey("rel_financeiro", {
+        isAdmin: false,
+        navPermissions: ["rel_titulos"],
+      }),
+    ).toBe(true);
   });
 });
 
@@ -74,5 +96,6 @@ describe("NAV_PERMISSION_OPTIONS", () => {
     const grupos = new Set(NAV_PERMISSION_OPTIONS.map((o) => o.group));
     expect(grupos.has("Principal")).toBe(true);
     expect(grupos.has("Relatórios")).toBe(true);
+    expect(grupos.has("Configurações")).toBe(true);
   });
 });
