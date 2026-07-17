@@ -77,6 +77,59 @@ test("POST /api/auth/login valida credenciais", async () => {
   assert.ok(ok.body.token);
 });
 
+test("GET /api/auth/tenants lista todas as organizações", async () => {
+  await seedTenant({ slug: "requinte", name: "Requinte" });
+  const res = await agent.get("/api/auth/tenants");
+  assert.equal(res.status, 200);
+  assert.equal(res.body.tenants.length, 2);
+  const slugs = res.body.tenants.map((t) => t.slug).sort();
+  assert.deepEqual(slugs, ["default", "requinte"]);
+});
+
+test("POST /api/auth/login com mesmo e-mail em 2 tenants exige organização", async () => {
+  const bcrypt = require("bcrypt");
+  const colombocal = await prisma.tenant.findUnique({ where: { slug: "default" } });
+  const requinte = await seedTenant({ slug: "requinte", name: "Requinte" });
+  const hash = await bcrypt.hash("segredo123", 10);
+  await prisma.user.create({
+    data: {
+      tenantId: colombocal.id,
+      email: "mesmo@e.com",
+      passwordHash: hash,
+      name: "Admin Col",
+      role: "admin",
+    },
+  });
+  await prisma.user.create({
+    data: {
+      tenantId: requinte.id,
+      email: "mesmo@e.com",
+      passwordHash: hash,
+      name: "Admin Req",
+      role: "admin",
+    },
+  });
+
+  const ambig = await agent
+    .post("/api/auth/login")
+    .send({ email: "mesmo@e.com", password: "segredo123" });
+  assert.equal(ambig.status, 400);
+  assert.equal(ambig.body.code, "TENANT_REQUIRED");
+  assert.equal(ambig.body.tenants.length, 2);
+
+  const reqOk = await agent
+    .post("/api/auth/login")
+    .send({ email: "mesmo@e.com", password: "segredo123", tenantSlug: "requinte" });
+  assert.equal(reqOk.status, 200);
+  assert.equal(reqOk.body.tenant.slug, "requinte");
+
+  const colOk = await agent
+    .post("/api/auth/login")
+    .send({ email: "mesmo@e.com", password: "segredo123", tenantSlug: "default" });
+  assert.equal(colOk.status, 200);
+  assert.equal(colOk.body.tenant.slug, "default");
+});
+
 test("Auth real (AUTH_DISABLED=false): 401 sem token, /me com token", async () => {
   // cria usuário e obtém token
   process.env.OPEN_REGISTRATION = "true";

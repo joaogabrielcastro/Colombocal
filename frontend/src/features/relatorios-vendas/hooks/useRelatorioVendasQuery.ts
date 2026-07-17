@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiFetchWithMeta } from "@/lib/api";
+import { getAuthTenantId } from "@/lib/auth-token";
 import type { RelVendas, RelatorioVendasParams } from "../types";
 
 function toSearchParams(params: RelatorioVendasParams) {
@@ -18,8 +19,9 @@ function toSearchParams(params: RelatorioVendasParams) {
 }
 
 export function useRelatorioVendasQuery(params: RelatorioVendasParams, enabled: boolean) {
+  const tenantId = getAuthTenantId();
   return useQuery({
-    queryKey: ["relatorio-vendas", params],
+    queryKey: ["relatorio-vendas", tenantId, params],
     enabled,
     queryFn: async () => {
       const query = toSearchParams(params);

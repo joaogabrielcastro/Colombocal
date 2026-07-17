@@ -1,8 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getAuthToken, setAuthToken, clearAuthToken } from "./auth-token";
+import {
+  getAuthToken,
+  setAuthToken,
+  clearAuthToken,
+  getAuthTenantId,
+} from "./auth-token";
+import {
+  clearTenantFeaturesCache,
+  getTenantFeaturesCache,
+  setTenantFeaturesCache,
+} from "./tenant-features-cache";
 
 afterEach(() => {
   window.localStorage.clear();
+  clearTenantFeaturesCache();
 });
 
 describe("auth-token", () => {
@@ -15,5 +26,17 @@ describe("auth-token", () => {
     expect(getAuthToken()).toBe("abc123");
     clearAuthToken();
     expect(getAuthToken()).toBeNull();
+  });
+
+  it("limpa cache de features ao trocar sessão", () => {
+    setTenantFeaturesCache({ clienteCpf: true, frete: false });
+    setAuthToken("novo");
+    expect(getTenantFeaturesCache()).toBeNull();
+  });
+
+  it("lê tid do JWT para isolamento de cache", () => {
+    const payload = btoa(JSON.stringify({ tid: 7, sub: 1 }));
+    setAuthToken(`hdr.${payload}.sig`);
+    expect(getAuthTenantId()).toBe(7);
   });
 });

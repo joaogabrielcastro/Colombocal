@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Cliente } from "@/lib/utils";
 import api from "@/lib/api";
+import { getAuthTenantId } from "@/lib/auth-token";
 
 export function useClientesListaQuery({
   busca,
@@ -13,8 +14,9 @@ export function useClientesListaQuery({
   page: number;
   pageSize: number;
 }) {
+  const tenantId = getAuthTenantId();
   return useQuery({
-    queryKey: ["clientes", { busca, page, pageSize }],
+    queryKey: ["clientes", tenantId, { busca, page, pageSize }],
     queryFn: () => {
       const params = new URLSearchParams({
         ativo: "true",

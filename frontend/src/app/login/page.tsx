@@ -1,18 +1,42 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import api from '@/lib/api';
+import api, { ApiError } from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
 import { reportApiError } from '@/lib/report-api-error';
 import BrandLogo from '@/components/BrandLogo';
 
+type LoginTenant = {
+  slug: string;
+  name: string;
+};
+
+type TenantsResponse = {
+  tenants: LoginTenant[];
+};
+
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [tenantSlug, setTenantSlug] = useState('');
+  const [tenants, setTenants] = useState<LoginTenant[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<TenantsResponse>('/auth/tenants')
+      .then((data) => {
+        const list = data.tenants ?? [];
+        setTenants(list);
+        if (list.length === 1) {
+          setTenantSlug(list[0].slug);
+        }
+      })
+      .catch(() => {
+        setTenants([]);
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,16 +46,31 @@ export default function LoginPage() {
         token: string;
         user: { email: string; name: string | null };
         tenant: { name: string };
-      }>('/auth/login', { email: email.trim().toLowerCase(), password });
+      }>('/auth/login', {
+        email: email.trim().toLowerCase(),
+        password,
+        ...(tenantSlug ? { tenantSlug } : {}),
+      });
       setAuthToken(res.token);
-      router.replace('/');
-      router.refresh();
+      // Reload completo evita cache React Query / features do tenant anterior
+      window.location.assign('/');
     } catch (err) {
+      if (err instanceof ApiError && err.status === 400) {
+        const body = err.body as { code?: string; tenants?: LoginTenant[] } | undefined;
+        if (body?.code === 'TENANT_REQUIRED' && Array.isArray(body.tenants) && body.tenants.length > 0) {
+          setTenants(body.tenants);
+          setTenantSlug('');
+          reportApiError(err, { title: 'Selecione a organização' });
+          return;
+        }
+      }
       reportApiError(err, { title: 'Falha no login' });
     } finally {
       setLoading(false);
     }
   };
+
+  const multipleTenants = tenants.length > 1;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
@@ -41,6 +80,29 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-4">Entre com seu e-mail e senha</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {multipleTenants ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Organização</label>
+              <select
+                className="input-field w-full"
+                value={tenantSlug}
+                onChange={(e) => setTenantSlug(e.target.value)}
+                required
+              >
+                <option value="">Selecione a empresa</option>
+                {tenants.map((t) => (
+                  <option key={t.slug} value={t.slug}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : tenants[0] ? (
+            <p className="text-sm text-gray-600 text-center">
+              Organização: <strong>{tenants[0].name}</strong>
+            </p>
+          ) : null}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
             <input

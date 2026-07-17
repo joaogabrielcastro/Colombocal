@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Cheque } from "@/lib/utils";
 import api from "@/lib/api";
+import { getAuthTenantId } from "@/lib/auth-token";
 
 export type ResumoCheques = { count: number; total: number };
 type ChequesPayload = Cheque[] | { items: Cheque[]; resumo: ResumoCheques };
@@ -44,8 +45,9 @@ function toParams(f: ChequesFilters) {
 }
 
 export function useChequesQuery(filters: ChequesFilters) {
+  const tenantId = getAuthTenantId();
   return useQuery({
-    queryKey: ["cheques", filters],
+    queryKey: ["cheques", tenantId, filters],
     queryFn: async () => {
       const resp = await api.getWithMeta<ChequesPayload>(`/cheques?${toParams(filters)}`);
       const raw = resp.data;

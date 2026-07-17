@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
 import { reportApiError } from '@/lib/report-api-error';
@@ -15,7 +14,6 @@ type SetupStatus = {
 };
 
 export default function NovoTenantPage() {
-  const router = useRouter();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [statusError, setStatusError] = useState(false);
   const [tenantName, setTenantName] = useState('');
@@ -54,10 +52,9 @@ export default function NovoTenantPage() {
       });
       if (res.token) {
         setAuthToken(res.token);
-        router.replace('/');
-        router.refresh();
+        window.location.assign('/');
       } else {
-        router.replace('/login');
+        window.location.assign('/login');
       }
     } catch (err) {
       reportApiError(err, { title: 'Não foi possível criar a organização' });

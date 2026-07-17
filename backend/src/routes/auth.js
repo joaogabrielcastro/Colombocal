@@ -45,6 +45,19 @@ const loginLimiter = rateLimit({
   message: { error: "Muitas tentativas de login. Tente novamente em alguns minutos." },
 });
 
+// GET /api/auth/tenants — lista organizações para a tela de login (slug + nome)
+router.get("/tenants", async (req, res) => {
+  try {
+    const tenants = await prisma.tenant.findMany({
+      select: { slug: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    res.json({ tenants });
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
 // GET /api/auth/register-status — saber se o cadastro público está ligado
 router.get("/register-status", async (req, res) => {
   try {
@@ -153,7 +166,7 @@ router.post("/register", registerLimiter, async (req, res) => {
   }
 });
 
-// POST /api/auth/login { email, password }
+// POST /api/auth/login { email, password, tenantSlug? }
 router.post("/login", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "")
@@ -167,42 +180,47 @@ router.post("/login", loginLimiter, async (req, res) => {
     const tenantSlug =
       req.body?.tenantSlug != null ? String(req.body.tenantSlug).trim().toLowerCase() : "";
 
-    let user = null;
+    let candidates = [];
     if (tenantSlug) {
       const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
       if (!tenant) {
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
-      user = await prisma.user.findUnique({
+      const user = await prisma.user.findUnique({
         where: { tenantId_email: { tenantId: tenant.id, email } },
         include: { tenant: true },
       });
+      if (user) candidates = [user];
     } else {
-      const matches = await prisma.user.findMany({
+      candidates = await prisma.user.findMany({
         where: { email },
         include: { tenant: true },
-        take: 5,
+        take: 10,
       });
-      if (matches.length > 1) {
-        return res.status(400).json({
-          error: "Este e-mail existe em mais de uma organização. Informe o slug (tenantSlug).",
-          tenants: matches.map((u) => ({
-            slug: u.tenant?.slug,
-            name: u.tenant?.name,
-          })),
-        });
-      }
-      user = matches[0] || null;
     }
-    if (!user) {
+
+    const matched = [];
+    for (const u of candidates) {
+      const ok = await bcrypt.compare(password, u.passwordHash);
+      if (ok) matched.push(u);
+    }
+
+    if (matched.length === 0) {
       return res.status(401).json({ error: "Credenciais inválidas" });
     }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) {
-      return res.status(401).json({ error: "Credenciais inválidas" });
+    if (matched.length > 1) {
+      return res.status(400).json({
+        error: "Este e-mail existe em mais de uma organização. Selecione a empresa.",
+        code: "TENANT_REQUIRED",
+        tenants: matched.map((u) => ({
+          slug: u.tenant?.slug,
+          name: u.tenant?.name,
+        })),
+      });
     }
 
+    const user = matched[0];
     const token = signAuthToken(user);
     res.json({
       token,

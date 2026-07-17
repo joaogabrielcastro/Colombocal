@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
 import { reportApiError } from '@/lib/report-api-error';
@@ -20,7 +19,6 @@ type RegisterStatus = {
 };
 
 export default function CadastroPage() {
-  const router = useRouter();
   const [status, setStatus] = useState<RegisterStatus | null>(null);
   const [loadErr, setLoadErr] = useState(false);
   const [email, setEmail] = useState('');
@@ -61,8 +59,7 @@ export default function CadastroPage() {
         ...(status?.registrationRequiresKey ? { registrationKey } : {}),
       });
       setAuthToken(res.token);
-      router.replace('/');
-      router.refresh();
+      window.location.assign('/');
     } catch (err) {
       reportApiError(err, { title: 'Não foi possível criar a conta' });
     } finally {

@@ -120,4 +120,33 @@ router.get("/tipos", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/auditoria/integridade-tenant
+ * Conta vendas deste tenant cujo cliente pertence a outro tenant (FK cruzada).
+ * Só admin.
+ */
+router.get("/integridade-tenant", async (req, res) => {
+  try {
+    if (req.authUser?.role !== "admin") {
+      return res.status(403).json({ error: "Apenas administradores" });
+    }
+    const tid = req.tenantId;
+    const rows = await prisma.$queryRaw`
+      SELECT COUNT(*)::int AS c
+      FROM "Venda" v
+      INNER JOIN "Cliente" c ON c.id = v."clienteId"
+      WHERE v."tenantId" = ${tid} AND c."tenantId" <> ${tid}
+    `;
+    const cruzados = Array.isArray(rows) && rows[0] != null ? Number(rows[0].c) : 0;
+
+    res.json({
+      tenantId: tid,
+      vendasComClienteDeOutroTenant: cruzados,
+      ok: cruzados === 0,
+    });
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
 module.exports = router;

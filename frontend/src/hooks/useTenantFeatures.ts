@@ -2,30 +2,35 @@
 
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
+import {
+  TENANT_FEATURES_DEFAULTS,
+  clearTenantFeaturesCache,
+  getTenantFeaturesCache,
+  setTenantFeaturesCache,
+  type TenantFeatures,
+} from "@/lib/tenant-features-cache";
 
-export type TenantFeatures = {
-  clienteCpf: boolean;
-  frete: boolean;
-};
+export type { TenantFeatures };
 
-const DEFAULTS: TenantFeatures = { clienteCpf: false, frete: true };
-
-let cache: TenantFeatures | null = null;
 let inflight: Promise<TenantFeatures> | null = null;
 
+export { clearTenantFeaturesCache };
+
 export function fetchTenantFeatures(): Promise<TenantFeatures> {
-  if (cache) return Promise.resolve(cache);
+  const cached = getTenantFeaturesCache();
+  if (cached) return Promise.resolve(cached);
   if (!inflight) {
     inflight = api
       .get<{ features?: Partial<TenantFeatures> }>("/auth/me")
       .then((r) => {
-        cache = {
+        const next: TenantFeatures = {
           clienteCpf: !!r.features?.clienteCpf,
           frete: r.features?.frete !== false,
         };
-        return cache;
+        setTenantFeaturesCache(next);
+        return next;
       })
-      .catch(() => DEFAULTS)
+      .catch(() => TENANT_FEATURES_DEFAULTS)
       .finally(() => {
         inflight = null;
       });
@@ -34,8 +39,10 @@ export function fetchTenantFeatures(): Promise<TenantFeatures> {
 }
 
 export function useTenantFeatures() {
-  const [features, setFeatures] = useState<TenantFeatures>(cache ?? DEFAULTS);
-  const [loading, setLoading] = useState(cache == null);
+  const [features, setFeatures] = useState<TenantFeatures>(
+    () => getTenantFeaturesCache() ?? TENANT_FEATURES_DEFAULTS,
+  );
+  const [loading, setLoading] = useState(() => getTenantFeaturesCache() == null);
 
   useEffect(() => {
     let cancelled = false;

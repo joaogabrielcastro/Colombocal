@@ -102,7 +102,7 @@ router.get("/", async (req, res) => {
       defaultTake: 100,
       maxTake: 500,
     });
-    const where = { ...tw(req) };
+    const where = { ...tw(req), cliente: { tenantId: req.tenantId } };
     if (clienteId) where.clienteId = parseInt(clienteId, 10);
     if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
     if (motoristaId !== undefined && motoristaId !== "") {
@@ -138,6 +138,7 @@ router.get("/", async (req, res) => {
     }
     if (busca) {
       where.cliente = {
+        tenantId: req.tenantId,
         OR: [
           { razaoSocial: { contains: busca, mode: "insensitive" } },
           { nomeFantasia: { contains: busca, mode: "insensitive" } },
