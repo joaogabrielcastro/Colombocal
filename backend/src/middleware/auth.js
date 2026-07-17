@@ -45,6 +45,7 @@ async function requireTenantUser(req, res, next) {
         role: "admin",
         navPermissions: null,
       };
+      res.setHeader("X-Tenant-Id", String(req.tenantId));
       return next();
     }
 
@@ -81,6 +82,7 @@ async function requireTenantUser(req, res, next) {
 
     req.tenantId = tid;
     req.authUser = user;
+    res.setHeader("X-Tenant-Id", String(tid));
     return next();
   } catch {
     return res.status(401).json({ error: "Sessão inválida ou expirada" });

@@ -25,6 +25,7 @@
     "db:studio": "prisma studio",
     "db:seed": "node scripts/seed.js",
     "tenant:create": "node scripts/create-tenant.js",
+    "tenant:diagnose": "node scripts/diagnose-tenants.js",
     "seed:deploy": "prisma migrate deploy && node scripts/seed.js",
     "db:reset": "prisma migrate reset --force",
     "legacy:reset-financeiro": "node scripts/reset-financeiro-legacy.js",

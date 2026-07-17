@@ -42,6 +42,12 @@ const corsOrigin = process.env.CORS_ORIGIN;
 app.use(
   cors({
     origin: corsOrigin || true,
+    exposedHeaders: [
+      "X-Tenant-Id",
+      "X-Total-Count",
+      "X-Sum-Valor-Total",
+      "x-sum-valor-total",
+    ],
   }),
 );
 app.use(

@@ -28,20 +28,33 @@ type MeUser = {
   navPermissions?: string[] | null;
 };
 
+type MeTenant = {
+  name: string;
+  slug: string | null;
+};
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [me, setMe] = useState<MeUser | null>(null);
+  const [tenant, setTenant] = useState<MeTenant | null>(null);
   const { freteEnabled } = useTenantFeatures();
 
   useEffect(() => {
     if (!getAuthToken()) {
       setMe(null);
+      setTenant(null);
       return;
     }
     api
-      .get<{ user: MeUser }>('/auth/me')
-      .then((r) => setMe(r.user))
-      .catch(() => setMe(null));
+      .get<{ user: MeUser; tenant?: MeTenant }>('/auth/me')
+      .then((r) => {
+        setMe(r.user);
+        setTenant(r.tenant ?? null);
+      })
+      .catch(() => {
+        setMe(null);
+        setTenant(null);
+      });
   }, []);
 
   const isAdmin = me?.role === 'admin';
@@ -83,6 +96,11 @@ export default function Sidebar() {
         <Link href="/" className="block hover:opacity-90 transition-opacity">
           <BrandLogo variant="sidebar" />
         </Link>
+        {tenant ? (
+          <p className="mt-2 text-xs text-gray-400 truncate" title={tenant.slug || undefined}>
+            Org: <span className="text-gray-200 font-medium">{tenant.name}</span>
+          </p>
+        ) : null}
       </div>
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         {mainVisible.map(({ href, label, icon: Icon }) => (

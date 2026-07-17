@@ -60,6 +60,7 @@ router.get("/", async (req, res) => {
       prisma.cliente.count({ where }),
     ]);
     setPaginationHeaders(res, { total, take, skip });
+    res.set("X-Tenant-Id", String(req.tenantId));
     res.json({ clientes, total });
   } catch (error) {
     handleRouteError(res, error);

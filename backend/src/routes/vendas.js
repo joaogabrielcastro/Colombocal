@@ -173,6 +173,7 @@ router.get("/", async (req, res) => {
     const soma = somaAgg._sum.valorTotal;
     const somaNum = soma != null ? parseFloat(String(soma)) : 0;
     res.set("x-sum-valor-total", Number.isFinite(somaNum) ? somaNum.toFixed(2) : "0");
+    res.set("X-Tenant-Id", String(req.tenantId));
     const comSaldo = vendas.map((v) => ({
       ...v,
       saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(v),
