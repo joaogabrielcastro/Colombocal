@@ -209,17 +209,9 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Credenciais inválidas" });
     }
 
-    if (matched.length > 1) {
-      return res.status(400).json({
-        error: "Este e-mail existe em mais de uma organização. Selecione a empresa.",
-        code: "TENANT_REQUIRED",
-        tenants: matched.map((u) => ({
-          slug: u.tenant?.slug,
-          name: u.tenant?.name,
-        })),
-      });
-    }
-
+    // E-mail identifica o usuário: em caso raro de senha válida em mais de um
+    // tenant, entra no primeiro cadastro (menor id) — sem seletor de organização.
+    matched.sort((a, b) => a.id - b.id);
     const user = matched[0];
     const token = signAuthToken(user);
     res.json({

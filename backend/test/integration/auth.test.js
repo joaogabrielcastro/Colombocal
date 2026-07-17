@@ -86,7 +86,7 @@ test("GET /api/auth/tenants lista todas as organizações", async () => {
   assert.deepEqual(slugs, ["default", "requinte"]);
 });
 
-test("POST /api/auth/login com mesmo e-mail em 2 tenants exige organização", async () => {
+test("POST /api/auth/login com mesmo e-mail em 2 tenants entra sem seletor", async () => {
   const bcrypt = require("bcrypt");
   const colombocal = await prisma.tenant.findUnique({ where: { slug: "default" } });
   const requinte = await seedTenant({ slug: "requinte", name: "Requinte" });
@@ -110,12 +110,12 @@ test("POST /api/auth/login com mesmo e-mail em 2 tenants exige organização", a
     },
   });
 
-  const ambig = await agent
+  const auto = await agent
     .post("/api/auth/login")
     .send({ email: "mesmo@e.com", password: "segredo123" });
-  assert.equal(ambig.status, 400);
-  assert.equal(ambig.body.code, "TENANT_REQUIRED");
-  assert.equal(ambig.body.tenants.length, 2);
+  assert.equal(auto.status, 200);
+  // Sem seletor: entra no primeiro usuário (menor id) que bater senha
+  assert.ok(auto.body.tenant?.slug === "default" || auto.body.tenant?.slug === "requinte");
 
   const reqOk = await agent
     .post("/api/auth/login")
