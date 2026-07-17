@@ -22,7 +22,10 @@ export function useRelatorioVendasQuery(params: RelatorioVendasParams, enabled: 
   const tenantId = getAuthTenantId();
   return useQuery({
     queryKey: ["relatorio-vendas", tenantId, params],
-    enabled,
+    enabled: enabled && tenantId != null,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
       const query = toSearchParams(params);
       const { data, meta } = await apiFetchWithMeta<RelVendas>(`/relatorios/vendas?${query}`);

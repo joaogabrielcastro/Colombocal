@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 
 const apiGet = vi.fn();
@@ -9,7 +9,20 @@ vi.mock("@/lib/api", () => ({
 import { useClientesListaQuery } from "./useClientesListaQuery";
 import { createQueryWrapper } from "@/test-utils/reactQuery";
 
-beforeEach(() => apiGet.mockReset());
+function setTestJwt(tenantId: number) {
+  const payload = btoa(JSON.stringify({ tid: tenantId, sub: 1 }));
+  localStorage.setItem("colombocal_auth_token", `hdr.${payload}.sig`);
+}
+
+beforeEach(() => {
+  apiGet.mockReset();
+  localStorage.clear();
+  setTestJwt(1);
+});
+
+afterEach(() => {
+  localStorage.clear();
+});
 
 describe("useClientesListaQuery", () => {
   it("monta a query com paginação e busca", async () => {

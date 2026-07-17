@@ -21,6 +21,10 @@ function initialAllowBody(pathname: string): boolean {
   return false;
 }
 
+function sessionKeyFromToken() {
+  return `tenant-${getAuthTenantId() ?? 'none'}`;
+}
+
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -30,12 +34,14 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isPublicShell = isLogin || isSetup || isCadastro;
 
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
-  const [sessionKey, setSessionKey] = useState(() => `tenant-${getAuthTenantId() ?? 'none'}`);
+  const [sessionKey, setSessionKey] = useState(sessionKeyFromToken);
 
   useEffect(() => {
     const refreshSessionKey = () => {
-      setSessionKey(`tenant-${getAuthTenantId() ?? 'none'}-${Date.now()}`);
+      setSessionKey(`${sessionKeyFromToken()}-${Date.now()}`);
     };
+    // Sincroniza se o token já mudou (ex.: login na mesma aba)
+    setSessionKey(sessionKeyFromToken());
     window.addEventListener(AUTH_SESSION_EVENT, refreshSessionKey);
     window.addEventListener('storage', refreshSessionKey);
     return () => {
@@ -78,6 +84,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 
+  // key força remontar Sidebar + página ao trocar tenant (sem hard refresh manual)
   return (
     <div key={sessionKey} className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar />

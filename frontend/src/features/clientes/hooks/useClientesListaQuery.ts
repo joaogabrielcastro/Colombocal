@@ -17,6 +17,10 @@ export function useClientesListaQuery({
   const tenantId = getAuthTenantId();
   return useQuery({
     queryKey: ["clientes", tenantId, { busca, page, pageSize }],
+    enabled: tenantId != null,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
     queryFn: () => {
       const params = new URLSearchParams({
         ativo: "true",

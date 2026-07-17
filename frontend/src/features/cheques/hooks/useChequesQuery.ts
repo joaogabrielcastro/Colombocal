@@ -48,6 +48,10 @@ export function useChequesQuery(filters: ChequesFilters) {
   const tenantId = getAuthTenantId();
   return useQuery({
     queryKey: ["cheques", tenantId, filters],
+    enabled: tenantId != null,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
       const resp = await api.getWithMeta<ChequesPayload>(`/cheques?${toParams(filters)}`);
       const raw = resp.data;

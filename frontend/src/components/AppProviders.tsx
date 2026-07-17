@@ -2,35 +2,50 @@
 
 import { Toaster } from 'sonner';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import FormEnterNavigation from '@/components/FormEnterNavigation';
-import { AUTH_SESSION_EVENT } from '@/lib/auth-token';
+import { AUTH_SESSION_EVENT, getAuthTenantId } from '@/lib/auth-token';
+
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Multi-tenant: nunca reutilizar lista de outro tenant sem refetch
+        staleTime: 0,
+        gcTime: 0,
+        retry: 1,
+        refetchOnMount: 'always',
+        refetchOnWindowFocus: false,
+      },
+    },
+  });
+}
 
 export default function AppProviders({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      }),
-  );
+  const [tenantKey, setTenantKey] = useState(() => getAuthTenantId() ?? 0);
+  const [queryClient, setQueryClient] = useState(() => createQueryClient());
+
+  const resetSessionCaches = useCallback(() => {
+    const tid = getAuthTenantId() ?? 0;
+    setTenantKey(tid);
+    setQueryClient((prev) => {
+      prev.clear();
+      return createQueryClient();
+    });
+  }, []);
 
   useEffect(() => {
-    const onAuthChange = () => {
-      queryClient.clear();
+    window.addEventListener(AUTH_SESSION_EVENT, resetSessionCaches);
+    window.addEventListener('storage', resetSessionCaches);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, resetSessionCaches);
+      window.removeEventListener('storage', resetSessionCaches);
     };
-    window.addEventListener(AUTH_SESSION_EVENT, onAuthChange);
-    return () => window.removeEventListener(AUTH_SESSION_EVENT, onAuthChange);
-  }, [queryClient]);
+  }, [resetSessionCaches]);
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient} key={`qc-${tenantKey}`}>
       <FormEnterNavigation />
       {children}
       <Toaster richColors closeButton position="top-right" />
