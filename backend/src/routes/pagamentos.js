@@ -20,7 +20,16 @@ function tw(req) {
 // GET /api/pagamentos
 router.get("/", async (req, res) => {
   try {
-    const { clienteId, vendaId, tipo, dataInicio, dataFim, cliente, ordem } = req.query;
+    const {
+      clienteId,
+      vendaId,
+      tipo,
+      dataInicio,
+      dataFim,
+      cliente,
+      ordem,
+      emitente,
+    } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 100,
       maxTake: 500,
@@ -62,6 +71,16 @@ router.get("/", async (req, res) => {
           OR: [{ vendaId: n }, { venda: { numeroVenda: n } }],
         });
       }
+    }
+    if (emitente && String(emitente).trim()) {
+      and.push({
+        cheque: {
+          emitenteNome: {
+            contains: String(emitente).trim(),
+            mode: "insensitive",
+          },
+        },
+      });
     }
     const where = and.length === 1 ? and[0] : { AND: and };
     const includeResumo =

@@ -3,7 +3,12 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { PlusIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+} from "@heroicons/react/24/outline";
 import { formatMoney, formatDate, type Pagamento } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import * as XLSX from "xlsx";
@@ -41,6 +46,12 @@ function FinanceiroPageContent() {
   const [ordemInput, setOrdemInput] = useState(ordemInicial);
   const [ordemFiltro, setOrdemFiltro] = useState(ordemInicial);
   const [tipoFiltro, setTipoFiltro] = useState(searchParams.get("tipo") || "");
+  const emitenteInicial = searchParams.get("emitente") || "";
+  const [emitenteInput, setEmitenteInput] = useState(emitenteInicial);
+  const [emitenteFiltro, setEmitenteFiltro] = useState(emitenteInicial);
+  const [maisFiltrosAbertos, setMaisFiltrosAbertos] = useState(() =>
+    Boolean(searchParams.get("tipo") || searchParams.get("emitente")),
+  );
   const [pagamentoParaEstornar, setPagamentoParaEstornar] = useState<Pagamento | null>(null);
   const [estornando, setEstornando] = useState(false);
 
@@ -50,6 +61,7 @@ function FinanceiroPageContent() {
     cliente: clienteFiltro,
     ordem: ordemFiltro,
     tipo: tipoFiltro,
+    emitente: emitenteFiltro,
     page,
     pageSize,
   });
@@ -61,6 +73,7 @@ function FinanceiroPageContent() {
   const aplicarFiltros = () => {
     setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
     setClienteFiltro(clienteInput.trim());
+    setEmitenteFiltro(emitenteInput.trim());
     setPage(1);
   };
 
@@ -72,6 +85,8 @@ function FinanceiroPageContent() {
     setClienteInput("");
     setClienteFiltro("");
     setTipoFiltro("");
+    setEmitenteInput("");
+    setEmitenteFiltro("");
     setPage(1);
   };
 
@@ -81,6 +96,7 @@ function FinanceiroPageContent() {
     const cliente = searchParams.get("cliente") || "";
     const ordem = searchParams.get("ordem") || "";
     const tipo = searchParams.get("tipo") || "";
+    const emitente = searchParams.get("emitente") || "";
     const parsedPage = parseInt(searchParams.get("page") || "1", 10) || 1;
     setDataInicio(di);
     setDataFim(df);
@@ -89,7 +105,10 @@ function FinanceiroPageContent() {
     setOrdemInput(ordem);
     setOrdemFiltro(ordem);
     setTipoFiltro(tipo);
+    setEmitenteInput(emitente);
+    setEmitenteFiltro(emitente);
     setPage(parsedPage);
+    if (tipo || emitente) setMaisFiltrosAbertos(true);
   }, [searchParams]);
 
   useEffect(() => {
@@ -100,9 +119,19 @@ function FinanceiroPageContent() {
     const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
     if (ordemTrim) params.set("ordem", ordemTrim);
     if (tipoFiltro) params.set("tipo", tipoFiltro);
+    if (emitenteFiltro.trim()) params.set("emitente", emitenteFiltro.trim());
     if (page > 1) params.set("page", String(page));
     router.replace(`/financeiro${params.toString() ? `?${params.toString()}` : ""}`);
-  }, [dataInicio, dataFim, clienteFiltro, ordemFiltro, tipoFiltro, page, router]);
+  }, [
+    dataInicio,
+    dataFim,
+    clienteFiltro,
+    ordemFiltro,
+    tipoFiltro,
+    emitenteFiltro,
+    page,
+    router,
+  ]);
 
   const handleExportExcel = () => {
     const rows = pagamentos.map((p) => ({
@@ -222,13 +251,16 @@ function FinanceiroPageContent() {
         }
         filters={
           <FilterBar className="p-4 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Cliente</label>
                 <input
                   type="text"
                   value={clienteInput}
                   onChange={(e) => setClienteInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") aplicarFiltros();
+                  }}
                   className="input-field w-full"
                   placeholder="Nome fantasia, razão ou CNPJ"
                 />
@@ -271,22 +303,41 @@ function FinanceiroPageContent() {
                   className="input-field w-full"
                 />
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Tipo</label>
-                <select
-                  value={tipoFiltro}
-                  onChange={(e) => {
-                    setTipoFiltro(e.target.value);
-                    setPage(1);
-                  }}
-                  className="input-field w-full"
-                >
-                  <option value="">Todos</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="transferencia">PIX</option>
-                  <option value="dinheiro">Dinheiro</option>
-                </select>
-              </div>
+              {maisFiltrosAbertos ? (
+                <>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+                    <select
+                      value={tipoFiltro}
+                      onChange={(e) => {
+                        setTipoFiltro(e.target.value);
+                        setPage(1);
+                      }}
+                      className="input-field w-full"
+                    >
+                      <option value="">Todos</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="transferencia">PIX</option>
+                      <option value="dinheiro">Dinheiro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Nome do emitente
+                    </label>
+                    <input
+                      type="text"
+                      value={emitenteInput}
+                      onChange={(e) => setEmitenteInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") aplicarFiltros();
+                      }}
+                      className="input-field w-full"
+                      placeholder="Nome no cheque"
+                    />
+                  </div>
+                </>
+              ) : null}
             </div>
             <div className="pt-1 border-t border-gray-100 flex flex-wrap items-center gap-2">
               <button
@@ -303,6 +354,18 @@ function FinanceiroPageContent() {
                 className="btn-secondary h-10 shrink-0"
               >
                 Limpar
+              </button>
+              <button
+                type="button"
+                onClick={() => setMaisFiltrosAbertos((open) => !open)}
+                className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+              >
+                {maisFiltrosAbertos ? (
+                  <ChevronUpIcon className="w-4 h-4" />
+                ) : (
+                  <ChevronDownIcon className="w-4 h-4" />
+                )}
+                {maisFiltrosAbertos ? "Ocultar filtros" : "Mais filtros"}
               </button>
               <div className="ml-auto">
                 <ExportActions
@@ -343,7 +406,12 @@ function FinanceiroPageContent() {
                     Nenhum recebimento encontrado
                   </p>
                   <p className="text-sm mt-1">
-                    {clienteFiltro || ordemFiltro || dataInicio || dataFim || tipoFiltro
+                    {clienteFiltro ||
+                    ordemFiltro ||
+                    dataInicio ||
+                    dataFim ||
+                    tipoFiltro ||
+                    emitenteFiltro
                       ? "Nenhum resultado para estes filtros. Tente limpar os filtros."
                       : "Ainda não há recebimentos. Clique em Receber pagamento para registrar o primeiro."}
                   </p>

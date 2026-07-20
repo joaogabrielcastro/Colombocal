@@ -14,6 +14,7 @@ type PagamentosFilters = {
   cliente: string;
   ordem: string;
   tipo: string;
+  emitente: string;
   page: number;
   pageSize: number;
 };
@@ -26,6 +27,7 @@ function toParams(f: PagamentosFilters) {
   const ordemTrim = f.ordem.replace(/^#/, "").trim();
   if (ordemTrim) params.set("ordem", ordemTrim);
   if (f.tipo) params.set("tipo", f.tipo);
+  if (f.emitente.trim()) params.set("emitente", f.emitente.trim());
   params.set("resumo", "1");
   params.set("take", String(f.pageSize));
   params.set("skip", String((f.page - 1) * f.pageSize));
