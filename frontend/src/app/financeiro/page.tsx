@@ -306,7 +306,7 @@ function FinanceiroPageContent() {
   return (
     <>
     <ListScaffold
-      title="Recebimentos"
+      title="Financeiro"
       subtitle={subtitle}
       actions={(
         <Link href="/financeiro/novo" className="btn-primary">
@@ -315,14 +315,14 @@ function FinanceiroPageContent() {
       )}
       filters={(
         <FilterBar className="p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Cliente</label>
             <input
               type="text"
               value={clienteInput}
               onChange={(e) => setClienteInput(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
               placeholder="Nome fantasia, razão ou CNPJ"
             />
           </div>
@@ -340,47 +340,40 @@ function FinanceiroPageContent() {
                   aplicarFiltros();
                 }
               }}
-              className="input-field font-mono"
+              className="input-field font-mono w-full"
               placeholder="ex: 1520 ou #1520"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Data Início
+              Data início
             </label>
             <input
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data Fim</label>
+            <label className="block text-xs text-gray-500 mb-1">Data fim</label>
             <input
               type="date"
               value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
             />
           </div>
         </div>
-        <button
-          type="button"
-          className="text-sm text-blue-600 hover:underline"
-          onClick={() => setMaisFiltros((v) => !v)}
-        >
-          {maisFiltros ? "Ocultar filtros avançados" : "Mais filtros"}
-        </button>
         {maisFiltros ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 items-end pt-1 border-t border-gray-100">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Emitente</label>
             <input
               type="text"
               value={emitenteInput}
               onChange={(e) => setEmitenteInput(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
               placeholder="Nome do emitente"
             />
           </div>
@@ -390,7 +383,7 @@ function FinanceiroPageContent() {
               type="text"
               value={bancoInput}
               onChange={(e) => setBancoInput(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
               placeholder="Ex.: Bradesco"
             />
           </div>
@@ -400,7 +393,7 @@ function FinanceiroPageContent() {
               type="text"
               value={numeroInput}
               onChange={(e) => setNumeroInput(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
               placeholder="Ex.: 003579"
             />
           </div>
@@ -414,7 +407,7 @@ function FinanceiroPageContent() {
               min="0"
               value={valorMinInput}
               onChange={(e) => setValorMinInput(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
               placeholder="0,00"
             />
           </div>
@@ -428,51 +421,58 @@ function FinanceiroPageContent() {
               min="0"
               value={valorMaxInput}
               onChange={(e) => setValorMaxInput(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
               placeholder="0,00"
             />
           </div>
         </div>
         ) : null}
-        <div className="mt-2 pt-3 border-t border-gray-100 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                aplicarFiltros();
-              }}
-              className="btn-primary h-10 shrink-0"
-            >
-              <MagnifyingGlassIcon className="w-4 h-4 inline -mt-0.5 mr-1" />
-              Filtrar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDataInicio("");
-                setDataFim("");
-                setOrdemInput("");
-                setOrdemFiltro("");
-                setClienteInput("");
-                setClienteFiltro("");
-                setEmitenteInput("");
-                setEmitenteFiltro("");
-                setBancoInput("");
-                setBancoFiltro("");
-                setNumeroInput("");
-                setNumeroFiltro("");
-                setValorMinInput("");
-                setValorMinFiltro("");
-                setValorMaxInput("");
-                setValorMaxFiltro("");
-                setPage(1);
-              }}
-              className="btn-secondary h-10 shrink-0"
-            >
-              Limpar
-            </button>
+        <div className="pt-1 border-t border-gray-100 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              aplicarFiltros();
+            }}
+            className="btn-primary h-10 shrink-0"
+          >
+            <MagnifyingGlassIcon className="w-4 h-4 inline -mt-0.5 mr-1" />
+            Filtrar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDataInicio("");
+              setDataFim("");
+              setOrdemInput("");
+              setOrdemFiltro("");
+              setClienteInput("");
+              setClienteFiltro("");
+              setEmitenteInput("");
+              setEmitenteFiltro("");
+              setBancoInput("");
+              setBancoFiltro("");
+              setNumeroInput("");
+              setNumeroFiltro("");
+              setValorMinInput("");
+              setValorMinFiltro("");
+              setValorMaxInput("");
+              setValorMaxFiltro("");
+              setPage(1);
+            }}
+            className="btn-secondary h-10 shrink-0"
+          >
+            Limpar
+          </button>
+          <button
+            type="button"
+            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            onClick={() => setMaisFiltros((v) => !v)}
+          >
+            {maisFiltros ? "Ocultar filtros" : "Mais filtros"}
+          </button>
+          <div className="ml-auto">
+            <ExportActions onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} />
           </div>
-          <ExportActions onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} />
         </div>
         </FilterBar>
       )}

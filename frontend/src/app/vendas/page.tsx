@@ -233,19 +233,19 @@ function VendasPageContent() {
       ) : null}
 
       <FilterBar className="p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3 items-end">
+          <div className="sm:col-span-2 xl:col-span-6">
             <label className="block text-xs text-gray-500 mb-1">
               Busca (cliente, CNPJ, cidade…)
             </label>
             <input
               value={buscaInput}
               onChange={(e) => setBuscaInput(e.target.value)}
-              className="input-field"
+              className="input-field w-full"
               placeholder="Nome, fantasia, CNPJ, cidade…"
             />
           </div>
-          <div>
+          <div className="xl:col-span-2">
             <label className="block text-xs text-gray-500 mb-1">
               Ordem (#)
             </label>
@@ -260,11 +260,11 @@ function VendasPageContent() {
                   aplicarBuscaJa();
                 }
               }}
-              className="input-field font-mono"
+              className="input-field font-mono w-full"
               placeholder="ex: 7 ou #7"
             />
           </div>
-          <div>
+          <div className="xl:col-span-2">
             <label className="block text-xs text-gray-500 mb-1">
               Data início
             </label>
@@ -275,10 +275,10 @@ function VendasPageContent() {
                 setDataInicio(e.target.value);
                 setPage(1);
               }}
-              className="input-field"
+              className="input-field w-full"
             />
           </div>
-          <div>
+          <div className="xl:col-span-2">
             <label className="block text-xs text-gray-500 mb-1">Data fim</label>
             <input
               type="date"
@@ -287,111 +287,107 @@ function VendasPageContent() {
                 setDataFim(e.target.value);
                 setPage(1);
               }}
-              className="input-field"
+              className="input-field w-full"
             />
           </div>
         </div>
-        <div>
+        {maisFiltrosAbertos ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-end pt-1 border-t border-gray-100">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Vendedor</label>
+              <select
+                value={vendedorId}
+                onChange={(e) => {
+                  setVendedorId(e.target.value);
+                  setPage(1);
+                }}
+                className="input-field w-full"
+              >
+                <option value="">Todos</option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={String(v.id)}>
+                    {v.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Motorista</label>
+              <select
+                value={motoristaId}
+                onChange={(e) => {
+                  setMotoristaId(e.target.value);
+                  setPage(1);
+                }}
+                className="input-field w-full"
+              >
+                <option value="">Todos</option>
+                {motoristas.map((m) => (
+                  <option key={m.id} value={String(m.id)}>
+                    {m.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Valor mín. (R$)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={valorMin}
+                onChange={(e) => {
+                  setValorMin(e.target.value);
+                  setPage(1);
+                }}
+                className="input-field w-full"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Valor máx. (R$)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={valorMax}
+                onChange={(e) => {
+                  setValorMax(e.target.value);
+                  setPage(1);
+                }}
+                className="input-field w-full"
+                placeholder="—"
+              />
+            </div>
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100">
+          <button type="button" onClick={aplicarBuscaJa} className="btn-primary h-10">
+            <MagnifyingGlassIcon className="w-4 h-4" /> Aplicar busca
+          </button>
+          <button
+            type="button"
+            onClick={limparFiltros}
+            className="btn-secondary h-10 flex items-center gap-1"
+          >
+            <XMarkIcon className="w-4 h-4" />
+            Limpar filtros
+          </button>
           <button
             type="button"
             onClick={() => setMaisFiltrosAbertos((open) => !open)}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900"
+            className="ml-auto flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
           >
             {maisFiltrosAbertos ? (
               <ChevronUpIcon className="w-4 h-4" />
             ) : (
               <ChevronDownIcon className="w-4 h-4" />
             )}
-            Mais filtros
-          </button>
-        </div>
-        {maisFiltrosAbertos ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Vendedor</label>
-                <select
-                  value={vendedorId}
-                  onChange={(e) => {
-                    setVendedorId(e.target.value);
-                    setPage(1);
-                  }}
-                  className="input-field"
-                >
-                  <option value="">Todos</option>
-                  {vendedores.map((v) => (
-                    <option key={v.id} value={String(v.id)}>
-                      {v.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Motorista</label>
-                <select
-                  value={motoristaId}
-                  onChange={(e) => {
-                    setMotoristaId(e.target.value);
-                    setPage(1);
-                  }}
-                  className="input-field"
-                >
-                  <option value="">Todos</option>
-                  {motoristas.map((m) => (
-                    <option key={m.id} value={String(m.id)}>
-                      {m.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Valor mín. (R$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={valorMin}
-                  onChange={(e) => {
-                    setValorMin(e.target.value);
-                    setPage(1);
-                  }}
-                  className="input-field"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Valor máx. (R$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={valorMax}
-                  onChange={(e) => {
-                    setValorMax(e.target.value);
-                    setPage(1);
-                  }}
-                  className="input-field"
-                  placeholder="—"
-                />
-              </div>
-            </div>
-          </>
-        ) : null}
-        <div className="flex flex-wrap gap-3 items-end">
-          <button type="button" onClick={aplicarBuscaJa} className="btn-primary">
-            <MagnifyingGlassIcon className="w-4 h-4" /> Aplicar busca
-          </button>
-          <button
-            type="button"
-            onClick={limparFiltros}
-            className="btn-secondary flex items-center gap-1"
-          >
-            <XMarkIcon className="w-4 h-4" />
-            Limpar filtros
+            {maisFiltrosAbertos ? 'Ocultar filtros' : 'Mais filtros'}
           </button>
         </div>
       </FilterBar>

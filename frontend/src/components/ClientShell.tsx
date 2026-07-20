@@ -34,8 +34,9 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isCadastro = pathname === '/cadastro';
   const isPublicShell = isLogin || isSetup || isCadastro;
 
+  // Valores estáveis no 1º render (SSR = cliente) — token/tenant só após mount
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
-  const [sessionKey, setSessionKey] = useState(sessionKeyFromToken);
+  const [sessionKey, setSessionKey] = useState('boot');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {

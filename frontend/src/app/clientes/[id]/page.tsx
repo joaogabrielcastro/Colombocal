@@ -20,7 +20,7 @@ const abasPrincipais: ClienteAba[] = ["conta", "cheques", "editar"];
 const abasAvancadas: ClienteAba[] = ["precos", "comissoes"];
 
 function labelAba(tab: ClienteAba, chequesCount: number) {
-  if (tab === "conta") return "Recebimentos";
+  if (tab === "conta") return "Financeiro";
   if (tab === "cheques") return `Cheques (${chequesCount})`;
   if (tab === "precos") return "Preços Especiais";
   if (tab === "comissoes") return "Comissões";

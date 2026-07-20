@@ -48,8 +48,6 @@ type MainNavItem = {
   navKey: NavPermissionKey;
   advancedOnly?: boolean;
   adminOnly?: boolean;
-  /** Itens de configuração (fora do fluxo diário). */
-  configOnly?: boolean;
 };
 
 type ReportNavItem = {
@@ -61,52 +59,37 @@ type ReportNavItem = {
 
 /** Opções para o admin marcar por usuário (usuários = só admin, não listado). */
 export const NAV_PERMISSION_OPTIONS: { key: NavPermissionKey; label: string; group: string }[] = [
-  { key: 'dashboard', label: 'Início', group: 'Principal' },
+  { key: 'dashboard', label: 'Dashboard', group: 'Principal' },
   { key: 'clientes', label: 'Clientes', group: 'Principal' },
+  { key: 'produtos', label: 'Produtos', group: 'Principal' },
   { key: 'vendas', label: 'Vendas', group: 'Principal' },
-  { key: 'financeiro', label: 'Recebimentos', group: 'Principal' },
-  { key: 'produtos', label: 'Produtos', group: 'Configurações' },
-  { key: 'fretes', label: 'Fretes', group: 'Configurações' },
-  { key: 'motoristas', label: 'Motoristas', group: 'Configurações' },
-  { key: 'vendedores', label: 'Vendedores', group: 'Configurações' },
+  { key: 'financeiro', label: 'Financeiro', group: 'Principal' },
+  { key: 'fretes', label: 'Fretes', group: 'Avançado' },
+  { key: 'motoristas', label: 'Motoristas', group: 'Avançado' },
+  { key: 'vendedores', label: 'Vendedores', group: 'Avançado' },
   { key: 'rel_vendas', label: 'Relatório de Vendas', group: 'Relatórios' },
   { key: 'rel_financeiro', label: 'Contas a receber', group: 'Relatórios' },
   { key: 'rel_comissoes', label: 'Comissões', group: 'Relatórios' },
-  { key: 'auditoria', label: 'Auditoria', group: 'Configurações' },
+  { key: 'auditoria', label: 'Auditoria', group: 'Sistema' },
 ];
 
 /**
- * Menu operacional (padrão): Início, Clientes, Vendas, Recebimentos.
- * Relatórios ficam em REPORT_NAV. Cadastros auxiliares em CONFIG_NAV.
+ * Menu clássico: Dashboard, Clientes, Produtos, Vendas, Financeiro + avançados.
+ * Relatórios em REPORT_NAV. Contas a receber unifica saldos e títulos (sem duplicar).
  */
 export const MAIN_NAV: MainNavItem[] = [
-  { href: '/', label: 'Início', icon: HomeIcon, navKey: 'dashboard' },
+  { href: '/', label: 'Dashboard', icon: HomeIcon, navKey: 'dashboard' },
   { href: '/clientes', label: 'Clientes', icon: UserGroupIcon, navKey: 'clientes' },
+  { href: '/produtos', label: 'Produtos', icon: CubeIcon, navKey: 'produtos' },
   { href: '/vendas', label: 'Vendas', icon: ShoppingCartIcon, navKey: 'vendas' },
-  { href: '/financeiro', label: 'Recebimentos', icon: BanknotesIcon, navKey: 'financeiro' },
-  {
-    href: '/produtos',
-    label: 'Produtos',
-    icon: CubeIcon,
-    navKey: 'produtos',
-    advancedOnly: true,
-    configOnly: true,
-  },
-  {
-    href: '/fretes',
-    label: 'Fretes',
-    icon: TruckIcon,
-    navKey: 'fretes',
-    advancedOnly: true,
-    configOnly: true,
-  },
+  { href: '/financeiro', label: 'Financeiro', icon: BanknotesIcon, navKey: 'financeiro' },
+  { href: '/fretes', label: 'Fretes', icon: TruckIcon, navKey: 'fretes', advancedOnly: true },
   {
     href: '/motoristas',
     label: 'Motoristas',
     icon: TruckIcon,
     navKey: 'motoristas',
     advancedOnly: true,
-    configOnly: true,
   },
   {
     href: '/vendedores',
@@ -114,15 +97,12 @@ export const MAIN_NAV: MainNavItem[] = [
     icon: UserIcon,
     navKey: 'vendedores',
     advancedOnly: true,
-    configOnly: true,
   },
   {
     href: '/auditoria',
     label: 'Auditoria',
     icon: ClipboardDocumentListIcon,
     navKey: 'auditoria',
-    advancedOnly: true,
-    configOnly: true,
   },
   {
     href: '/usuarios',
@@ -130,7 +110,6 @@ export const MAIN_NAV: MainNavItem[] = [
     icon: UserPlusIcon,
     navKey: 'dashboard',
     adminOnly: true,
-    configOnly: true,
   },
 ];
 
@@ -156,13 +135,12 @@ export function canAccessNavKey(
 export function filterMainNavForSidebar(
   items: MainNavItem[],
   hideAdvanced: boolean,
-  options?: { isAdmin?: boolean; navPermissions?: string[] | null },
+  options?: { isAdmin?: boolean; navPermissions?: string[] | null; freteEnabled?: boolean },
 ): MainNavItem[] {
   let out = items;
-  // Sempre esconder cadastros de configuração do menu principal
-  out = out.filter((i) => !i.configOnly);
   if (hideAdvanced) out = out.filter((i) => !i.advancedOnly);
   if (options?.isAdmin !== true) out = out.filter((i) => !i.adminOnly);
+  if (options?.freteEnabled === false) out = out.filter((i) => i.navKey !== 'fretes');
   out = out.filter((i) =>
     canAccessNavKey(i.navKey, {
       isAdmin: options?.isAdmin,
@@ -172,23 +150,8 @@ export function filterMainNavForSidebar(
   return out;
 }
 
-/** Itens de configuração (produtos, vendedores, etc.) filtrados por permissão. */
-export function filterConfigNav(
-  options?: { isAdmin?: boolean; navPermissions?: string[] | null; freteEnabled?: boolean },
-): MainNavItem[] {
-  return MAIN_NAV.filter((i) => i.configOnly)
-    .filter((i) => options?.freteEnabled !== false || i.navKey !== 'fretes')
-    .filter((i) => !i.adminOnly || options?.isAdmin === true)
-    .filter((i) =>
-      canAccessNavKey(i.navKey, {
-        isAdmin: options?.isAdmin,
-        navPermissions: options?.navPermissions,
-      }),
-    );
-}
-
 export function advancedMainNavItems(items: MainNavItem[]): MainNavItem[] {
-  return items.filter((i) => i.advancedOnly && !i.configOnly);
+  return items.filter((i) => i.advancedOnly);
 }
 
 export function filterReportsForSidebar(

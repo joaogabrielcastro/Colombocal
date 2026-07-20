@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AUTH_SESSION_EVENT, getAuthToken } from '@/lib/auth-token';
 import api from '@/lib/api';
@@ -8,11 +7,9 @@ import {
   clearTenantFeaturesCache,
   fetchTenantFeatures,
 } from '@/hooks/useTenantFeatures';
-import { filterConfigNav } from '@/lib/navigation';
 
 type MeUser = {
   role: string;
-  navPermissions?: string[] | null;
 };
 
 type TenantFeaturesConfig = {
@@ -67,14 +64,6 @@ export default function ConfiguracoesPage() {
     void carregarFeatures();
   }, [carregarFeatures]);
 
-  const freteEnabled = features?.frete ?? true;
-
-  const items = filterConfigNav({
-    isAdmin,
-    navPermissions: me?.navPermissions ?? null,
-    freteEnabled,
-  });
-
   const salvarFeatures = async () => {
     if (!features) return;
     setSalvandoFeatures(true);
@@ -95,8 +84,7 @@ export default function ConfiguracoesPage() {
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
       <p className="text-gray-500 text-sm mt-1 mb-6">
-        Cadastros e ferramentas que você usa ocasionalmente — fora do fluxo diário de
-        vender e receber.
+        Módulos e opções da organização.
       </p>
 
       {isAdmin ? (
@@ -145,25 +133,10 @@ export default function ConfiguracoesPage() {
             <p className="text-sm text-gray-400">Carregando módulos…</p>
           )}
         </section>
-      ) : null}
-
-      {items.length === 0 ? (
-        <p className="text-sm text-gray-500">Nenhuma configuração disponível para o seu usuário.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {items.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="card p-4 flex items-center gap-3 hover:border-blue-200 hover:bg-blue-50/40 transition-colors"
-            >
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700">
-                <Icon className="w-5 h-5" />
-              </span>
-              <span className="font-medium text-gray-900">{label}</span>
-            </Link>
-          ))}
-        </div>
+        <p className="text-sm text-gray-500">
+          Apenas administradores podem alterar as configurações da organização.
+        </p>
       )}
     </div>
   );

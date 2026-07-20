@@ -1,9 +1,8 @@
 /**
- * Menu operacional enxuto: Início, Clientes, Vendas, Recebimentos (+ Relatórios).
- * Cadastros auxiliares (produtos, vendedores, motoristas, fretes, auditoria, usuários)
- * ficam em Configurações (`configOnly` em navigation.ts).
+ * Menu clássico: Dashboard, Clientes, Produtos, Vendas, Financeiro (+ Relatórios).
+ * Itens `advancedOnly` (fretes, motoristas, vendedores) vão para "Avançado" quando
+ * `UI_HIDE_ADVANCED` está ativo.
  *
- * `UI_HIDE_ADVANCED` ainda esconde relatórios/itens `advancedOnly` restantes.
  * Docker: NEXT_PUBLIC_UI_HIDE_ADVANCED=true
  * Local: frontend/.env.local com NEXT_PUBLIC_UI_HIDE_ADVANCED=false
  */

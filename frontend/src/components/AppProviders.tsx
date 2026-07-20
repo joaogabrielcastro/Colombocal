@@ -23,7 +23,8 @@ function createQueryClient() {
 }
 
 export default function AppProviders({ children }: { children: ReactNode }) {
-  const [tenantKey, setTenantKey] = useState(() => getAuthTenantId() ?? 0);
+  // tenantKey estável no SSR; sincroniza com JWT só no client após mount
+  const [tenantKey, setTenantKey] = useState(0);
   const [queryClient, setQueryClient] = useState(() => createQueryClient());
 
   const resetSessionCaches = useCallback(() => {
@@ -36,6 +37,7 @@ export default function AppProviders({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    setTenantKey(getAuthTenantId() ?? 0);
     window.addEventListener(AUTH_SESSION_EVENT, resetSessionCaches);
     window.addEventListener('storage', resetSessionCaches);
     return () => {

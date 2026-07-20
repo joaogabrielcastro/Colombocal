@@ -30,10 +30,35 @@ describe("filterMainNavForSidebar", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, true, { isAdmin: true });
     expect(out.some((i) => i.advancedOnly)).toBe(false);
   });
-  it("esconde itens de configuração do menu principal", () => {
+  it("mostra menu clássico completo quando hideAdvanced=false", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, false, { isAdmin: true });
-    expect(out.some((i) => i.configOnly)).toBe(false);
-    expect(out.map((i) => i.href)).toEqual(["/", "/clientes", "/vendas", "/financeiro"]);
+    expect(out.map((i) => i.href)).toEqual([
+      "/",
+      "/clientes",
+      "/produtos",
+      "/vendas",
+      "/financeiro",
+      "/fretes",
+      "/motoristas",
+      "/vendedores",
+      "/auditoria",
+      "/usuarios",
+    ]);
+  });
+  it("rótulo Financeiro (não Recebimentos)", () => {
+    expect(MAIN_NAV.find((i) => i.navKey === "financeiro")?.label).toBe("Financeiro");
+  });
+  it("esconde Fretes quando freteEnabled=false", () => {
+    const out = filterMainNavForSidebar(MAIN_NAV, false, {
+      isAdmin: true,
+      freteEnabled: false,
+    });
+    expect(out.some((i) => i.navKey === "fretes")).toBe(false);
+  });
+  it("Fretes fica em Avançado quando hideAdvanced", () => {
+    const main = filterMainNavForSidebar(MAIN_NAV, true, { isAdmin: true });
+    expect(main.some((i) => i.navKey === "fretes")).toBe(false);
+    expect(advancedMainNavItems(MAIN_NAV).some((i) => i.navKey === "fretes")).toBe(true);
   });
   it("esconde itens adminOnly para não-admin", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, false, { isAdmin: false });
@@ -49,10 +74,8 @@ describe("filterMainNavForSidebar", () => {
 });
 
 describe("advancedMainNavItems / advancedReportItems", () => {
-  it("retorna apenas itens avançados (não configuração)", () => {
-    expect(advancedMainNavItems(MAIN_NAV).every((i) => i.advancedOnly && !i.configOnly)).toBe(
-      true,
-    );
+  it("retorna apenas itens avançados", () => {
+    expect(advancedMainNavItems(MAIN_NAV).every((i) => i.advancedOnly)).toBe(true);
     const advancedReports = advancedReportItems(REPORT_NAV);
     expect(advancedReports.every((i) => i.advancedOnly)).toBe(true);
   });
@@ -96,6 +119,7 @@ describe("NAV_PERMISSION_OPTIONS", () => {
     const grupos = new Set(NAV_PERMISSION_OPTIONS.map((o) => o.group));
     expect(grupos.has("Principal")).toBe(true);
     expect(grupos.has("Relatórios")).toBe(true);
-    expect(grupos.has("Configurações")).toBe(true);
+    expect(grupos.has("Avançado")).toBe(true);
+    expect(grupos.has("Sistema")).toBe(true);
   });
 });

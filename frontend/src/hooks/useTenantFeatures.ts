@@ -52,16 +52,23 @@ export function fetchTenantFeatures(force = false): Promise<TenantFeatures> {
 }
 
 export function useTenantFeatures() {
-  const tid = getAuthTenantId();
-  const [features, setFeatures] = useState<TenantFeatures>(
-    () => getTenantFeaturesCache(tid) ?? TENANT_FEATURES_DEFAULTS,
-  );
-  const [loading, setLoading] = useState(() => getTenantFeaturesCache(tid) == null);
+  // Sempre começa nos defaults para SSR e 1º paint no cliente baterem (evita hydration mismatch
+  // quando sessionStorage já tem frete=true).
+  const [features, setFeatures] = useState<TenantFeatures>(TENANT_FEATURES_DEFAULTS);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     const load = (force = false) => {
+      const tid = getAuthTenantId();
+      if (!force) {
+        const cached = getTenantFeaturesCache(tid);
+        if (cached && !cancelled) {
+          setFeatures(cached);
+          setLoading(false);
+        }
+      }
       void fetchTenantFeatures(force).then((f) => {
         if (!cancelled) {
           setFeatures(f);
@@ -70,7 +77,8 @@ export function useTenantFeatures() {
       });
     };
 
-    load(true);
+    // Aplica cache imediatamente após mount, depois confirma com a API
+    load(false);
 
     const onAuth = () => {
       setLoading(true);

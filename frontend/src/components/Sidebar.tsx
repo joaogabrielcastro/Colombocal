@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Cog6ToothIcon,
+  EllipsisHorizontalCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { UI_HIDE_ADVANCED } from '@/lib/features';
@@ -15,7 +16,8 @@ import {
   MAIN_NAV,
   REPORT_NAV,
   CONFIG_NAV_HREF,
-  filterConfigNav,
+  advancedMainNavItems,
+  advancedReportItems,
   filterMainNavForSidebar,
   filterReportsForSidebar,
   hasVisibleReports,
@@ -83,19 +85,32 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
   const isAdmin = me?.role === 'admin';
   const navOpts = { isAdmin, navPermissions: me?.navPermissions ?? null };
 
-  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED, navOpts);
-  const configItems = filterConfigNav({
+  const mainVisible = filterMainNavForSidebar(MAIN_NAV, UI_HIDE_ADVANCED, {
     ...navOpts,
     freteEnabled,
   });
+  const advancedMain = advancedMainNavItems(MAIN_NAV).filter(
+    (i) =>
+      (freteEnabled || i.navKey !== 'fretes') &&
+      (!i.adminOnly || isAdmin) &&
+      !mainVisible.some((v) => v.href === i.href) &&
+      filterMainNavForSidebar([i], false, { ...navOpts, freteEnabled }).length > 0,
+  );
   const reportsVisible = filterReportsForSidebar(REPORT_NAV, UI_HIDE_ADVANCED, navOpts);
+  const reportsAdvancedOnly = advancedReportItems(REPORT_NAV).filter(
+    (i) =>
+      !reportsVisible.some((v) => v.href === i.href) &&
+      filterReportsForSidebar([i], false, navOpts).length > 0,
+  );
   const showReportsSection = hasVisibleReports(UI_HIDE_ADVANCED, navOpts);
-  const showConfig = configItems.length > 0;
+  const showAdvanced =
+    UI_HIDE_ADVANCED && (advancedMain.length > 0 || reportsAdvancedOnly.length > 0);
 
   const [relOpen, setRelOpen] = useState(pathname.startsWith('/relatorios'));
-  const [cfgOpen, setCfgOpen] = useState(
-    pathname.startsWith('/configuracoes') ||
-      configItems.some((i) => pathname.startsWith(i.href)),
+  const [advOpen, setAdvOpen] = useState(
+    UI_HIDE_ADVANCED &&
+      (advancedMain.some((i) => pathname.startsWith(i.href)) ||
+        reportsAdvancedOnly.some((i) => pathname === i.href)),
   );
 
   const isActive = (href: string) => {
@@ -180,39 +195,29 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
           </div>
         )}
 
-        {showConfig && (
+        {showAdvanced && (
           <div className="mt-1">
             <button
               type="button"
-              onClick={() => setCfgOpen(!cfgOpen)}
+              onClick={() => setAdvOpen(!advOpen)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm transition-colors ${
-                pathname.startsWith(CONFIG_NAV_HREF) ||
-                configItems.some((i) => pathname.startsWith(i.href))
+                advancedMain.some((i) => pathname.startsWith(i.href)) ||
+                reportsAdvancedOnly.some((i) => pathname === i.href)
                   ? 'bg-gray-800 text-white font-medium'
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               }`}
             >
-              <Cog6ToothIcon className="w-5 h-5 flex-shrink-0" />
-              <span className="flex-1 text-left">Configurações</span>
-              {cfgOpen ? (
+              <EllipsisHorizontalCircleIcon className="w-5 h-5 flex-shrink-0" />
+              <span className="flex-1 text-left">Avançado</span>
+              {advOpen ? (
                 <ChevronDownIcon className="w-4 h-4" />
               ) : (
                 <ChevronRightIcon className="w-4 h-4" />
               )}
             </button>
-            {cfgOpen && (
+            {advOpen && (
               <div className="ml-2 pl-3 border-l border-gray-700 mb-1 space-y-0.5">
-                <Link
-                  href={CONFIG_NAV_HREF}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    pathname === CONFIG_NAV_HREF
-                      ? 'bg-blue-600 text-white font-medium'
-                      : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                  }`}
-                >
-                  Visão geral
-                </Link>
-                {configItems.map(({ href, label, icon: Icon }) => (
+                {advancedMain.map(({ href, label, icon: Icon }) => (
                   <Link
                     key={href}
                     href={href}
@@ -226,10 +231,37 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
                     {label}
                   </Link>
                 ))}
+                {reportsAdvancedOnly.map(({ href, label }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={`flex items-center px-3 py-2 rounded-lg text-sm transition-colors ${
+                      pathname === href
+                        ? 'bg-blue-600 text-white font-medium'
+                        : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </Link>
+                ))}
               </div>
             )}
           </div>
         )}
+
+        {isAdmin ? (
+          <Link
+            href={CONFIG_NAV_HREF}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm transition-colors mt-1 ${
+              pathname.startsWith(CONFIG_NAV_HREF)
+                ? 'bg-blue-600 text-white font-medium'
+                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+            }`}
+          >
+            <Cog6ToothIcon className="w-5 h-5 flex-shrink-0" />
+            Configurações
+          </Link>
+        ) : null}
       </nav>
 
       <div className="px-4 py-3 border-t border-gray-700 space-y-1">

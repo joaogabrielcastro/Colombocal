@@ -132,7 +132,7 @@ function FretesContent() {
         </button>
         </div>
         <Link href="/fretes/novo" className="btn-primary h-10">
-          Novo frete
+          Novo frete avulso
         </Link>
       </FilterBar>
 
