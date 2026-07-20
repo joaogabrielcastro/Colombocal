@@ -26,8 +26,8 @@ export function ClienteEditForm({
   return (
     <ClienteForm
       mode="edit"
-      form={form as Partial<Cliente> & ClienteFormState}
-      setForm={setForm as Dispatch<SetStateAction<Partial<Cliente> & ClienteFormState>>}
+      form={form as ClienteFormState}
+      setForm={setForm as Dispatch<SetStateAction<ClienteFormState>>}
       freteEnabled={freteEnabled}
       loadVendedorOptions={loadVendedorOptions}
       loadVendedorLabelById={loadVendedorLabelById}

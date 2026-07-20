@@ -3,7 +3,6 @@
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import SearchableSelect from '@/components/SearchableSelect';
-import type { Cliente } from '@/features/clientes/types';
 
 export type TipoPessoa = 'PF' | 'PJ';
 
@@ -26,8 +25,8 @@ export type ClienteFormState = {
 
 type Props = {
   mode: 'create' | 'edit';
-  form: Partial<Cliente> & ClienteFormState;
-  setForm: Dispatch<SetStateAction<Partial<Cliente> & ClienteFormState>>;
+  form: ClienteFormState;
+  setForm: Dispatch<SetStateAction<ClienteFormState>>;
   freteEnabled: boolean;
   permiteCpf?: boolean;
   tipoPessoa?: TipoPessoa;
