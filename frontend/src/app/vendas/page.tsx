@@ -232,9 +232,9 @@ function VendasPageContent() {
         </div>
       ) : null}
 
-      <FilterBar className="p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3 items-end">
-          <div className="sm:col-span-2 xl:col-span-6">
+      <FilterBar className="p-4 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+          <div>
             <label className="block text-xs text-gray-500 mb-1">
               Busca (cliente, CNPJ, cidade…)
             </label>
@@ -245,10 +245,8 @@ function VendasPageContent() {
               placeholder="Nome, fantasia, CNPJ, cidade…"
             />
           </div>
-          <div className="xl:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">
-              Ordem (#)
-            </label>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Ordem (#)</label>
             <input
               type="text"
               inputMode="numeric"
@@ -264,10 +262,8 @@ function VendasPageContent() {
               placeholder="ex: 7 ou #7"
             />
           </div>
-          <div className="xl:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">
-              Data início
-            </label>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Data início</label>
             <input
               type="date"
               value={dataInicio}
@@ -278,7 +274,7 @@ function VendasPageContent() {
               className="input-field w-full"
             />
           </div>
-          <div className="xl:col-span-2">
+          <div>
             <label className="block text-xs text-gray-500 mb-1">Data fim</label>
             <input
               type="date"
@@ -290,82 +286,79 @@ function VendasPageContent() {
               className="input-field w-full"
             />
           </div>
+          {maisFiltrosAbertos ? (
+            <>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Vendedor</label>
+                <select
+                  value={vendedorId}
+                  onChange={(e) => {
+                    setVendedorId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field w-full"
+                >
+                  <option value="">Todos</option>
+                  {vendedores.map((v) => (
+                    <option key={v.id} value={String(v.id)}>
+                      {v.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Motorista</label>
+                <select
+                  value={motoristaId}
+                  onChange={(e) => {
+                    setMotoristaId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field w-full"
+                >
+                  <option value="">Todos</option>
+                  {motoristas.map((m) => (
+                    <option key={m.id} value={String(m.id)}>
+                      {m.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Valor mín. (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorMin}
+                  onChange={(e) => {
+                    setValorMin(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field w-full"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Valor máx. (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorMax}
+                  onChange={(e) => {
+                    setValorMax(e.target.value);
+                    setPage(1);
+                  }}
+                  className="input-field w-full"
+                  placeholder="—"
+                />
+              </div>
+            </>
+          ) : null}
         </div>
-        {maisFiltrosAbertos ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-end pt-1 border-t border-gray-100">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Vendedor</label>
-              <select
-                value={vendedorId}
-                onChange={(e) => {
-                  setVendedorId(e.target.value);
-                  setPage(1);
-                }}
-                className="input-field w-full"
-              >
-                <option value="">Todos</option>
-                {vendedores.map((v) => (
-                  <option key={v.id} value={String(v.id)}>
-                    {v.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Motorista</label>
-              <select
-                value={motoristaId}
-                onChange={(e) => {
-                  setMotoristaId(e.target.value);
-                  setPage(1);
-                }}
-                className="input-field w-full"
-              >
-                <option value="">Todos</option>
-                {motoristas.map((m) => (
-                  <option key={m.id} value={String(m.id)}>
-                    {m.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Valor mín. (R$)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={valorMin}
-                onChange={(e) => {
-                  setValorMin(e.target.value);
-                  setPage(1);
-                }}
-                className="input-field w-full"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Valor máx. (R$)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={valorMax}
-                onChange={(e) => {
-                  setValorMax(e.target.value);
-                  setPage(1);
-                }}
-                className="input-field w-full"
-                placeholder="—"
-              />
-            </div>
-          </div>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100">
+
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={aplicarBuscaJa} className="btn-primary h-10">
             <MagnifyingGlassIcon className="w-4 h-4" /> Aplicar busca
           </button>
