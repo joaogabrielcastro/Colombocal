@@ -38,24 +38,75 @@ function parseNumberField(
   return parsed;
 }
 
+/** Meia-noite UTC → meio-dia UTC (evita dia anterior em America/Sao_Paulo). */
+function calendarDateAtUtcNoon(year, monthIndex, day) {
+  return new Date(Date.UTC(year, monthIndex, day, 12, 0, 0, 0));
+}
+
+function isUtcMidnight(date) {
+  return (
+    date instanceof Date &&
+    !Number.isNaN(date.getTime()) &&
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
 function parseDateField(value, fieldName, { required = false } = {}) {
-  if (!value) {
+  if (value == null || value === "") {
     if (required) throw validationError(`${fieldName} é obrigatório`);
     return null;
   }
+
+  // Date já coercido (ex.: Zod) com meia-noite UTC = data de calendário.
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throw validationError(`${fieldName} inválida`);
+    }
+    if (isUtcMidnight(value)) {
+      return calendarDateAtUtcNoon(
+        value.getUTCFullYear(),
+        value.getUTCMonth(),
+        value.getUTCDate(),
+      );
+    }
+    return value;
+  }
+
   const raw = String(value).trim();
   // Apenas data (YYYY-MM-DD): evitar new Date("...") = meia-noite UTC, que no Brasil vira o dia anterior.
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     const [y, m, d] = raw.split("-").map(Number);
-    const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0));
+    const date = calendarDateAtUtcNoon(y, m - 1, d);
     if (Number.isNaN(date.getTime())) {
       throw validationError(`${fieldName} inválida`);
     }
     return date;
   }
+
+  // ISO com T00:00:00.000Z (mesmo problema do coerce).
+  const isoMidnight = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})T00:00:00(?:\.000)?(?:Z)?$/,
+  );
+  if (isoMidnight) {
+    const y = Number(isoMidnight[1]);
+    const m = Number(isoMidnight[2]);
+    const d = Number(isoMidnight[3]);
+    return calendarDateAtUtcNoon(y, m - 1, d);
+  }
+
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) {
     throw validationError(`${fieldName} inválida`);
+  }
+  if (isUtcMidnight(date)) {
+    return calendarDateAtUtcNoon(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+    );
   }
   return date;
 }

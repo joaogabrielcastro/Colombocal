@@ -80,6 +80,30 @@ test("parseDateField: retorna Date para string válida", () => {
   assert.equal(d.toISOString(), "2024-01-15T12:00:00.000Z");
 });
 
+test("parseDateField: YYYY-MM-DD no fim do mês não vira dia anterior (UTC-3)", () => {
+  const d = parseDateField("2026-06-29", "dataVenda");
+  assert.equal(d.toISOString(), "2026-06-29T12:00:00.000Z");
+  // Em America/Sao_Paulo (UTC-3) o dia civil continua 29.
+  const br = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  assert.equal(br, "2026-06-29");
+});
+
+test("parseDateField: Date em meia-noite UTC vira meio-dia UTC", () => {
+  const midnight = new Date("2026-06-29T00:00:00.000Z");
+  const d = parseDateField(midnight, "dataVenda");
+  assert.equal(d.toISOString(), "2026-06-29T12:00:00.000Z");
+});
+
+test("parseDateField: ISO meia-noite UTC vira meio-dia UTC", () => {
+  const d = parseDateField("2026-06-29T00:00:00.000Z", "dataVenda");
+  assert.equal(d.toISOString(), "2026-06-29T12:00:00.000Z");
+});
+
 test("parseDateField: lança 400 para data inválida", () => {
   assert.throws(
     () => parseDateField("not-a-date", "data"),

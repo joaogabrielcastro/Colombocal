@@ -280,10 +280,12 @@ router.get("/:id", async (req, res) => {
 
 function dataFreteReciboParaPrisma(v) {
   if (v === undefined) return undefined;
-  if (v == null) return null;
-  if (v instanceof Date) return v;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (v == null || v === "") return null;
+  try {
+    return parseDateField(v, "freteReciboData");
+  } catch {
+    return null;
+  }
 }
 
 // PATCH /api/vendas/:id — frete / recibo (sincroniza com primeiro FreteMovimento)

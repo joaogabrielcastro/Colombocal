@@ -11,6 +11,7 @@ const {
   calcularComissaoParaVenda,
   loadComissaoMapPorCliente,
 } = require("../../services/comissaoCadastro");
+const { parseDateField } = require("../../utils/validation");
 
 function addDays(date, days) {
   const d = new Date(date);
@@ -91,12 +92,10 @@ async function criarVenda(prisma, payload) {
     }
   }
 
-  const dataVendaDate =
-    dataVenda instanceof Date
-      ? dataVenda
-      : dataVenda
-        ? new Date(dataVenda)
-        : null;
+  // YYYY-MM-DD / meia-noite UTC → meio-dia UTC (não virar dia anterior no Brasil).
+  const dataVendaDate = dataVenda
+    ? parseDateField(dataVenda, "dataVenda")
+    : null;
 
   const venda = await prisma.$transaction(async (tx) => {
     const cliente = await tx.cliente.findFirst({

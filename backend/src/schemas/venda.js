@@ -11,13 +11,14 @@ const vendaFretePatchSchema = z
       .optional(),
     freteRecibo: z.boolean().optional(),
     freteReciboNum: z.union([z.string(), z.null()]).optional(),
+    // Sem z.coerce.date(): "YYYY-MM-DD" vira meia-noite UTC e no Brasil mostra o dia anterior.
     freteReciboData: z.preprocess((v) => {
       if (v === undefined) return undefined;
       if (v === null || v === "") return null;
       return v;
-    }, z.union([z.null(), z.coerce.date(), z.string()]).optional()),
+    }, z.union([z.null(), z.string(), z.date()]).optional()),
   })
-  .strict();
+    .strict();
 
 const vendaItemSchema = z.object({
   produtoId: z.coerce.number().int().positive(),
@@ -59,8 +60,9 @@ const vendaCreateBase = {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return v;
-  }, z.union([z.null(), z.coerce.date(), z.string()]).optional()),
-  dataVenda: z.union([z.coerce.date(), z.string()]).optional(),
+  }, z.union([z.null(), z.string(), z.date()]).optional()),
+  // Manter string YYYY-MM-DD; parseDateField aplica meio-dia UTC.
+  dataVenda: z.union([z.string(), z.date()]).optional(),
   observacoes: z.union([z.string(), z.null()]).optional(),
   itens: z.array(vendaItemSchema).min(1),
   atualizarCliente: atualizarClienteSchema,

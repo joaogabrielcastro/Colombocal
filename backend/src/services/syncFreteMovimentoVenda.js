@@ -3,11 +3,15 @@
  * Usado na criação, edição e PATCH parcial de frete.
  */
 
+const { parseDateField } = require("../utils/validation");
+
 function parseReciboDate(value) {
   if (value == null || String(value).trim() === "") return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  try {
+    return parseDateField(value, "reciboData");
+  } catch {
+    return null;
+  }
 }
 
 /**
