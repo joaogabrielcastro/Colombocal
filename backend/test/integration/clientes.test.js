@@ -42,6 +42,26 @@ test("GET /api/clientes filtra por busca e por ativo", async () => {
   assert.equal(inativos.body.clientes[0].razaoSocial, "Mercado Sul");
 });
 
+test("GET /api/clientes busca pelo nome do representante", async () => {
+  const outro = await seedVendedor(ctx.tenant.id, {
+    nome: "Representante Silva",
+    comissaoPercentual: 5,
+  });
+  await seedCliente(ctx.tenant.id, {
+    razaoSocial: "Cliente Do Silva",
+    vendedorId: outro.id,
+  });
+  await seedCliente(ctx.tenant.id, {
+    razaoSocial: "Cliente Sem Vendedor",
+    cnpj: "99888777000166",
+  });
+  const res = await agent.get("/api/clientes").query({ busca: "Silva" });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.total, 1);
+  assert.equal(res.body.clientes[0].razaoSocial, "Cliente Do Silva");
+  assert.equal(res.body.clientes[0].vendedor?.nome, "Representante Silva");
+});
+
 test("POST /api/clientes cria cliente PJ", async () => {
   const res = await agent.post("/api/clientes").send({
     razaoSocial: "Nova Empresa",

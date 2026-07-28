@@ -47,6 +47,7 @@ router.get("/", async (req, res) => {
         { cpf: { contains: busca } },
         { cidade: { contains: busca, mode: "insensitive" } },
         { telefone: { contains: busca } },
+        { vendedor: { nome: { contains: busca, mode: "insensitive" } } },
       ];
     }
     const [clientes, total] = await Promise.all([

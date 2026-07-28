@@ -72,7 +72,7 @@ export default function ClientesPage() {
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por nome, documento ou cidade..."
+              placeholder="Buscar por nome, documento, cidade ou representante..."
               value={buscaInput}
               onChange={(e) => setBuscaInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
@@ -101,7 +101,7 @@ export default function ClientesPage() {
         <div className="card overflow-hidden">
         {loading ? (
           <div className="p-4">
-            <TableListSkeleton rows={10} cols={5} />
+            <TableListSkeleton rows={10} cols={6} />
           </div>
         ) : clientes.length === 0 ? (
           <div className="p-6">
@@ -109,7 +109,7 @@ export default function ClientesPage() {
               title={busca ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}
               description={
                 busca
-                  ? "Tente outro termo ou limpe a busca."
+                  ? "Tente outro termo (nome, documento, cidade ou representante) ou limpe a busca."
                   : "Cadastre o primeiro cliente para começar."
               }
               action={
@@ -128,6 +128,7 @@ export default function ClientesPage() {
                 <th className="table-header">Razão Social / Fantasia</th>
                 <th className="table-header">Documento</th>
                 <th className="table-header">Cidade / UF</th>
+                <th className="table-header">Representante</th>
                 {freteEnabled ? (
                 <th className="table-header">Frete padrão (saco / ton)</th>
                 ) : null}
@@ -150,6 +151,11 @@ export default function ClientesPage() {
                     {c.cidade
                       ? `${c.cidade}${c.estado ? " - " + c.estado : ""}`
                       : "-"}
+                  </td>
+                  <td className="table-cell text-sm">
+                    {c.vendedor?.nome || (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   {freteEnabled ? (
                   <td className="table-cell">
