@@ -15,6 +15,8 @@ type PagamentosFilters = {
   ordem: string;
   tipo: string;
   emitente: string;
+  banco: string;
+  numero: string;
   page: number;
   pageSize: number;
 };
@@ -28,6 +30,8 @@ function toParams(f: PagamentosFilters) {
   if (ordemTrim) params.set("ordem", ordemTrim);
   if (f.tipo) params.set("tipo", f.tipo);
   if (f.emitente.trim()) params.set("emitente", f.emitente.trim());
+  if (f.banco.trim()) params.set("banco", f.banco.trim());
+  if (f.numero.trim()) params.set("numero", f.numero.trim());
   params.set("resumo", "1");
   params.set("take", String(f.pageSize));
   params.set("skip", String((f.page - 1) * f.pageSize));

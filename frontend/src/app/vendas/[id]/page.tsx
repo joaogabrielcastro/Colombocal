@@ -13,6 +13,7 @@ import {
   formatDate,
   formatQuantidade,
   formatFreteReciboLinha,
+  formatChequeDetalhe,
   toInputDate,
   type Venda,
 } from "@/lib/utils";
@@ -688,9 +689,7 @@ export default function VendaDetailPage() {
                 estornoKind === "cheque" ? Number(chequeId) : p.id;
               const chequeInfo =
                 isCheque && p.cheque
-                  ? ` #${p.cheque.numeroOrdem}${p.cheque.banco ? ` · ${p.cheque.banco}` : ""}${
-                      p.cheque.numero ? ` · nº ${p.cheque.numero}` : ""
-                    }`
+                  ? ` ${formatChequeDetalhe(p.cheque)}`
                   : "";
               const tipo = String(p.tipo || "").toLowerCase();
               const badgeClass =

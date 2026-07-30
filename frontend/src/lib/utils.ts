@@ -220,6 +220,7 @@ export interface Pagamento {
   cheque?: {
     id: number;
     numeroOrdem?: number;
+    emitenteNome?: string | null;
     banco?: string | null;
     numero?: string | null;
     valor?: number;
@@ -230,6 +231,21 @@ export interface Pagamento {
     dataVenda: string;
     valorTotal: number;
   } | null;
+}
+
+/** Detalhe curto do cheque para listas (ordem · emitente · banco · nº). */
+export function formatChequeDetalhe(cheque: {
+  numeroOrdem?: number | null;
+  emitenteNome?: string | null;
+  banco?: string | null;
+  numero?: string | null;
+}): string {
+  const partes: string[] = [];
+  if (cheque.numeroOrdem != null) partes.push(`#${cheque.numeroOrdem}`);
+  if (cheque.emitenteNome?.trim()) partes.push(cheque.emitenteNome.trim());
+  if (cheque.banco?.trim()) partes.push(cheque.banco.trim());
+  if (cheque.numero?.trim()) partes.push(`nº ${cheque.numero.trim()}`);
+  return partes.join(" · ");
 }
 
 /** Resumo do status de pagamento do frete (primeiro movimento ou flags na venda). */

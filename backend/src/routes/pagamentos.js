@@ -29,6 +29,8 @@ router.get("/", async (req, res) => {
       cliente,
       ordem,
       emitente,
+      banco,
+      numero,
     } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 100,
@@ -72,15 +74,26 @@ router.get("/", async (req, res) => {
         });
       }
     }
+    const chequeFilter = {};
     if (emitente && String(emitente).trim()) {
-      and.push({
-        cheque: {
-          emitenteNome: {
-            contains: String(emitente).trim(),
-            mode: "insensitive",
-          },
-        },
-      });
+      chequeFilter.emitenteNome = {
+        contains: String(emitente).trim(),
+        mode: "insensitive",
+      };
+    }
+    if (banco && String(banco).trim()) {
+      chequeFilter.banco = {
+        contains: String(banco).trim(),
+        mode: "insensitive",
+      };
+    }
+    if (numero && String(numero).trim()) {
+      chequeFilter.numero = {
+        contains: String(numero).trim(),
+      };
+    }
+    if (Object.keys(chequeFilter).length > 0) {
+      and.push({ cheque: chequeFilter });
     }
     const where = and.length === 1 ? and[0] : { AND: and };
     const includeResumo =

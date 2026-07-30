@@ -83,6 +83,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [syncDialogDiff, setSyncDialogDiff] = useState<ClienteCadastroDiff | null>(
     null,
   );
+  const [obsAckClienteId, setObsAckClienteId] = useState<number | null>(null);
+  const [obsModalOpen, setObsModalOpen] = useState(false);
 
   const [freteRecibo, setFreteRecibo] = useState(false);
   const [freteReciboData, setFreteReciboData] = useState(localDateInputValue());
@@ -165,6 +167,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       return;
     }
     let cancelled = false;
+    setSelectedCliente(null);
     api
       .get<Cliente>(`/clientes/${clienteId}`)
       .then((cli) => {
@@ -186,6 +189,38 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       cancelled = true;
     };
   }, [clienteId]);
+
+  const clienteObs = (selectedCliente?.observacoes ?? "").trim();
+  const clienteCarregado =
+    Boolean(clienteId) &&
+    selectedCliente != null &&
+    String(selectedCliente.id) === String(clienteId);
+  const precisaAckObs = Boolean(clienteCarregado && clienteObs);
+  const obsLiberada =
+    !precisaAckObs || obsAckClienteId === selectedCliente?.id;
+  const formBloqueadoPorObs =
+    Boolean(clienteId) && (!clienteCarregado || !obsLiberada);
+
+  useEffect(() => {
+    if (!clienteId) {
+      setObsModalOpen(false);
+      setObsAckClienteId(null);
+      return;
+    }
+    if (!selectedCliente || String(selectedCliente.id) !== String(clienteId)) {
+      return;
+    }
+    const obs = (selectedCliente.observacoes ?? "").trim();
+    if (!obs) {
+      setObsModalOpen(false);
+      return;
+    }
+    if (obsAckClienteId === selectedCliente.id) {
+      setObsModalOpen(false);
+      return;
+    }
+    setObsModalOpen(true);
+  }, [clienteId, selectedCliente, obsAckClienteId]);
 
   const loadClienteOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({
@@ -409,6 +444,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formBloqueadoPorObs) {
+      setErro("Leia a observação do cliente e confirme em Li e entendi");
+      setObsModalOpen(true);
+      return;
+    }
     if (!clienteId || !vendedorId) {
       setErro("Selecione cliente e vendedor");
       return;
@@ -551,6 +591,32 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
               placeholder="Nome, fantasia, CNPJ ou cidade…"
             />
 
+            {formBloqueadoPorObs && precisaAckObs ? (
+              <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Este cliente tem observação. Confirme a leitura no aviso para
+                continuar a venda.
+              </p>
+            ) : null}
+
+            {obsLiberada && clienteCarregado && clienteObs ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Observação do cliente
+                </p>
+                <p className="mt-1 text-sm text-amber-950 whitespace-pre-line">
+                  {clienteObs}
+                </p>
+              </div>
+            ) : null}
+
+            <fieldset
+              disabled={formBloqueadoPorObs}
+              className={
+                formBloqueadoPorObs
+                  ? "space-y-4 opacity-50 pointer-events-none"
+                  : "space-y-4"
+              }
+            >
             {freteEnabled && !mostrarDetalhes ? (
               <p className="text-sm text-gray-600">
                 Frete calculado:{" "}
@@ -684,10 +750,18 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                 </div>
               </div>
             )}
+            </fieldset>
           </div>
         </div>
 
-        <div className="card p-5">
+        <fieldset
+          disabled={formBloqueadoPorObs}
+          className={
+            formBloqueadoPorObs
+              ? "card p-5 opacity-50 pointer-events-none"
+              : "card p-5"
+          }
+        >
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">Produtos</h2>
             <button
@@ -791,9 +865,15 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
               })}
             </tbody>
           </table>
-        </div>
+        </fieldset>
 
-        <div className="card p-5">
+        <div
+          className={
+            formBloqueadoPorObs
+              ? "card p-5 opacity-50 pointer-events-none"
+              : "card p-5"
+          }
+        >
           <div className="flex justify-end">
             <div className="w-72 space-y-2">
               <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
@@ -820,7 +900,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         </div>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={salvando} className="btn-primary">
+          <button
+            type="submit"
+            disabled={salvando || formBloqueadoPorObs}
+            className="btn-primary"
+          >
             {salvando
               ? isEdit
                 ? "Salvando..."
@@ -837,6 +921,28 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
           </Link>
         </div>
       </form>
+
+      <ConfirmDialog
+        open={obsModalOpen}
+        title="Observação do cliente"
+        description={
+          selectedCliente
+            ? `${selectedCliente.nomeFantasia?.trim() || selectedCliente.razaoSocial}\n\n${clienteObs}`
+            : clienteObs
+        }
+        cancelText="Trocar cliente"
+        confirmText="Li e entendi"
+        onConfirm={() => {
+          if (selectedCliente) setObsAckClienteId(selectedCliente.id);
+          setObsModalOpen(false);
+        }}
+        onCancel={() => {
+          setObsModalOpen(false);
+          setClienteId("");
+          setSelectedCliente(null);
+          setObsAckClienteId(null);
+        }}
+      />
 
       <ConfirmDialog
         open={syncDialogOpen}

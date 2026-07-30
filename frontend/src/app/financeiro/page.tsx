@@ -9,7 +9,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/24/outline";
-import { formatMoney, formatDate, type Pagamento } from "@/lib/utils";
+import { formatMoney, formatDate, formatChequeDetalhe, type Pagamento } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import * as XLSX from "xlsx";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
@@ -49,8 +49,19 @@ function FinanceiroPageContent() {
   const emitenteInicial = searchParams.get("emitente") || "";
   const [emitenteInput, setEmitenteInput] = useState(emitenteInicial);
   const [emitenteFiltro, setEmitenteFiltro] = useState(emitenteInicial);
+  const bancoInicial = searchParams.get("banco") || "";
+  const [bancoInput, setBancoInput] = useState(bancoInicial);
+  const [bancoFiltro, setBancoFiltro] = useState(bancoInicial);
+  const numeroInicial = searchParams.get("numero") || "";
+  const [numeroInput, setNumeroInput] = useState(numeroInicial);
+  const [numeroFiltro, setNumeroFiltro] = useState(numeroInicial);
   const [maisFiltrosAbertos, setMaisFiltrosAbertos] = useState(() =>
-    Boolean(searchParams.get("tipo") || searchParams.get("emitente")),
+    Boolean(
+      searchParams.get("tipo") ||
+        searchParams.get("emitente") ||
+        searchParams.get("banco") ||
+        searchParams.get("numero"),
+    ),
   );
   const [pagamentoParaEstornar, setPagamentoParaEstornar] = useState<Pagamento | null>(null);
   const [estornando, setEstornando] = useState(false);
@@ -62,6 +73,8 @@ function FinanceiroPageContent() {
     ordem: ordemFiltro,
     tipo: tipoFiltro,
     emitente: emitenteFiltro,
+    banco: bancoFiltro,
+    numero: numeroFiltro,
     page,
     pageSize,
   });
@@ -74,6 +87,8 @@ function FinanceiroPageContent() {
     setOrdemFiltro(ordemInput.replace(/^#/, "").trim());
     setClienteFiltro(clienteInput.trim());
     setEmitenteFiltro(emitenteInput.trim());
+    setBancoFiltro(bancoInput.trim());
+    setNumeroFiltro(numeroInput.trim());
     setPage(1);
   };
 
@@ -87,6 +102,10 @@ function FinanceiroPageContent() {
     setTipoFiltro("");
     setEmitenteInput("");
     setEmitenteFiltro("");
+    setBancoInput("");
+    setBancoFiltro("");
+    setNumeroInput("");
+    setNumeroFiltro("");
     setPage(1);
   };
 
@@ -97,6 +116,8 @@ function FinanceiroPageContent() {
     const ordem = searchParams.get("ordem") || "";
     const tipo = searchParams.get("tipo") || "";
     const emitente = searchParams.get("emitente") || "";
+    const banco = searchParams.get("banco") || "";
+    const numero = searchParams.get("numero") || "";
     const parsedPage = parseInt(searchParams.get("page") || "1", 10) || 1;
     setDataInicio(di);
     setDataFim(df);
@@ -107,8 +128,12 @@ function FinanceiroPageContent() {
     setTipoFiltro(tipo);
     setEmitenteInput(emitente);
     setEmitenteFiltro(emitente);
+    setBancoInput(banco);
+    setBancoFiltro(banco);
+    setNumeroInput(numero);
+    setNumeroFiltro(numero);
     setPage(parsedPage);
-    if (tipo || emitente) setMaisFiltrosAbertos(true);
+    if (tipo || emitente || banco || numero) setMaisFiltrosAbertos(true);
   }, [searchParams]);
 
   useEffect(() => {
@@ -120,6 +145,8 @@ function FinanceiroPageContent() {
     if (ordemTrim) params.set("ordem", ordemTrim);
     if (tipoFiltro) params.set("tipo", tipoFiltro);
     if (emitenteFiltro.trim()) params.set("emitente", emitenteFiltro.trim());
+    if (bancoFiltro.trim()) params.set("banco", bancoFiltro.trim());
+    if (numeroFiltro.trim()) params.set("numero", numeroFiltro.trim());
     if (page > 1) params.set("page", String(page));
     router.replace(`/financeiro${params.toString() ? `?${params.toString()}` : ""}`);
   }, [
@@ -129,6 +156,8 @@ function FinanceiroPageContent() {
     ordemFiltro,
     tipoFiltro,
     emitenteFiltro,
+    bancoFiltro,
+    numeroFiltro,
     page,
     router,
   ]);
@@ -140,9 +169,7 @@ function FinanceiroPageContent() {
       venda: p.venda ? `Venda ${vendaOrdemTexto(p.venda)}` : "",
       detalhe:
         String(p.tipo).toLowerCase() === "cheque" && p.cheque
-          ? `#${p.cheque.numeroOrdem}${p.cheque.banco ? ` · ${p.cheque.banco}` : ""}${
-              p.cheque.numero ? ` · nº ${p.cheque.numero}` : ""
-            }`
+          ? formatChequeDetalhe(p.cheque)
           : p.observacoes || "",
       valor: parseFloat(String(p.valor)),
       data: formatDate(p.data),
@@ -336,6 +363,34 @@ function FinanceiroPageContent() {
                       placeholder="Nome no cheque"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Banco</label>
+                    <input
+                      type="text"
+                      value={bancoInput}
+                      onChange={(e) => setBancoInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") aplicarFiltros();
+                      }}
+                      className="input-field w-full"
+                      placeholder="Ex.: sicredi, bradesco"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Número do cheque
+                    </label>
+                    <input
+                      type="text"
+                      value={numeroInput}
+                      onChange={(e) => setNumeroInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") aplicarFiltros();
+                      }}
+                      className="input-field font-mono w-full"
+                      placeholder="Ex.: 789456"
+                    />
+                  </div>
                 </>
               ) : null}
             </div>
@@ -411,7 +466,9 @@ function FinanceiroPageContent() {
                     dataInicio ||
                     dataFim ||
                     tipoFiltro ||
-                    emitenteFiltro
+                    emitenteFiltro ||
+                    bancoFiltro ||
+                    numeroFiltro
                       ? "Nenhum resultado para estes filtros. Tente limpar os filtros."
                       : "Ainda não há recebimentos. Clique em Receber pagamento para registrar o primeiro."}
                   </p>
@@ -471,9 +528,7 @@ function FinanceiroPageContent() {
                           </td>
                           <td className="table-cell text-sm text-gray-600">
                             {isCheque && p.cheque
-                              ? `#${p.cheque.numeroOrdem}${
-                                  p.cheque.banco ? ` · ${p.cheque.banco}` : ""
-                                }${p.cheque.numero ? ` · nº ${p.cheque.numero}` : ""}`
+                              ? formatChequeDetalhe(p.cheque)
                               : p.observacoes || "-"}
                           </td>
                           <td className="table-cell font-semibold">

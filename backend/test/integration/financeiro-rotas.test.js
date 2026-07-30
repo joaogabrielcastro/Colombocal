@@ -101,6 +101,28 @@ test("GET /api/pagamentos filtra por cliente e venda", async () => {
   assert.ok(porVenda.body.length >= 1);
 });
 
+test("GET /api/pagamentos filtra cheque por banco e numero", async () => {
+  await agent.post("/api/cheques").send({
+    clienteId: ctx.cliente.id,
+    vendaId: ctx.venda.id,
+    valor: 55,
+    emitenteNome: "Emitente Banco",
+    banco: "sicredi",
+    numero: "789456",
+  });
+  const porBanco = await agent.get("/api/pagamentos").query({ banco: "sicredi" });
+  assert.equal(porBanco.status, 200);
+  assert.ok(porBanco.body.some((p) => p.tipo === "cheque" && p.cheque?.banco === "sicredi"));
+
+  const porNumero = await agent.get("/api/pagamentos").query({ numero: "789456" });
+  assert.equal(porNumero.status, 200);
+  assert.ok(porNumero.body.some((p) => p.cheque?.numero === "789456"));
+
+  const semMatch = await agent.get("/api/pagamentos").query({ banco: "xyz-inexistente" });
+  assert.equal(semMatch.status, 200);
+  assert.equal(semMatch.body.length, 0);
+});
+
 test("DELETE /api/pagamentos/:id", async () => {
   const pg = await agent.post("/api/pagamentos").send({
     clienteId: ctx.cliente.id,
