@@ -54,10 +54,19 @@ function ProdutosPageContent() {
     setSalvando(true);
     setErro("");
     try {
+      const pesoRaw = form.pesoKg;
+      const pesoNum =
+        pesoRaw === null || pesoRaw === undefined || String(pesoRaw).trim() === ""
+          ? null
+          : Number(String(pesoRaw).replace(",", "."));
+      const payload = {
+        ...form,
+        pesoKg: Number.isFinite(pesoNum as number) && (pesoNum as number) > 0 ? pesoNum : null,
+      };
       if (editando) {
-        await api.put(`/produtos/${editando.id}`, form);
+        await api.put(`/produtos/${editando.id}`, payload);
       } else {
-        await api.post("/produtos", form);
+        await api.post("/produtos", payload);
       }
       setMostrarForm(false);
       setEditando(null);
@@ -225,6 +234,24 @@ function ProdutosPageContent() {
                     <option value="m3">M³</option>
                     <option value="un">Unidade</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Peso por unidade (kg)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={form.pesoKg ?? ""}
+                    onChange={set("pesoKg")}
+                    className="input-field"
+                    placeholder="Ex.: 8 (cal de pintura)"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Se preenchido, o frete usa quantidade × peso × tarifa/ton.
+                    Deixe vazio para frete normal (saco/ton/kg).
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -29,6 +29,9 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { getDateRange } = require("../utils/dateRangeQuery");
+const {
+  calcularFreteAutomatico,
+} = require("../domain/frete/calcularFrete");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -67,23 +70,6 @@ function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
-}
-
-function calcularFreteAutomatico(itens, produtosPorId, fretePorSaco, fretePorTonelada) {
-  const tarifaSaco = parseFloat(String(fretePorSaco ?? 0));
-  const tarifaTon = parseFloat(String(fretePorTonelada ?? 0));
-  const tarifaKg = Number.isFinite(tarifaTon) ? tarifaTon / 1000 : 0;
-
-  return itens.reduce((acc, item) => {
-    const produto = produtosPorId.get(item.produtoId);
-    const unidade = String(produto?.unidade || "")
-      .trim()
-      .toLowerCase();
-    if (unidade === "saco") return acc + item.quantidade * (Number.isFinite(tarifaSaco) ? tarifaSaco : 0);
-    if (unidade === "ton") return acc + item.quantidade * (Number.isFinite(tarifaTon) ? tarifaTon : 0);
-    if (unidade === "kg") return acc + item.quantidade * tarifaKg;
-    return acc;
-  }, 0);
 }
 
 // GET /api/vendas
@@ -452,7 +438,7 @@ router.put("/:id", async (req, res) => {
     const produtoIds = [...new Set(itensValidos.map((i) => i.produtoId))];
     const produtos = await prisma.produto.findMany({
       where: { tenantId, id: { in: produtoIds } },
-      select: { id: true, unidade: true },
+      select: { id: true, unidade: true, pesoKg: true },
     });
     const produtosPorId = new Map(produtos.map((p) => [p.id, p]));
     for (const item of itensValidos) {

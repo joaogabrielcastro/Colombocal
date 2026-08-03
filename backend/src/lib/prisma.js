@@ -45,6 +45,11 @@ async function ensureDatabaseCompat() {
       ON "FinanceiroEvento"("tenantId", "userId", "createdAt")
   `);
 
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Produto"
+    ADD COLUMN IF NOT EXISTS "pesoKg" DECIMAL(10,3)
+  `);
+
   // Cheque.numeroOrdem é único por tenant — remove índice global legado se existir
   await prisma.$executeRawUnsafe(`
     DROP INDEX IF EXISTS "Cheque_numeroOrdem_key"

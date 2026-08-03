@@ -67,7 +67,7 @@ router.get("/:id", async (req, res) => {
 // POST /api/produtos
 router.post("/", async (req, res) => {
   try {
-    const { nome, codigo, precoPadrao, unidade } = req.body;
+    const { nome, codigo, precoPadrao, unidade, pesoKg } = req.body;
     const codigoTrim =
       codigo != null && String(codigo).trim() !== ""
         ? String(codigo).trim()
@@ -75,6 +75,10 @@ router.post("/", async (req, res) => {
     const codigoFinal =
       codigoTrim ||
       `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    const peso =
+      pesoKg === null || pesoKg === undefined || String(pesoKg).trim() === ""
+        ? null
+        : Number(String(pesoKg).replace(",", "."));
     const produto = await prisma.produto.create({
       data: {
         ...tw(req),
@@ -82,6 +86,7 @@ router.post("/", async (req, res) => {
         codigo: codigoFinal,
         precoPadrao,
         unidade: unidade || "ton",
+        pesoKg: Number.isFinite(peso) && peso > 0 ? peso : null,
       },
     });
     res.status(201).json(produto);
@@ -99,10 +104,19 @@ router.put("/:id", async (req, res) => {
     const exists = await prisma.produto.count({ where: { id, ...tw(req) } });
     if (!exists) return res.status(404).json({ error: "Produto não encontrado" });
 
-    const { nome, codigo, precoPadrao, unidade, ativo } = req.body;
+    const { nome, codigo, precoPadrao, unidade, ativo, pesoKg } = req.body;
+    const data = { nome, codigo, precoPadrao, unidade, ativo };
+    if (pesoKg !== undefined) {
+      if (pesoKg === null || String(pesoKg).trim() === "") {
+        data.pesoKg = null;
+      } else {
+        const peso = Number(String(pesoKg).replace(",", "."));
+        data.pesoKg = Number.isFinite(peso) && peso > 0 ? peso : null;
+      }
+    }
     const produto = await prisma.produto.update({
       where: { id },
-      data: { nome, codigo, precoPadrao, unidade, ativo },
+      data,
     });
     res.json(produto);
   } catch (error) {

@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { formatMoney, localDateInputValue } from "@/lib/utils";
+import { freteLinha } from "@/lib/frete";
 import { reportApiError } from "@/lib/report-api-error";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
 
 type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; fretePadraoSaco?: number; fretePadraoTonelada?: number };
 type Motorista = { id: number; nome: string };
-type Produto = { id: number; nome: string; unidade: string };
+type Produto = { id: number; nome: string; unidade: string; pesoKg?: number | null };
 type FreteItemForm = { produtoId: string; quantidade: string };
 
 export default function NovoFretePage() {
@@ -80,18 +81,14 @@ export default function NovoFretePage() {
   const precoTonelada = Number(form.precoTonelada.replace(",", ".")) || 0;
   const subtotais = itens.map((item) => {
     const produto = produtos.find((p) => String(p.id) === item.produtoId);
-    const unidadeRaw = String(produto?.unidade || "").trim().toLowerCase();
-    const unidade =
-      unidadeRaw === "sacos" ? "saco" : ["tonelada", "toneladas", "t"].includes(unidadeRaw) ? "ton" : unidadeRaw;
     const quantidade = Number(item.quantidade.replace(",", ".")) || 0;
-    const subtotal =
-      unidade === "saco"
-        ? quantidade * precoSaco
-        : unidade === "ton"
-          ? quantidade * precoTonelada
-          : unidade === "kg"
-            ? quantidade * (precoTonelada / 1000)
-            : 0;
+    const subtotal = freteLinha({
+      unidade: produto?.unidade,
+      pesoKg: produto?.pesoKg,
+      quantidade,
+      fretePorSaco: precoSaco,
+      fretePorTonelada: precoTonelada,
+    });
     return { produto, quantidade, subtotal };
   });
   const valorCalculado = subtotais.reduce((acc, item) => acc + item.subtotal, 0);

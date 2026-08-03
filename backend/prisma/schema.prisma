@@ -95,6 +95,8 @@ model Produto {
   codigo      String
   precoPadrao Decimal  @db.Decimal(10, 2)
   unidade     String   @default("ton")
+  /// Peso de 1 unidade em kg. Se preenchido, frete = qtd × pesoKg × (tarifaTon/1000).
+  pesoKg      Decimal? @db.Decimal(10, 3)
   ativo       Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

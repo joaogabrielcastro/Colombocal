@@ -13,6 +13,9 @@ const {
 } = require("../utils/api");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
+const {
+  freteLinha,
+} = require("../domain/frete/calcularFrete");
 
 async function requireFreteTenant(req, res, next) {
   try {
@@ -36,16 +39,6 @@ function formatMoneyBr(v) {
   return Number.isFinite(n)
     ? n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
     : "R$ 0,00";
-}
-
-function normalizarUnidade(unidadeRaw) {
-  const u = String(unidadeRaw || "")
-    .trim()
-    .toLowerCase();
-  if (["saco", "sacos", "sc"].includes(u)) return "saco";
-  if (["ton", "tonelada", "toneladas", "t"].includes(u)) return "ton";
-  if (["kg", "quilo", "quilos"].includes(u)) return "kg";
-  return u;
 }
 
 // POST /api/fretes/avulso — cadastro avulso completo (cliente/motorista/produto)
@@ -128,15 +121,12 @@ router.post("/avulso", async (req, res) => {
       }
 
       const itensCalculados = itens.map((it) => {
-        const unidade = normalizarUnidade(it.produto.unidade);
-        const subtotal =
-          unidade === "saco"
-            ? it.quantidade * precoSaco
-            : unidade === "ton"
-              ? it.quantidade * precoTonelada
-              : unidade === "kg"
-                ? it.quantidade * (precoTonelada / 1000)
-                : 0;
+        const subtotal = freteLinha({
+          produto: it.produto,
+          quantidade: it.quantidade,
+          fretePorSaco: precoSaco,
+          fretePorTonelada: precoTonelada,
+        });
         return {
           produtoId: it.produto.id,
           produtoNome: it.produto.nome,

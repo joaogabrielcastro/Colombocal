@@ -97,6 +97,7 @@ async function seedProduto(tenantId, over = {}) {
       codigo: over.codigo || `P-${Math.random().toString(36).slice(2, 8)}`,
       precoPadrao: over.precoPadrao ?? 100,
       unidade: over.unidade || "ton",
+      pesoKg: over.pesoKg ?? null,
       ativo: over.ativo ?? true,
     },
   });

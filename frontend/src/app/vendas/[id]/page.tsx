@@ -196,28 +196,28 @@ export default function VendaDetailPage() {
   <title>Ordem de Serviço - Venda ${numPub}</title>
   <style>
     * { box-sizing: border-box; }
-    @page { size: A4; margin: 6mm; }
-    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 6px 8px; font-size: 10px; }
-    .sheet { max-height: 14.8cm; overflow: hidden; }
-    h1 { margin:0; font-size: 13px; font-weight: 700; line-height: 1.2; }
-    .meta { margin-top: 2px; color:#4b5563; font-size: 9px; }
-    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px; }
-    .box { border:1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; }
+    @page { size: A4; margin: 10mm; }
+    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 10px 12px; font-size: 14px; }
+    .sheet { max-height: none; overflow: visible; }
+    h1 { margin:0; font-size: 22px; font-weight: 700; line-height: 1.25; }
+    .meta { margin-top: 4px; color:#4b5563; font-size: 13px; }
+    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+    .box { border:1px solid #e5e7eb; border-radius: 6px; padding: 8px 10px; }
     .box-full { grid-column: 1 / -1; }
-    .label { color:#6b7280; font-size: 8px; text-transform: uppercase; font-weight: 700; line-height: 1.2; }
-    .value { margin-top: 1px; font-size: 10px; line-height: 1.25; }
-    table { width:100%; border-collapse: collapse; margin-top: 6px; }
-    th, td { border:1px solid #e5e7eb; padding: 3px 5px; font-size: 9px; }
-    th { background:#f9fafb; text-align:left; }
-    .totais { margin-top: 6px; padding: 4px 6px; border:1px solid #e5e7eb; border-radius: 4px; font-size: 9px; line-height: 1.35; }
-    .totais strong { font-weight: 700; }
-    .frete-hint { color:#6b7280; font-size: 8px; margin-top: 2px; }
-    .obs { margin-top: 6px; border:1px dashed #d1d5db; border-radius: 4px; padding: 4px 6px; min-height: 24px; font-size: 9px; }
-    .assinatura { margin-top: 8px; }
-    .linha { border-top:1px solid #9ca3af; padding-top: 4px; text-align:center; font-size: 9px; color:#374151; max-width: 220px; margin: 0 auto; }
+    .label { color:#6b7280; font-size: 11px; text-transform: uppercase; font-weight: 700; line-height: 1.3; letter-spacing: 0.02em; }
+    .value { margin-top: 4px; font-size: 14px; line-height: 1.35; font-weight: 600; }
+    table { width:100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border:1px solid #e5e7eb; padding: 8px 10px; font-size: 13px; }
+    th { background:#f9fafb; text-align:left; font-size: 12px; text-transform: uppercase; }
+    .totais { margin-top: 12px; padding: 10px 12px; border:1px solid #e5e7eb; border-radius: 6px; font-size: 13px; line-height: 1.45; }
+    .totais strong { font-weight: 700; font-size: 14px; }
+    .frete-hint { color:#6b7280; font-size: 12px; margin-top: 4px; }
+    .obs { margin-top: 12px; border:1px dashed #d1d5db; border-radius: 6px; padding: 10px 12px; min-height: 48px; font-size: 13px; }
+    .assinatura { margin-top: 28px; }
+    .linha { border-top:1px solid #9ca3af; padding-top: 8px; text-align:center; font-size: 13px; color:#374151; max-width: 280px; margin: 0 auto; }
     @media print {
       body { padding: 0; }
-      .sheet { max-height: 14.8cm; page-break-inside: avoid; }
+      .sheet { max-height: none; page-break-inside: avoid; }
     }
   </style>
 </head>

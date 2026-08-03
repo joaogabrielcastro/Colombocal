@@ -31,6 +31,7 @@ import {
 } from "@/lib/venda-cliente-sync";
 import SearchableSelect from "@/components/SearchableSelect";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { freteLinha } from "@/lib/frete";
 
 interface ItemForm {
   produtoId: string;
@@ -39,6 +40,7 @@ interface ItemForm {
   precoUnitario: string;
   precoReferencia: string;
   unidade: string;
+  pesoKg: string;
 }
 
 const emptyItem = (): ItemForm => ({
@@ -48,6 +50,7 @@ const emptyItem = (): ItemForm => ({
   precoUnitario: "",
   precoReferencia: "",
   unidade: "",
+  pesoKg: "",
 });
 
 interface ProdutoPreco extends Produto {
@@ -138,6 +141,10 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             precoUnitario: String(item.precoUnitario),
             precoReferencia: String(item.precoUnitario),
             unidade: String(item.produto.unidade || ""),
+            pesoKg:
+              item.produto.pesoKg != null
+                ? String(item.produto.pesoKg)
+                : "",
           })),
         );
         setFreteRefSaco(String(v.freteTarifaSaco ?? 0));
@@ -322,6 +329,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     let precoReferencia = "";
     let unidade = "";
     let produtoNome = "";
+    let pesoKg = "";
     if (cidSnapshot) {
       try {
         const rows = await api.get<ProdutoPreco[]>(
@@ -334,6 +342,10 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
           precoReferencia = preco;
           unidade = String(pc.unidade || "");
           produtoNome = pc.nome;
+          pesoKg =
+            pc.pesoKg != null && String(pc.pesoKg).trim() !== ""
+              ? String(pc.pesoKg)
+              : "";
         }
       } catch {
         if (clienteIdRef.current !== cidSnapshot) return;
@@ -346,6 +358,10 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         precoReferencia = preco;
         unidade = String(p.unidade || "");
         produtoNome = p.nome;
+        pesoKg =
+          p.pesoKg != null && String(p.pesoKg).trim() !== ""
+            ? String(p.pesoKg)
+            : "";
       } catch {
         if (clienteIdRef.current !== "") return;
       }
@@ -363,6 +379,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
               precoUnitario: preco,
               precoReferencia,
               unidade,
+              pesoKg,
             }
           : item,
       ),
@@ -389,16 +406,18 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     }
     const tarifaSaco = Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0;
     const tarifaTon = Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0;
-    const tarifaKg = tarifaTon / 1000;
-    const totalFrete = itens.reduce((acc, item) => {
-      const unidade = String(item.unidade || "").trim().toLowerCase();
-      const qtd = parseFloat(item.quantidade || "0");
-      if (!Number.isFinite(qtd) || qtd <= 0) return acc;
-      if (unidade === "saco") return acc + qtd * tarifaSaco;
-      if (unidade === "ton") return acc + qtd * tarifaTon;
-      if (unidade === "kg") return acc + qtd * tarifaKg;
-      return acc;
-    }, 0);
+    const totalFrete = itens.reduce(
+      (acc, item) =>
+        acc +
+        freteLinha({
+          unidade: item.unidade,
+          pesoKg: item.pesoKg,
+          quantidade: item.quantidade,
+          fretePorSaco: tarifaSaco,
+          fretePorTonelada: tarifaTon,
+        }),
+      0,
+    );
     setFrete(totalFrete.toFixed(2));
   }, [itens, fretePorSacoVal, fretePorTonVal, freteEnabled]);
 

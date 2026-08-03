@@ -85,6 +85,26 @@ test("POST /api/vendas frete por saco", async () => {
   assert.equal(Number(res.body.frete), 15); // 10 sacos * 1.5
 });
 
+test("POST /api/vendas frete por pesoKg (cal pintura 8kg)", async () => {
+  const pintura = await seedProduto(ctx.tenant.id, {
+    nome: "Cal Pintura",
+    unidade: "saco",
+    pesoKg: 8,
+    precoPadrao: 15,
+    codigo: "CP8",
+  });
+  const res = await agent.post("/api/vendas").send({
+    clienteId: ctx.cliente.id,
+    vendedorId: ctx.vendedor.id,
+    fretePorSaco: 5,
+    fretePorTonelada: 100,
+    itens: [{ produtoId: pintura.id, quantidade: 10, precoUnitario: 15 }],
+  });
+  assert.equal(res.status, 201);
+  // 10 × 8kg × (100/1000) = 8 — não usa fretePorSaco
+  assert.equal(Number(res.body.frete), 8);
+});
+
 test("POST /api/vendas produto inexistente retorna 400", async () => {
   const res = await criarVenda({
     itens: [{ produtoId: 99999, quantidade: 1, precoUnitario: 10 }],

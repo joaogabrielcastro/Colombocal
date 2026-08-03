@@ -103,6 +103,8 @@ export interface Produto {
   codigo: string;
   precoPadrao: number;
   unidade: string;
+  /** Peso de 1 unidade em kg; se setado, frete usa qtd × pesoKg × (tarifaTon/1000). */
+  pesoKg?: number | null;
   ativo: boolean;
 }
 
