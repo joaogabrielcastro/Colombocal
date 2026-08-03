@@ -85,7 +85,7 @@ test("POST /api/vendas frete por saco", async () => {
   assert.equal(Number(res.body.frete), 15); // 10 sacos * 1.5
 });
 
-test("POST /api/vendas frete por pesoKg (cal pintura 8kg)", async () => {
+test("POST /api/vendas frete por pesoKg prioriza frete/saco", async () => {
   const pintura = await seedProduto(ctx.tenant.id, {
     nome: "Cal Pintura",
     unidade: "saco",
@@ -96,12 +96,32 @@ test("POST /api/vendas frete por pesoKg (cal pintura 8kg)", async () => {
   const res = await agent.post("/api/vendas").send({
     clienteId: ctx.cliente.id,
     vendedorId: ctx.vendedor.id,
-    fretePorSaco: 5,
+    fretePorSaco: 2.5,
+    fretePorTonelada: 2.5, // mesmo nº do saco — não deve virar 0,02
+    itens: [{ produtoId: pintura.id, quantidade: 10, precoUnitario: 15 }],
+  });
+  assert.equal(res.status, 201);
+  // 10 × (2.5 × 8/20) = 10
+  assert.equal(Number(res.body.frete), 10);
+});
+
+test("POST /api/vendas frete pintura usa ton só quando saco=0", async () => {
+  const pintura = await seedProduto(ctx.tenant.id, {
+    nome: "Cal Pintura 2",
+    unidade: "saco",
+    pesoKg: 8,
+    precoPadrao: 15,
+    codigo: "CP8B",
+  });
+  const res = await agent.post("/api/vendas").send({
+    clienteId: ctx.cliente.id,
+    vendedorId: ctx.vendedor.id,
+    fretePorSaco: 0,
     fretePorTonelada: 100,
     itens: [{ produtoId: pintura.id, quantidade: 10, precoUnitario: 15 }],
   });
   assert.equal(res.status, 201);
-  // 10 × 8kg × (100/1000) = 8 — não usa fretePorSaco
+  // 10 × 8 × (100/1000) = 8
   assert.equal(Number(res.body.frete), 8);
 });
 

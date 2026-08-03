@@ -12,6 +12,9 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
+import { openFreteAvulsoPrint, type FreteAvulsoImpressao } from "@/lib/frete-avulso-print";
+import { PrinterIcon } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 
 type FreteListRow = FreteMovimento & {
   cliente: {
@@ -32,16 +35,20 @@ function FretesContent() {
   const searchParams = useSearchParams();
   const reciboQ = searchParams.get("reciboEmitido");
   const vendaQ = searchParams.get("vendaId") || "";
+  const clienteQ = searchParams.get("cliente") || "";
 
   const [rows, setRows] = useState<FreteListRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [imprimindoId, setImprimindoId] = useState<number | null>(null);
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
   const [vendaInput, setVendaInput] = useState(vendaQ);
   const [vendaFiltro, setVendaFiltro] = useState(vendaQ.replace(/^#/, "").trim());
+  const [clienteInput, setClienteInput] = useState(clienteQ);
+  const [clienteFiltro, setClienteFiltro] = useState(clienteQ.trim());
   const pageSize = 50;
 
   const carregar = async () => {
@@ -52,6 +59,7 @@ function FretesContent() {
       params.set("reciboEmitido", reciboEmitido);
     }
     if (vendaFiltro) params.set("vendaId", vendaFiltro);
+    if (clienteFiltro) params.set("cliente", clienteFiltro);
     setLoading(true);
     try {
       const { data, meta } = await apiFetchWithMeta<FreteListRow[]>(
@@ -73,7 +81,20 @@ function FretesContent() {
 
   useEffect(() => {
     carregar();
-  }, [page, reciboEmitido, vendaFiltro]);
+  }, [page, reciboEmitido, vendaFiltro, clienteFiltro]);
+
+  const reimprimirAvulso = async (id: number) => {
+    setImprimindoId(id);
+    try {
+      const resumo = await api.get<FreteAvulsoImpressao>(`/fretes/${id}/impressao`);
+      openFreteAvulsoPrint(resumo);
+      toast.success("Abrindo impressão");
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível reimprimir o frete" });
+    } finally {
+      setImprimindoId(null);
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -83,7 +104,8 @@ function FretesContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Histórico de fretes</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Lista de movimentações (espelho do frete da venda). Para alterar valor ou recibo, use a{' '}
+            Lista de movimentações (espelho do frete da venda). Frete avulso pode ser
+            reimpresso. Para alterar valor ou recibo da venda, use a{" "}
             <Link href="/vendas" className="text-blue-600 hover:underline">
               venda
             </Link>
@@ -95,12 +117,36 @@ function FretesContent() {
       <FilterBar className="p-4 flex flex-wrap gap-3 items-end justify-between">
         <div className="flex flex-wrap gap-3 items-end">
         <div>
+          <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+          <input
+            type="text"
+            value={clienteInput}
+            onChange={(e) => setClienteInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setClienteFiltro(clienteInput.trim());
+                setVendaFiltro(vendaInput.replace(/^#/, "").trim());
+                setPage(1);
+              }
+            }}
+            className="input-field min-w-56"
+            placeholder="Nome, fantasia ou documento"
+          />
+        </div>
+        <div>
           <label className="block text-xs text-gray-500 mb-1">Nº venda</label>
           <input
             type="text"
             inputMode="numeric"
             value={vendaInput}
             onChange={(e) => setVendaInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setClienteFiltro(clienteInput.trim());
+                setVendaFiltro(vendaInput.replace(/^#/, "").trim());
+                setPage(1);
+              }
+            }}
             className="input-field font-mono min-w-32"
             placeholder="ex: 1840"
           />
@@ -124,6 +170,7 @@ function FretesContent() {
           type="button"
           className="btn-primary"
           onClick={() => {
+            setClienteFiltro(clienteInput.trim());
             setVendaFiltro(vendaInput.replace(/^#/, "").trim());
             setPage(1);
           }}
@@ -138,7 +185,7 @@ function FretesContent() {
 
       {loading ? (
         <div className="card p-4">
-          <TableListSkeleton rows={10} cols={5} />
+          <TableListSkeleton rows={10} cols={6} />
         </div>
       ) : rows.length === 0 ? (
         <EmptyState
@@ -161,6 +208,7 @@ function FretesContent() {
                   <th className="table-header w-24 bg-slate-50">Ordem</th>
                   <th className="table-header text-right">Valor</th>
                   <th className="table-header">Frete pago</th>
+                  <th className="table-header w-28">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -182,7 +230,7 @@ function FretesContent() {
                       {r.venda ? (
                         <VendaOrdem venda={r.venda} size="sm" />
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-amber-700 text-xs font-medium">Avulso</span>
                       )}
                     </td>
                     <td className="table-cell text-right font-medium">
@@ -202,6 +250,21 @@ function FretesContent() {
                             : "Pago"
                           : "Pendente"}
                       </span>
+                    </td>
+                    <td className="table-cell">
+                      {!r.vendaId ? (
+                        <button
+                          type="button"
+                          className="text-blue-600 hover:underline text-xs inline-flex items-center gap-1"
+                          disabled={imprimindoId === r.id}
+                          onClick={() => void reimprimirAvulso(r.id)}
+                        >
+                          <PrinterIcon className="w-3.5 h-3.5" />
+                          {imprimindoId === r.id ? "Abrindo…" : "Reimprimir"}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

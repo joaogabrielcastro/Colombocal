@@ -203,12 +203,14 @@ router.post("/avulso", async (req, res) => {
         valor: valorFinal,
         payload: {
           motoristaId,
+          motoristaNome: motorista.nome,
           itens: itensCalculados,
           precoSaco,
           precoTonelada,
           valorCalculado,
           valorFinal,
           pagoNoAto,
+          observacaoLivre: observacaoLivre || null,
           tituloId: titulo?.id || null,
           pagamentoId: pagamento?.id || null,
         },
@@ -221,7 +223,11 @@ router.post("/avulso", async (req, res) => {
         resumoImpressao: {
           freteId: frete.id,
           cliente: cliente.nomeFantasia || cliente.razaoSocial,
+          clienteCidade: cliente.cidade,
+          clienteEstado: cliente.estado,
+          clienteTelefone: cliente.telefone,
           motorista: motorista.nome,
+          observacao: observacaoLivre || null,
           itens: itensCalculados,
           precoSaco,
           precoTonelada,
@@ -243,7 +249,8 @@ router.post("/avulso", async (req, res) => {
 // GET /api/fretes — listagem com filtros (painel / relatório)
 router.get("/", async (req, res) => {
   try {
-    const { clienteId, vendaId, reciboEmitido, dataInicio, dataFim } = req.query;
+    const { clienteId, vendaId, reciboEmitido, dataInicio, dataFim, cliente } =
+      req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 50,
       maxTake: 500,
@@ -254,6 +261,17 @@ router.get("/", async (req, res) => {
     if (vendaId) where.vendaId = parseInt(vendaId, 10);
     if (reciboEmitido === "true") where.reciboEmitido = true;
     if (reciboEmitido === "false") where.reciboEmitido = false;
+    if (cliente && String(cliente).trim()) {
+      const term = String(cliente).trim();
+      where.cliente = {
+        OR: [
+          { nomeFantasia: { contains: term, mode: "insensitive" } },
+          { razaoSocial: { contains: term, mode: "insensitive" } },
+          { cnpj: { contains: term } },
+          { cpf: { contains: term } },
+        ],
+      };
+    }
     if (dataInicio || dataFim) {
       where.data = {};
       if (dataInicio) where.data.gte = new Date(dataInicio);
@@ -288,6 +306,97 @@ router.get("/", async (req, res) => {
     ]);
     setPaginationHeaders(res, { total, take, skip });
     res.json(rows);
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+// GET /api/fretes/:id/impressao — dados para reimprimir frete avulso
+router.get("/:id/impressao", async (req, res) => {
+  try {
+    const id = parseIntField(req.params.id, "id", { min: 1 });
+    const tenantId = req.tenantId;
+    const frete = await prisma.freteMovimento.findFirst({
+      where: { id, tenantId },
+      include: {
+        cliente: {
+          select: {
+            id: true,
+            razaoSocial: true,
+            nomeFantasia: true,
+            cidade: true,
+            estado: true,
+            telefone: true,
+          },
+        },
+      },
+    });
+    if (!frete) {
+      return res.status(404).json({ error: "Frete não encontrado" });
+    }
+    if (frete.vendaId != null) {
+      return res.status(400).json({
+        error: "Reimpressão por esta rota é só para frete avulso. Use a ordem da venda.",
+      });
+    }
+
+    const evento = await prisma.financeiroEvento.findFirst({
+      where: {
+        tenantId,
+        tipo: "FRETE_AVULSO_CRIADO",
+        entidade: "FreteMovimento",
+        entidadeId: id,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    const payload = evento?.payload && typeof evento.payload === "object"
+      ? evento.payload
+      : {};
+    const itens = Array.isArray(payload.itens) ? payload.itens : [];
+    let motoristaNome =
+      payload.motoristaNome != null ? String(payload.motoristaNome) : null;
+    const motoristaId = payload.motoristaId != null ? Number(payload.motoristaId) : null;
+    if (!motoristaNome && Number.isFinite(motoristaId) && motoristaId > 0) {
+      const m = await prisma.motorista.findFirst({
+        where: { id: motoristaId, tenantId },
+        select: { nome: true },
+      });
+      motoristaNome = m?.nome || null;
+    }
+
+    const obsLivrePayload =
+      payload.observacaoLivre != null && String(payload.observacaoLivre).trim()
+        ? String(payload.observacaoLivre).trim()
+        : null;
+    // Legado: tenta pegar o último trecho livre da observação concatenada
+    let obsLivre = obsLivrePayload;
+    if (!obsLivre && frete.observacao) {
+      const partes = String(frete.observacao)
+        .split(" · ")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      const candidata = partes[partes.length - 1] || "";
+      const automatica =
+        /^Frete avulso/i.test(candidata) ||
+        /^Motorista:/i.test(candidata) ||
+        /\(R\$\s/.test(candidata);
+      if (candidata && !automatica) obsLivre = candidata;
+    }
+
+    res.json({
+      freteId: frete.id,
+      cliente: frete.cliente.nomeFantasia || frete.cliente.razaoSocial,
+      clienteCidade: frete.cliente.cidade,
+      clienteEstado: frete.cliente.estado,
+      clienteTelefone: frete.cliente.telefone,
+      motorista: motoristaNome,
+      observacao: obsLivre,
+      itens,
+      valorFinal: parseFloat(String(frete.valor)),
+      valorLabel: formatMoneyBr(frete.valor),
+      pagoNoAto: !!frete.reciboEmitido,
+      data: frete.data,
+    });
   } catch (e) {
     handleRouteError(res, e);
   }

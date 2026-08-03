@@ -3,6 +3,9 @@ function toNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Peso de referência do saco “normal” na Colombocal (para ratear frete/saco). */
+const PESO_SACO_PADRAO_KG = 20;
+
 function pesoKgProduto(produto) {
   const n = toNum(produto?.pesoKg);
   return n > 0 ? n : 0;
@@ -19,8 +22,21 @@ function normalizarUnidade(unidadeRaw) {
 }
 
 /**
- * Frete de uma linha: se o produto tem pesoKg > 0, usa
- * qtd × pesoKg × (tarifaTon / 1000). Senão, cai na unidade (saco/ton/kg).
+ * Frete unitário quando o produto tem pesoKg.
+ * Prioriza frete/saco (uso típico Colombocal): tarifaSaco × (pesoKg / 20).
+ * Só usa frete/ton se frete/saco estiver zerado: pesoKg × (tarifaTon / 1000).
+ */
+function freteUnitarioPorPeso(pesoKg, fretePorSaco, fretePorTonelada) {
+  const tarifaTon = toNum(fretePorTonelada);
+  const tarifaSaco = toNum(fretePorSaco);
+  if (tarifaSaco > 0) return tarifaSaco * (pesoKg / PESO_SACO_PADRAO_KG);
+  if (tarifaTon > 0) return pesoKg * (tarifaTon / 1000);
+  return 0;
+}
+
+/**
+ * Frete de uma linha: se o produto tem pesoKg > 0, usa peso;
+ * senão cai na unidade (saco/ton/kg).
  */
 function freteLinha({ produto, quantidade, fretePorSaco, fretePorTonelada }) {
   const qtd = toNum(quantidade);
@@ -29,7 +45,7 @@ function freteLinha({ produto, quantidade, fretePorSaco, fretePorTonelada }) {
   const tarifaTon = toNum(fretePorTonelada);
   const pesoKg = pesoKgProduto(produto);
   if (pesoKg > 0) {
-    return qtd * pesoKg * (tarifaTon / 1000);
+    return qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
   }
   const unidade = normalizarUnidade(produto?.unidade);
   if (unidade === "saco") return qtd * tarifaSaco;
@@ -59,6 +75,8 @@ module.exports = {
   toNum,
   pesoKgProduto,
   normalizarUnidade,
+  freteUnitarioPorPeso,
   freteLinha,
   calcularFreteAutomatico,
+  PESO_SACO_PADRAO_KG,
 };

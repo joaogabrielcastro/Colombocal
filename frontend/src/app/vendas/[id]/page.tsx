@@ -17,6 +17,7 @@ import {
   toInputDate,
   type Venda,
 } from "@/lib/utils";
+import { freteLinha } from "@/lib/frete";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -175,6 +176,57 @@ export default function VendaDetailPage() {
       .join(" - ");
     const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0));
     const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0));
+    const freteTotal = parseFloat(String(venda.frete ?? 0));
+
+    let temSacoPadrao = false;
+    let fretePinturaUnit: number | null = null;
+    const fretesEspeciais = new Map<string, number>();
+
+    for (const item of venda.itens) {
+      const qtd = parseFloat(String(item.quantidade ?? 0));
+      if (!freteEnabled || !(qtd > 0)) continue;
+      const freteLin = freteLinha({
+        unidade: item.produto.unidade,
+        pesoKg: item.produto.pesoKg,
+        quantidade: qtd,
+        fretePorSaco: tarifaSaco,
+        fretePorTonelada: tarifaTon,
+      });
+      const freteUnit = freteLin / qtd;
+      const nome = String(item.produto.nome || "");
+      const isPintura = /pintura/i.test(nome);
+      const pesoKg = parseFloat(String(item.produto.pesoKg ?? 0));
+      const unidade = String(item.produto.unidade || "")
+        .trim()
+        .toLowerCase();
+
+      if (isPintura) {
+        fretePinturaUnit = freteUnit;
+      } else if (Number.isFinite(pesoKg) && pesoKg > 0) {
+        const label = `FRETE ${nome}`.toUpperCase().slice(0, 28);
+        fretesEspeciais.set(label, freteUnit);
+      } else if (unidade === "saco" || unidade === "sacos") {
+        temSacoPadrao = true;
+      }
+    }
+
+    const freteDestaqueParts: string[] = [];
+    if (freteEnabled && (temSacoPadrao || tarifaSaco > 0)) {
+      freteDestaqueParts.push(
+        `<span class="frete-tag">FRETE: <strong>${escapeHtml(formatMoney(tarifaSaco))}</strong></span>`,
+      );
+    }
+    if (freteEnabled && fretePinturaUnit != null) {
+      freteDestaqueParts.push(
+        `<span class="frete-tag frete-pintura">FRETE PINTURA: <strong>${escapeHtml(formatMoney(fretePinturaUnit))}</strong></span>`,
+      );
+    }
+    for (const [label, unit] of fretesEspeciais) {
+      freteDestaqueParts.push(
+        `<span class="frete-tag">${escapeHtml(label)}: <strong>${escapeHtml(formatMoney(unit))}</strong></span>`,
+      );
+    }
+
     const itensRows = venda.itens
       .map((item) => {
         const preco = parseFloat(String(item.precoUnitario ?? 0));
@@ -196,28 +248,43 @@ export default function VendaDetailPage() {
   <title>Ordem de Serviço - Venda ${numPub}</title>
   <style>
     * { box-sizing: border-box; }
-    @page { size: A4; margin: 10mm; }
-    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 10px 12px; font-size: 14px; }
-    .sheet { max-height: none; overflow: visible; }
-    h1 { margin:0; font-size: 22px; font-weight: 700; line-height: 1.25; }
-    .meta { margin-top: 4px; color:#4b5563; font-size: 13px; }
-    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
-    .box { border:1px solid #e5e7eb; border-radius: 6px; padding: 8px 10px; }
+    @page { size: A4; margin: 6mm; }
+    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 4px 6px; font-size: 11px; }
+    .sheet { max-height: 13.8cm; overflow: hidden; }
+    h1 { margin:0; font-size: 14px; font-weight: 700; line-height: 1.15; }
+    .meta { margin-top: 1px; color:#4b5563; font-size: 10px; }
+    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 5px; }
+    .box { border:1px solid #d1d5db; border-radius: 3px; padding: 3px 5px; }
     .box-full { grid-column: 1 / -1; }
-    .label { color:#6b7280; font-size: 11px; text-transform: uppercase; font-weight: 700; line-height: 1.3; letter-spacing: 0.02em; }
-    .value { margin-top: 4px; font-size: 14px; line-height: 1.35; font-weight: 600; }
-    table { width:100%; border-collapse: collapse; margin-top: 14px; }
-    th, td { border:1px solid #e5e7eb; padding: 8px 10px; font-size: 13px; }
-    th { background:#f9fafb; text-align:left; font-size: 12px; text-transform: uppercase; }
-    .totais { margin-top: 12px; padding: 10px 12px; border:1px solid #e5e7eb; border-radius: 6px; font-size: 13px; line-height: 1.45; }
-    .totais strong { font-weight: 700; font-size: 14px; }
-    .frete-hint { color:#6b7280; font-size: 12px; margin-top: 4px; }
-    .obs { margin-top: 12px; border:1px dashed #d1d5db; border-radius: 6px; padding: 10px 12px; min-height: 48px; font-size: 13px; }
-    .assinatura { margin-top: 28px; }
-    .linha { border-top:1px solid #9ca3af; padding-top: 8px; text-align:center; font-size: 13px; color:#374151; max-width: 280px; margin: 0 auto; }
+    .label { color:#6b7280; font-size: 8px; text-transform: uppercase; font-weight: 700; line-height: 1.15; }
+    .value { margin-top: 1px; font-size: 11px; line-height: 1.2; font-weight: 600; }
+    table { width:100%; border-collapse: collapse; margin-top: 5px; }
+    th, td { border:1px solid #d1d5db; padding: 2px 4px; font-size: 10px; }
+    th { background:#f3f4f6; text-align:left; font-size: 9px; text-transform: uppercase; }
+    .totais { margin-top: 5px; padding: 3px 5px; border:1px solid #d1d5db; border-radius: 3px; font-size: 10px; line-height: 1.25; }
+    .totais strong { font-weight: 700; }
+    .fretes-linha {
+      margin-top: 6px;
+      padding: 5px 6px;
+      border: 2px solid #111827;
+      border-radius: 3px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 28px;
+      align-items: baseline;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+    .frete-tag { font-weight: 700; text-transform: uppercase; }
+    .frete-tag strong { font-size: 13px; }
+    .frete-pintura { color: #14532d; }
+    .frete-hint { color:#6b7280; font-size: 8px; margin-top: 2px; }
+    .obs { margin-top: 5px; border:1px dashed #d1d5db; border-radius: 3px; padding: 3px 5px; min-height: 18px; font-size: 10px; }
+    .assinatura { margin-top: 10px; }
+    .linha { border-top:1px solid #9ca3af; padding-top: 3px; text-align:center; font-size: 9px; color:#374151; max-width: 200px; margin: 0 auto; }
     @media print {
       body { padding: 0; }
-      .sheet { max-height: none; page-break-inside: avoid; }
+      .sheet { max-height: 13.8cm; page-break-inside: avoid; }
     }
   </style>
 </head>
@@ -268,17 +335,16 @@ export default function VendaDetailPage() {
     <div class="totais">
       <div>Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>${
         freteEnabled
-          ? `
-        · Frete/saco: <strong>${escapeHtml(formatMoney(tarifaSaco))}</strong>
-        · Frete/t: <strong>${escapeHtml(formatMoney(tarifaTon))}</strong>`
+          ? ` · Frete total: <strong>${escapeHtml(formatMoney(freteTotal))}</strong>`
           : ""
-      }
-      </div>${
-        freteEnabled
-          ? `<div class="frete-hint">Frete total calculado no destino conforme quantidade entregue.</div>`
-          : ""
-      }
+      }</div>
     </div>
+    ${
+      freteEnabled && freteDestaqueParts.length
+        ? `<div class="fretes-linha">${freteDestaqueParts.join("")}</div>
+    <div class="frete-hint">Valores unitários de frete por tipo de produto (como no sistema antigo).</div>`
+        : ""
+    }
 
     <div class="obs">
       <div class="label">Observações</div>

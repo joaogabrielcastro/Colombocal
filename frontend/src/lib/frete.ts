@@ -1,5 +1,8 @@
 /** Frete de uma linha (espelha backend/src/domain/frete/calcularFrete.js). */
 
+/** Peso de referência do saco “normal” (rateio do frete/saco). */
+export const PESO_SACO_PADRAO_KG = 20;
+
 function toNum(v: unknown): number {
   const n = parseFloat(String(v ?? "").replace(",", "."));
   return Number.isFinite(n) ? n : 0;
@@ -15,6 +18,19 @@ function normalizarUnidade(unidadeRaw: unknown): string {
   return u;
 }
 
+/** Unitário por peso: prioriza frete/saco (× peso/20); frete/ton só se saco = 0. */
+export function freteUnitarioPorPeso(
+  pesoKg: number,
+  fretePorSaco: number,
+  fretePorTonelada: number,
+): number {
+  const tarifaTon = toNum(fretePorTonelada);
+  const tarifaSaco = toNum(fretePorSaco);
+  if (tarifaSaco > 0) return tarifaSaco * (pesoKg / PESO_SACO_PADRAO_KG);
+  if (tarifaTon > 0) return pesoKg * (tarifaTon / 1000);
+  return 0;
+}
+
 export function freteLinha(params: {
   unidade?: string | null;
   pesoKg?: number | string | null;
@@ -28,7 +44,7 @@ export function freteLinha(params: {
   const tarifaTon = toNum(params.fretePorTonelada);
   const pesoKg = toNum(params.pesoKg);
   if (pesoKg > 0) {
-    return qtd * pesoKg * (tarifaTon / 1000);
+    return qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
   }
   const unidade = normalizarUnidade(params.unidade);
   if (unidade === "saco") return qtd * tarifaSaco;

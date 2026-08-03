@@ -10,6 +10,7 @@ import { freteLinha } from "@/lib/frete";
 import { reportApiError } from "@/lib/report-api-error";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
+import { openFreteAvulsoPrint } from "@/lib/frete-avulso-print";
 
 type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; fretePadraoSaco?: number; fretePadraoTonelada?: number };
 type Motorista = { id: number; nome: string };
@@ -94,25 +95,6 @@ export default function NovoFretePage() {
   const valorCalculado = subtotais.reduce((acc, item) => acc + item.subtotal, 0);
   const valorFinal = Number(form.valorTotal.replace(",", ".")) || valorCalculado;
 
-  const abrirImpressao = (resumo: any) => {
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"/><title>Frete Avulso #${resumo.freteId}</title>
-    <style>body{font-family:Arial,sans-serif;padding:24px;color:#111} .box{border:1px solid #ddd;border-radius:8px;padding:12px;margin:8px 0} .k{font-size:12px;color:#666} .v{font-size:16px;font-weight:700}</style></head><body>
-    <h2>Comprovante de Frete Avulso #${resumo.freteId}</h2>
-    <div class="box"><div class="k">Cliente</div><div class="v">${resumo.cliente}</div></div>
-    <div class="box"><div class="k">Motorista</div><div class="v">${resumo.motorista}</div></div>
-    <div class="box"><div class="k">Itens</div><div class="v">${(resumo.itens || [])
-      .map((i: any) => `${i.produtoNome} (${i.quantidade} ${i.unidade})`)
-      .join("<br/>")}</div></div>
-    <div class="box"><div class="k">Valor</div><div class="v">${resumo.valorLabel}</div></div>
-    <div class="box"><div class="k">Pagamento</div><div class="v">${resumo.pagoNoAto ? "Pago no ato" : "A receber (gerado título)"}</div></div>
-    </body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
-  };
-
   const salvar = async (printAfter: boolean) => {
     const clienteId = Number.parseInt(form.clienteId, 10);
     const motoristaId = Number.parseInt(form.motoristaId, 10);
@@ -142,7 +124,7 @@ export default function NovoFretePage() {
         pagamentoTipo: form.pagamentoTipo,
         pagamentoData: form.pagamentoData,
       });
-      if (printAfter) abrirImpressao(resp.resumoImpressao);
+      if (printAfter) openFreteAvulsoPrint(resp.resumoImpressao);
       router.push("/fretes");
     } catch (e) {
       reportApiError(e, { title: "Não foi possível salvar frete avulso" });
