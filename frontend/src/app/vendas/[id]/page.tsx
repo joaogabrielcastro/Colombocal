@@ -17,7 +17,7 @@ import {
   toInputDate,
   type Venda,
 } from "@/lib/utils";
-import { freteLinha } from "@/lib/frete";
+import { freteLinha, quantidadeEmSacos } from "@/lib/frete";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -364,25 +364,22 @@ export default function VendaDetailPage() {
       .join(" - ");
 
     let totalSacos = 0;
-    let temSaco = false;
     const itensRows = venda.itens
       .map((item) => {
-        const qtd = parseFloat(String(item.quantidade ?? 0));
-        const unidade = String(item.produto.unidade || "")
-          .trim()
-          .toLowerCase();
-        if (
-          Number.isFinite(qtd) &&
-          qtd > 0 &&
-          (unidade === "saco" || unidade === "sacos" || unidade === "sc")
-        ) {
-          temSaco = true;
-          totalSacos += qtd;
-        }
+        const sacos = quantidadeEmSacos({
+          quantidade: item.quantidade,
+          unidade: item.produto.unidade,
+          pesoKg: item.produto.pesoKg,
+        });
+        totalSacos += sacos;
+        const qtdTxt = `${sacos.toLocaleString("pt-BR", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 3,
+        })} saco`;
         return `
         <tr>
           <td>${escapeHtml(item.produto.nome)}</td>
-          <td style="text-align:right">${escapeHtml(formatQuantidade(item.quantidade, item.produto.unidade))}</td>
+          <td style="text-align:right">${escapeHtml(qtdTxt)}</td>
         </tr>`;
       })
       .join("");
@@ -452,7 +449,7 @@ export default function VendaDetailPage() {
       <thead>
         <tr>
           <th>Produto</th>
-          <th style="text-align:right">Qtd</th>
+          <th style="text-align:right">Qtd (sacos)</th>
         </tr>
       </thead>
       <tbody>
@@ -460,18 +457,14 @@ export default function VendaDetailPage() {
       </tbody>
     </table>
 
-    ${
-      temSaco
-        ? `<div class="totais">
+    <div class="totais">
       <div>Total sacos: <strong>${escapeHtml(
         totalSacos.toLocaleString("pt-BR", {
           minimumFractionDigits: 0,
           maximumFractionDigits: 3,
         }),
       )}</strong></div>
-    </div>`
-        : ""
-    }
+    </div>
 
     <div class="obs">
       <div class="label">Observações</div>

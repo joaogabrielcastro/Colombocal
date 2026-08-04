@@ -18,6 +18,30 @@ function normalizarUnidade(unidadeRaw: unknown): string {
   return u;
 }
 
+/**
+ * Converte quantidade da venda para sacos (ordem de carregamento).
+ * - saco: usa a quantidade como está
+ * - ton: (qtd × 1000) / peso do saco (pesoKg do produto ou 20 kg)
+ * - kg: qtd / peso do saco
+ */
+export function quantidadeEmSacos(params: {
+  quantidade: number | string;
+  unidade?: string | null;
+  pesoKg?: number | string | null;
+}): number {
+  const qtd = toNum(params.quantidade);
+  if (qtd <= 0) return 0;
+  const unidade = normalizarUnidade(params.unidade);
+  if (unidade === "saco") return qtd;
+  const pesoSaco = (() => {
+    const p = toNum(params.pesoKg);
+    return p > 0 ? p : PESO_SACO_PADRAO_KG;
+  })();
+  if (unidade === "ton") return (qtd * 1000) / pesoSaco;
+  if (unidade === "kg") return qtd / pesoSaco;
+  return qtd;
+}
+
 /** Unitário por peso: prioriza frete/saco (× peso/20); frete/ton só se saco = 0. */
 export function freteUnitarioPorPeso(
   pesoKg: number,
