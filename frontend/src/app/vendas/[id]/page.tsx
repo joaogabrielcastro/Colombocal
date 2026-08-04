@@ -176,35 +176,28 @@ export default function VendaDetailPage() {
       .join(" - ");
     const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0));
     const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0));
-    const freteTotal = parseFloat(String(venda.frete ?? 0));
 
     let temSacoPadrao = false;
     let fretePinturaUnit: number | null = null;
-    const fretesEspeciais = new Map<string, number>();
 
     for (const item of venda.itens) {
       const qtd = parseFloat(String(item.quantidade ?? 0));
       if (!freteEnabled || !(qtd > 0)) continue;
-      const freteLin = freteLinha({
-        unidade: item.produto.unidade,
-        pesoKg: item.produto.pesoKg,
-        quantidade: qtd,
-        fretePorSaco: tarifaSaco,
-        fretePorTonelada: tarifaTon,
-      });
-      const freteUnit = freteLin / qtd;
       const nome = String(item.produto.nome || "");
       const isPintura = /pintura/i.test(nome);
-      const pesoKg = parseFloat(String(item.produto.pesoKg ?? 0));
       const unidade = String(item.produto.unidade || "")
         .trim()
         .toLowerCase();
 
       if (isPintura) {
-        fretePinturaUnit = freteUnit;
-      } else if (Number.isFinite(pesoKg) && pesoKg > 0) {
-        const label = `FRETE ${nome}`.toUpperCase().slice(0, 28);
-        fretesEspeciais.set(label, freteUnit);
+        const freteLin = freteLinha({
+          unidade: item.produto.unidade,
+          pesoKg: item.produto.pesoKg,
+          quantidade: qtd,
+          fretePorSaco: tarifaSaco,
+          fretePorTonelada: tarifaTon,
+        });
+        fretePinturaUnit = freteLin / qtd;
       } else if (unidade === "saco" || unidade === "sacos") {
         temSacoPadrao = true;
       }
@@ -219,11 +212,6 @@ export default function VendaDetailPage() {
     if (freteEnabled && fretePinturaUnit != null) {
       freteDestaqueParts.push(
         `<span class="frete-tag frete-pintura">FRETE PINTURA: <strong>${escapeHtml(formatMoney(fretePinturaUnit))}</strong></span>`,
-      );
-    }
-    for (const [label, unit] of fretesEspeciais) {
-      freteDestaqueParts.push(
-        `<span class="frete-tag">${escapeHtml(label)}: <strong>${escapeHtml(formatMoney(unit))}</strong></span>`,
       );
     }
 
@@ -333,11 +321,7 @@ export default function VendaDetailPage() {
     </table>
 
     <div class="totais">
-      <div>Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>${
-        freteEnabled
-          ? ` · Frete total: <strong>${escapeHtml(formatMoney(freteTotal))}</strong>`
-          : ""
-      }</div>
+      <div>Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong></div>
     </div>
     ${
       freteEnabled && freteDestaqueParts.length
@@ -353,6 +337,149 @@ export default function VendaDetailPage() {
 
     <div class="assinatura">
       <div class="linha">Assinatura do Recebedor</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
+
+  const imprimirOrdemCarregamento = () => {
+    if (!venda) return;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    const numPub = vendaOrdemTexto(venda);
+
+    const clienteNome = venda.cliente.nomeFantasia || venda.cliente.razaoSocial;
+    const enderecoCliente = [
+      venda.cliente.endereco,
+      venda.cliente.cidade,
+      venda.cliente.estado,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
+    let totalSacos = 0;
+    let temSaco = false;
+    const itensRows = venda.itens
+      .map((item) => {
+        const qtd = parseFloat(String(item.quantidade ?? 0));
+        const unidade = String(item.produto.unidade || "")
+          .trim()
+          .toLowerCase();
+        if (
+          Number.isFinite(qtd) &&
+          qtd > 0 &&
+          (unidade === "saco" || unidade === "sacos" || unidade === "sc")
+        ) {
+          temSaco = true;
+          totalSacos += qtd;
+        }
+        return `
+        <tr>
+          <td>${escapeHtml(item.produto.nome)}</td>
+          <td style="text-align:right">${escapeHtml(formatQuantidade(item.quantidade, item.produto.unidade))}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Ordem de Carregamento - Venda ${numPub}</title>
+  <style>
+    * { box-sizing: border-box; }
+    @page { size: A4; margin: 6mm; }
+    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 4px 6px; font-size: 11px; }
+    .sheet { max-height: 13.8cm; overflow: hidden; }
+    h1 { margin:0; font-size: 14px; font-weight: 700; line-height: 1.15; }
+    .meta { margin-top: 1px; color:#4b5563; font-size: 10px; }
+    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 5px; }
+    .box { border:1px solid #d1d5db; border-radius: 3px; padding: 3px 5px; }
+    .box-full { grid-column: 1 / -1; }
+    .label { color:#6b7280; font-size: 8px; text-transform: uppercase; font-weight: 700; line-height: 1.15; }
+    .value { margin-top: 1px; font-size: 11px; line-height: 1.2; font-weight: 600; }
+    table { width:100%; border-collapse: collapse; margin-top: 5px; }
+    th, td { border:1px solid #d1d5db; padding: 2px 4px; font-size: 10px; }
+    th { background:#f3f4f6; text-align:left; font-size: 9px; text-transform: uppercase; }
+    .totais { margin-top: 5px; padding: 3px 5px; border:1px solid #d1d5db; border-radius: 3px; font-size: 10px; line-height: 1.25; }
+    .totais strong { font-weight: 700; }
+    .obs { margin-top: 5px; border:1px dashed #d1d5db; border-radius: 3px; padding: 3px 5px; min-height: 18px; font-size: 10px; }
+    .assinatura { margin-top: 10px; }
+    .linha { border-top:1px solid #9ca3af; padding-top: 3px; text-align:center; font-size: 9px; color:#374151; max-width: 220px; margin: 0 auto; }
+    @media print {
+      body { padding: 0; }
+      .sheet { max-height: 13.8cm; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <h1>Ordem de Carregamento</h1>
+    <div class="meta">Venda ${numPub} • Data ${formatDate(venda.dataVenda)}</div>
+
+    <div class="grid">
+      <div class="box">
+        <div class="label">Cliente</div>
+        <div class="value">${escapeHtml(clienteNome)}</div>
+      </div>
+      <div class="box">
+        <div class="label">Motorista</div>
+        <div class="value">${escapeHtml(venda.motorista?.nome || "-")}</div>
+      </div>
+      <div class="box">
+        <div class="label">Telefone</div>
+        <div class="value">${escapeHtml(venda.cliente.telefone || "-")}</div>
+      </div>
+      <div class="box">
+        <div class="label">Veículo / Placa</div>
+        <div class="value">${escapeHtml(
+          [venda.motorista?.veiculo, venda.motorista?.placa].filter(Boolean).join(" - ") || "-",
+        )}</div>
+      </div>
+      <div class="box box-full">
+        <div class="label">Endereço / Local</div>
+        <div class="value">${escapeHtml(enderecoCliente || "-")}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th style="text-align:right">Qtd</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itensRows}
+      </tbody>
+    </table>
+
+    ${
+      temSaco
+        ? `<div class="totais">
+      <div>Total sacos: <strong>${escapeHtml(
+        totalSacos.toLocaleString("pt-BR", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 3,
+        }),
+      )}</strong></div>
+    </div>`
+        : ""
+    }
+
+    <div class="obs">
+      <div class="label">Observações</div>
+      <div style="margin-top:2px;">${escapeHtml(venda.observacoes || "Sem observações.")}</div>
+    </div>
+
+    <div class="assinatura">
+      <div class="linha">Conferido / Carregado por</div>
     </div>
   </div>
 </body>
@@ -401,12 +528,12 @@ export default function VendaDetailPage() {
   });
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/vendas" className="btn-secondary py-1.5 px-2.5">
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="flex flex-wrap items-start gap-3 mb-6">
+        <Link href="/vendas" className="btn-secondary py-1.5 px-2.5 shrink-0">
           <ArrowLeftIcon className="w-4 h-4" />
         </Link>
-        <div className="flex-1">
+        <div className="flex-1 min-w-[14rem]">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 flex-wrap">
             <span className="text-gray-500 font-normal text-lg">Venda</span>
             <VendaOrdem venda={venda} link={false} size="xl" />
@@ -430,36 +557,42 @@ export default function VendaDetailPage() {
             ) : null}
           </p>
         </div>
-        <button onClick={imprimirOrdemServico} className="btn-secondary">
-          <PrinterIcon className="w-4 h-4" />
-          Imprimir O.S.
-        </button>
-        {venda.podeEditar ? (
-          <Link href={`/vendas/${id}/editar`} className="btn-secondary">
-            <PencilIcon className="w-4 h-4" />
-            Editar
-          </Link>
-        ) : (
-          <span
-            className="text-xs text-gray-500 max-w-[10rem] leading-tight"
-            title="Não é possível editar com baixas ou cheques vinculados"
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <button onClick={imprimirOrdemServico} className="btn-secondary">
+            <PrinterIcon className="w-4 h-4" />
+            Imprimir O.S.
+          </button>
+          <button onClick={imprimirOrdemCarregamento} className="btn-secondary">
+            <PrinterIcon className="w-4 h-4" />
+            Imprimir carregamento
+          </button>
+          {venda.podeEditar ? (
+            <Link href={`/vendas/${id}/editar`} className="btn-secondary">
+              <PencilIcon className="w-4 h-4" />
+              Editar
+            </Link>
+          ) : (
+            <span
+              className="text-xs text-gray-500 max-w-[10rem] leading-tight"
+              title="Não é possível editar com baixas ou cheques vinculados"
+            >
+              Edição bloqueada (baixas/cheques)
+            </span>
+          )}
+          <button
+            onClick={() => setConfirmCancelOpen(true)}
+            disabled={cancelando || temBaixas}
+            className="btn-danger disabled:opacity-50"
+            title={
+              temBaixas
+                ? "Estorne todas as baixas e cheques antes de cancelar"
+                : undefined
+            }
           >
-            Edição bloqueada (baixas/cheques)
-          </span>
-        )}
-        <button
-          onClick={() => setConfirmCancelOpen(true)}
-          disabled={cancelando || temBaixas}
-          className="btn-danger disabled:opacity-50"
-          title={
-            temBaixas
-              ? "Estorne todas as baixas e cheques antes de cancelar"
-              : undefined
-          }
-        >
-          <TrashIcon className="w-4 h-4" />
-          {cancelando ? "Cancelando..." : "Cancelar Venda"}
-        </button>
+            <TrashIcon className="w-4 h-4" />
+            {cancelando ? "Cancelando..." : "Cancelar Venda"}
+          </button>
+        </div>
       </div>
       <ConfirmDialog
         open={confirmEstorno != null}
@@ -491,7 +624,7 @@ export default function VendaDetailPage() {
       />
 
       <div className="card p-5 mb-4">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <p className="text-gray-500 text-xs font-semibold uppercase">
               Cliente
@@ -543,150 +676,149 @@ export default function VendaDetailPage() {
         </div>
       </div>
 
-      <div className="card overflow-hidden mb-4">
-        <div className="px-5 py-3 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Produtos</h3>
-        </div>
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200">
-              <th className="table-header">Produto</th>
-              <th className="table-header text-right">Quantidade</th>
-              <th className="table-header text-right">Preço Unit.</th>
-              <th className="table-header text-right">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {venda.itens.map((item) => (
-              <tr key={item.id} className="table-row">
-                <td className="table-cell font-medium">{item.produto.nome}</td>
-                <td className="table-cell text-right">
-                  {formatQuantidade(item.quantidade, item.produto.unidade)}
-                </td>
-                <td className="table-cell text-right">
-                  {formatMoney(item.precoUnitario)}
-                </td>
-                <td className="table-cell text-right font-medium">
-                  {formatMoney(item.subtotal)}
-                </td>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
+        <div className="card overflow-hidden lg:col-span-3">
+          <div className="px-5 py-3 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">Produtos</h3>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="table-header">Produto</th>
+                <th className="table-header text-right">Quantidade</th>
+                <th className="table-header text-right">Preço Unit.</th>
+                <th className="table-header text-right">Subtotal</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {venda.itens.map((item) => (
+                <tr key={item.id} className="table-row">
+                  <td className="table-cell font-medium">{item.produto.nome}</td>
+                  <td className="table-cell text-right">
+                    {formatQuantidade(item.quantidade, item.produto.unidade)}
+                  </td>
+                  <td className="table-cell text-right">
+                    {formatMoney(item.precoUnitario)}
+                  </td>
+                  <td className="table-cell text-right font-medium">
+                    {formatMoney(item.subtotal)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-      {freteEnabled ? (
-      <div className="card p-5 mb-4">
-        <h3 className="font-semibold text-gray-900 mb-2">Frete e pagamento</h3>
-        <p className="text-xs text-gray-500 mb-3">
-          O primeiro movimento de frete da venda é mantido alinhado com os campos
-          abaixo (valor, frete pago e data do pagamento).
-        </p>
-        <form
-          onSubmit={salvarFreteRecibo}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6 pb-6 border-b border-gray-100"
-        >
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Valor do frete (R$)
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={freteForm.valor}
-              onChange={(e) =>
-                setFreteForm((s) => ({ ...s, valor: e.target.value }))
-              }
-              className="input-field"
-            />
-          </div>
-          <div className="flex items-end gap-2 pb-0.5">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={freteForm.recibo}
-                onChange={(e) =>
-                  setFreteForm((s) => ({ ...s, recibo: e.target.checked }))
-                }
-                className="rounded border-gray-300"
-              />
-              Frete pago
-            </label>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Data do pagamento
-            </label>
-            <input
-              type="date"
-              value={freteForm.data}
-              onChange={(e) =>
-                setFreteForm((s) => ({ ...s, data: e.target.value }))
-              }
-              className="input-field"
-            />
-          </div>
-          <div className="md:col-span-2 lg:col-span-3">
-            <button
-              type="submit"
-              disabled={salvandoFrete}
-              className="btn-primary text-sm"
+        {freteEnabled ? (
+          <div className="card p-5 lg:col-span-2">
+            <h3 className="font-semibold text-gray-900 mb-2">Frete e pagamento</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              O primeiro movimento de frete da venda é mantido alinhado com os campos
+              abaixo (valor, frete pago e data do pagamento).
+            </p>
+            <form
+              onSubmit={salvarFreteRecibo}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 pb-4 border-b border-gray-100"
             >
-              {salvandoFrete ? "Salvando…" : "Salvar frete"}
-            </button>
-          </div>
-        </form>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Valor do frete (R$)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={freteForm.valor}
+                  onChange={(e) =>
+                    setFreteForm((s) => ({ ...s, valor: e.target.value }))
+                  }
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Data do pagamento
+                </label>
+                <input
+                  type="date"
+                  value={freteForm.data}
+                  onChange={(e) =>
+                    setFreteForm((s) => ({ ...s, data: e.target.value }))
+                  }
+                  className="input-field"
+                />
+              </div>
+              <div className="flex items-end gap-2 pb-0.5">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={freteForm.recibo}
+                    onChange={(e) =>
+                      setFreteForm((s) => ({ ...s, recibo: e.target.checked }))
+                    }
+                    className="rounded border-gray-300"
+                  />
+                  Frete pago
+                </label>
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  disabled={salvandoFrete}
+                  className="btn-primary text-sm w-full sm:w-auto"
+                >
+                  {salvandoFrete ? "Salvando…" : "Salvar frete"}
+                </button>
+              </div>
+            </form>
 
-        {venda.fretes && venda.fretes.length > 0 ? (
-          <ul className="divide-y divide-gray-100 text-sm mb-4">
-            {venda.fretes.map((f) => (
-              <li key={f.id} className="py-2 flex justify-between gap-2">
-                <span className="text-gray-700">
-                  {formatDate(f.data)} •{" "}
-                  {f.reciboEmitido ? "Frete pago" : "Pagamento pendente"}
-                  {f.reciboData ? ` • ${formatDate(f.reciboData)}` : ""}
+            {venda.fretes && venda.fretes.length > 0 ? (
+              <ul className="divide-y divide-gray-100 text-sm mb-4">
+                {venda.fretes.map((f) => (
+                  <li key={f.id} className="py-2 flex justify-between gap-2">
+                    <span className="text-gray-700">
+                      {formatDate(f.data)} •{" "}
+                      {f.reciboEmitido ? "Frete pago" : "Pagamento pendente"}
+                      {f.reciboData ? ` • ${formatDate(f.reciboData)}` : ""}
+                    </span>
+                    <span className="font-medium shrink-0">
+                      {formatMoney(f.valor)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400 mb-4">Sem movimentação de frete.</p>
+            )}
+
+            <div className="space-y-2 pt-1">
+              <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
+                <span>Total Produtos:</span>
+                <span className="text-green-700 text-lg">
+                  {formatMoney(venda.valorTotal)}
                 </span>
-                <span className="font-medium shrink-0">
-                  {formatMoney(f.valor)}
-                </span>
-              </li>
-            ))}
-          </ul>
+              </div>
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Frete (cobrado à parte):</span>
+                <span className="font-medium">{formatMoney(venda.frete)}</span>
+              </div>
+            </div>
+          </div>
         ) : (
-          <p className="text-sm text-gray-400 mb-4">Sem movimentação de frete.</p>
+          <div className="card p-5 lg:col-span-2 flex flex-col justify-end">
+            <div className="space-y-2">
+              <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
+                <span>Total Produtos:</span>
+                <span className="text-green-700 text-lg">
+                  {formatMoney(venda.valorTotal)}
+                </span>
+              </div>
+            </div>
+          </div>
         )}
-
-        <div className="flex justify-end">
-          <div className="w-72 space-y-2">
-            <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
-              <span>Total Produtos:</span>
-              <span className="text-green-700 text-lg">
-                {formatMoney(venda.valorTotal)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-500">
-              <span>Frete (cobrado à parte):</span>
-              <span className="font-medium">{formatMoney(venda.frete)}</span>
-            </div>
-          </div>
-        </div>
       </div>
-      ) : (
-      <div className="card p-5 mb-4">
-        <div className="flex justify-end">
-          <div className="w-72 space-y-2">
-            <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
-              <span>Total Produtos:</span>
-              <span className="text-green-700 text-lg">
-                {formatMoney(venda.valorTotal)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-      )}
 
-      <div className="card p-5 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+      <div className="card p-5">
         <h3 className="font-semibold text-gray-900 mb-2">Títulos desta venda</h3>
         {venda.titulos && venda.titulos.length > 0 ? (
           <ul className="divide-y divide-gray-100 text-sm mb-3">
@@ -707,7 +839,7 @@ export default function VendaDetailPage() {
         )}
       </div>
 
-      <div className="card p-5 mb-4">
+      <div className="card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
           <div>
             <h3 className="font-semibold text-gray-900">
@@ -855,6 +987,7 @@ export default function VendaDetailPage() {
             ))}
           </ul>
         )}
+      </div>
       </div>
     </div>
   );
