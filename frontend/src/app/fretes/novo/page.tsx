@@ -10,7 +10,7 @@ import { freteLinha } from "@/lib/frete";
 import { reportApiError } from "@/lib/report-api-error";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
-import { openFreteAvulsoPrint } from "@/lib/frete-avulso-print";
+import { openFreteAvulsoPrint, openFreteAvulsoCarregamentoPrint } from "@/lib/frete-avulso-print";
 
 type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; fretePadraoSaco?: number; fretePadraoTonelada?: number };
 type Motorista = { id: number; nome: string };
@@ -24,6 +24,9 @@ export default function NovoFretePage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [imprimindo, setImprimindo] = useState(false);
+  const [imprimindoTipo, setImprimindoTipo] = useState<
+    "orcamento" | "carregamento" | null
+  >(null);
 
   const [form, setForm] = useState({
     clienteId: "",
@@ -95,7 +98,7 @@ export default function NovoFretePage() {
   const valorCalculado = subtotais.reduce((acc, item) => acc + item.subtotal, 0);
   const valorFinal = Number(form.valorTotal.replace(",", ".")) || valorCalculado;
 
-  const salvar = async (printAfter: boolean) => {
+  const salvar = async (printAfter: false | "orcamento" | "carregamento") => {
     const clienteId = Number.parseInt(form.clienteId, 10);
     const motoristaId = Number.parseInt(form.motoristaId, 10);
     const itensValidos = itens
@@ -108,7 +111,12 @@ export default function NovoFretePage() {
       alert("Preencha cliente, motorista, pelo menos um item e valor.");
       return;
     }
-    printAfter ? setImprimindo(true) : setSalvando(true);
+    if (printAfter) {
+      setImprimindo(true);
+      setImprimindoTipo(printAfter);
+    } else {
+      setSalvando(true);
+    }
     try {
       const resp = await api.post<{ frete: { id: number }; resumoImpressao: any }>("/fretes/avulso", {
         clienteId,
@@ -124,13 +132,17 @@ export default function NovoFretePage() {
         pagamentoTipo: form.pagamentoTipo,
         pagamentoData: form.pagamentoData,
       });
-      if (printAfter) openFreteAvulsoPrint(resp.resumoImpressao);
+      if (printAfter === "orcamento") openFreteAvulsoPrint(resp.resumoImpressao);
+      if (printAfter === "carregamento") {
+        openFreteAvulsoCarregamentoPrint(resp.resumoImpressao);
+      }
       router.push("/fretes");
     } catch (e) {
       reportApiError(e, { title: "Não foi possível salvar frete avulso" });
     } finally {
       setSalvando(false);
       setImprimindo(false);
+      setImprimindoTipo(null);
     }
   };
 
@@ -191,7 +203,7 @@ export default function NovoFretePage() {
 
   return (
     <FreteFeatureGuard>
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 w-full max-w-[90rem] mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/fretes" className="btn-secondary py-1.5 px-2.5">
           <ArrowLeftIcon className="w-4 h-4" />
@@ -346,12 +358,27 @@ export default function NovoFretePage() {
         </div>
       </div>
 
-      <div className="flex gap-3 mt-4">
+      <div className="flex flex-wrap gap-3 mt-4">
         <button className="btn-primary" onClick={() => void salvar(false)} disabled={salvando || imprimindo}>
           {salvando ? "Salvando..." : "Salvar frete"}
         </button>
-        <button className="btn-secondary" onClick={() => void salvar(true)} disabled={salvando || imprimindo}>
-          {imprimindo ? "Imprimindo..." : "Salvar e imprimir"}
+        <button
+          className="btn-secondary"
+          onClick={() => void salvar("orcamento")}
+          disabled={salvando || imprimindo}
+        >
+          {imprimindo && imprimindoTipo === "orcamento"
+            ? "Imprimindo..."
+            : "Salvar e imprimir orçamento"}
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => void salvar("carregamento")}
+          disabled={salvando || imprimindo}
+        >
+          {imprimindo && imprimindoTipo === "carregamento"
+            ? "Imprimindo..."
+            : "Salvar e imprimir ordem de carregamento"}
         </button>
         <Link href="/fretes" className="btn-secondary">Cancelar</Link>
       </div>

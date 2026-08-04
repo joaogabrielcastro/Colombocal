@@ -131,6 +131,10 @@ router.post("/avulso", async (req, res) => {
           produtoId: it.produto.id,
           produtoNome: it.produto.nome,
           unidade: it.produto.unidade || "",
+          pesoKg:
+            it.produto.pesoKg != null
+              ? parseFloat(String(it.produto.pesoKg))
+              : null,
           quantidade: it.quantidade,
           subtotal,
         };
@@ -226,7 +230,12 @@ router.post("/avulso", async (req, res) => {
           clienteCidade: cliente.cidade,
           clienteEstado: cliente.estado,
           clienteTelefone: cliente.telefone,
+          clienteEndereco: [cliente.endereco, cliente.cidade, cliente.estado]
+            .filter(Boolean)
+            .join(" - ") || null,
           motorista: motorista.nome,
+          motoristaVeiculo: motorista.veiculo || null,
+          motoristaPlaca: motorista.placa || null,
           observacao: observacaoLivre || null,
           itens: itensCalculados,
           precoSaco,
@@ -327,6 +336,7 @@ router.get("/:id/impressao", async (req, res) => {
             cidade: true,
             estado: true,
             telefone: true,
+            endereco: true,
           },
         },
       },
@@ -352,16 +362,50 @@ router.get("/:id/impressao", async (req, res) => {
     const payload = evento?.payload && typeof evento.payload === "object"
       ? evento.payload
       : {};
-    const itens = Array.isArray(payload.itens) ? payload.itens : [];
+    let itens = Array.isArray(payload.itens) ? [...payload.itens] : [];
+    // Completa pesoKg em itens legados (para ordem de carregamento em sacos)
+    const produtoIds = [
+      ...new Set(
+        itens
+          .map((i) => Number(i?.produtoId))
+          .filter((n) => Number.isFinite(n) && n > 0),
+      ),
+    ];
+    if (produtoIds.length) {
+      const produtos = await prisma.produto.findMany({
+        where: { tenantId, id: { in: produtoIds } },
+        select: { id: true, pesoKg: true, unidade: true },
+      });
+      const porId = new Map(produtos.map((p) => [p.id, p]));
+      itens = itens.map((i) => {
+        const p = porId.get(Number(i.produtoId));
+        if (!p) return i;
+        const peso =
+          i.pesoKg != null && String(i.pesoKg).trim() !== ""
+            ? i.pesoKg
+            : p.pesoKg != null
+              ? parseFloat(String(p.pesoKg))
+              : null;
+        return {
+          ...i,
+          unidade: i.unidade || p.unidade || "",
+          pesoKg: peso,
+        };
+      });
+    }
     let motoristaNome =
       payload.motoristaNome != null ? String(payload.motoristaNome) : null;
+    let motoristaVeiculo = null;
+    let motoristaPlaca = null;
     const motoristaId = payload.motoristaId != null ? Number(payload.motoristaId) : null;
-    if (!motoristaNome && Number.isFinite(motoristaId) && motoristaId > 0) {
+    if (Number.isFinite(motoristaId) && motoristaId > 0) {
       const m = await prisma.motorista.findFirst({
         where: { id: motoristaId, tenantId },
-        select: { nome: true },
+        select: { nome: true, veiculo: true, placa: true },
       });
-      motoristaNome = m?.nome || null;
+      if (!motoristaNome) motoristaNome = m?.nome || null;
+      motoristaVeiculo = m?.veiculo || null;
+      motoristaPlaca = m?.placa || null;
     }
 
     const obsLivrePayload =
@@ -383,13 +427,24 @@ router.get("/:id/impressao", async (req, res) => {
       if (candidata && !automatica) obsLivre = candidata;
     }
 
+    const enderecoCliente = [
+      frete.cliente.endereco,
+      frete.cliente.cidade,
+      frete.cliente.estado,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
     res.json({
       freteId: frete.id,
       cliente: frete.cliente.nomeFantasia || frete.cliente.razaoSocial,
       clienteCidade: frete.cliente.cidade,
       clienteEstado: frete.cliente.estado,
       clienteTelefone: frete.cliente.telefone,
+      clienteEndereco: enderecoCliente || null,
       motorista: motoristaNome,
+      motoristaVeiculo,
+      motoristaPlaca,
       observacao: obsLivre,
       itens,
       valorFinal: parseFloat(String(frete.valor)),

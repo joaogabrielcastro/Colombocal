@@ -521,7 +521,7 @@ export default function VendaDetailPage() {
   });
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 w-full max-w-[90rem] mx-auto">
       <div className="flex flex-wrap items-start gap-3 mb-6">
         <Link href="/vendas" className="btn-secondary py-1.5 px-2.5 shrink-0">
           <ArrowLeftIcon className="w-4 h-4" />

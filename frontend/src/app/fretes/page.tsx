@@ -12,7 +12,11 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
-import { openFreteAvulsoPrint, type FreteAvulsoImpressao } from "@/lib/frete-avulso-print";
+import {
+  openFreteAvulsoPrint,
+  openFreteAvulsoCarregamentoPrint,
+  type FreteAvulsoImpressao,
+} from "@/lib/frete-avulso-print";
 import { PrinterIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 
@@ -42,6 +46,9 @@ function FretesContent() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [imprimindoId, setImprimindoId] = useState<number | null>(null);
+  const [imprimindoTipo, setImprimindoTipo] = useState<"orcamento" | "carregamento" | null>(
+    null,
+  );
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
@@ -83,40 +90,51 @@ function FretesContent() {
     carregar();
   }, [page, reciboEmitido, vendaFiltro, clienteFiltro]);
 
-  const reimprimirAvulso = async (id: number) => {
+  const imprimirAvulso = async (
+    id: number,
+    tipo: "orcamento" | "carregamento",
+  ) => {
     setImprimindoId(id);
+    setImprimindoTipo(tipo);
     try {
       const resumo = await api.get<FreteAvulsoImpressao>(`/fretes/${id}/impressao`);
-      openFreteAvulsoPrint(resumo);
-      toast.success("Abrindo impressão");
+      if (tipo === "carregamento") openFreteAvulsoCarregamentoPrint(resumo);
+      else openFreteAvulsoPrint(resumo);
+      toast.success(
+        tipo === "carregamento"
+          ? "Abrindo ordem de carregamento"
+          : "Abrindo impressão",
+      );
     } catch (e) {
-      reportApiError(e, { title: "Não foi possível reimprimir o frete" });
+      reportApiError(e, {
+        title:
+          tipo === "carregamento"
+            ? "Não foi possível imprimir o carregamento"
+            : "Não foi possível reimprimir o frete",
+      });
     } finally {
       setImprimindoId(null);
+      setImprimindoTipo(null);
     }
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 w-full max-w-[90rem] mx-auto">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Histórico de fretes</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Lista de movimentações (espelho do frete da venda). Frete avulso pode ser
-            reimpresso. Para alterar valor ou recibo da venda, use a{" "}
-            <Link href="/vendas" className="text-blue-600 hover:underline">
-              venda
-            </Link>
-            .
+            Avulso: imprima orçamento ou carregamento aqui. Frete da venda: use
+            Abrir venda.
           </p>
         </div>
       </div>
 
       <FilterBar className="p-4 flex flex-wrap gap-3 items-end justify-between">
-        <div className="flex flex-wrap gap-3 items-end">
-        <div>
+        <div className="flex flex-wrap gap-3 items-end flex-1 min-w-0">
+        <div className="flex-1 min-w-[16rem] max-w-md">
           <label className="block text-xs text-gray-500 mb-1">Cliente</label>
           <input
             type="text"
@@ -129,7 +147,7 @@ function FretesContent() {
                 setPage(1);
               }
             }}
-            className="input-field min-w-56"
+            className="input-field w-full"
             placeholder="Nome, fantasia ou documento"
           />
         </div>
@@ -208,7 +226,7 @@ function FretesContent() {
                   <th className="table-header w-24 bg-slate-50">Ordem</th>
                   <th className="table-header text-right">Valor</th>
                   <th className="table-header">Frete pago</th>
-                  <th className="table-header w-28">Ações</th>
+                  <th className="table-header text-right min-w-[11rem]">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -251,19 +269,43 @@ function FretesContent() {
                           : "Pendente"}
                       </span>
                     </td>
-                    <td className="table-cell">
+                    <td className="table-cell text-right">
                       {!r.vendaId ? (
-                        <button
-                          type="button"
-                          className="text-blue-600 hover:underline text-xs inline-flex items-center gap-1"
-                          disabled={imprimindoId === r.id}
-                          onClick={() => void reimprimirAvulso(r.id)}
-                        >
-                          <PrinterIcon className="w-3.5 h-3.5" />
-                          {imprimindoId === r.id ? "Abrindo…" : "Reimprimir"}
-                        </button>
+                        <div className="inline-flex flex-wrap justify-end gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            title="Reimprimir orçamento de frete"
+                            disabled={imprimindoId === r.id}
+                            onClick={() => void imprimirAvulso(r.id, "orcamento")}
+                          >
+                            <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
+                            {imprimindoId === r.id && imprimindoTipo === "orcamento"
+                              ? "…"
+                              : "Orçamento"}
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            title="Imprimir ordem de carregamento"
+                            disabled={imprimindoId === r.id}
+                            onClick={() => void imprimirAvulso(r.id, "carregamento")}
+                          >
+                            <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
+                            {imprimindoId === r.id &&
+                            imprimindoTipo === "carregamento"
+                              ? "…"
+                              : "Carregamento"}
+                          </button>
+                        </div>
                       ) : (
-                        <span className="text-gray-400 text-xs">—</span>
+                        <Link
+                          href={`/vendas/${r.vendaId}`}
+                          className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          title="O.S. e ordem de carregamento ficam na venda"
+                        >
+                          Abrir venda
+                        </Link>
                       )}
                     </td>
                   </tr>
