@@ -11,6 +11,7 @@ const TIPO_LABEL = {
   CHEQUE_EXCLUIDO: "Cheque excluído",
   CHEQUE_STATUS_ALTERADO: "Status do cheque",
   FRETE_ALTERADO: "Frete alterado",
+  FRETE_EXCLUIDO: "Frete excluído",
   FRETE_AVULSO_CRIADO: "Frete avulso criado",
   FRETE_VALE_AVULSO_CRIADO: "Vale de frete avulso criado",
   FRETE_VALE_CRIADO: "Vale de frete criado",

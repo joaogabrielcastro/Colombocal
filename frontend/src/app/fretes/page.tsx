@@ -18,6 +18,7 @@ import {
 } from "@/lib/frete-avulso-print";
 import { PrinterIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type FreteListRow = FreteMovimento & {
   cliente: {
@@ -45,6 +46,8 @@ function FretesContent() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [imprimindoId, setImprimindoId] = useState<number | null>(null);
+  const [toDelete, setToDelete] = useState<FreteListRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
@@ -99,7 +102,27 @@ function FretesContent() {
     }
   };
 
+  const confirmarExclusao = async () => {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/fretes/${toDelete.id}`);
+      toast.success("Frete excluído");
+      setToDelete(null);
+      void carregar();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível excluir o frete" });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const actionBtn =
+    "inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50";
+  const actionBtnDanger =
+    "inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50";
 
   return (
     <div className="p-6 w-full max-w-[90rem] mx-auto">
@@ -251,26 +274,60 @@ function FretesContent() {
                       </span>
                     </td>
                     <td className="table-cell text-right">
-                      {!r.vendaId ? (
+                      <div className="inline-flex flex-wrap justify-end gap-1.5">
+                        {!r.vendaId ? (
+                          <button
+                            type="button"
+                            className={actionBtn}
+                            title="Reimprimir orçamento de frete"
+                            disabled={imprimindoId === r.id}
+                            onClick={() => void reimprimirOrcamento(r.id)}
+                          >
+                            <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
+                            {imprimindoId === r.id ? "…" : "Orçamento"}
+                          </button>
+                        ) : (
+                          <Link
+                            href={`/vendas/${r.vendaId}`}
+                            className={actionBtn}
+                            title="Abrir venda"
+                          >
+                            Abrir venda
+                          </Link>
+                        )}
+                        <Link
+                          href={
+                            r.vendaId
+                              ? `/vendas/${r.vendaId}`
+                              : `/fretes/${r.id}/editar`
+                          }
+                          className={actionBtn}
+                          title="Editar"
+                        >
+                          Editar
+                        </Link>
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          title="Reimprimir orçamento de frete"
-                          disabled={imprimindoId === r.id}
-                          onClick={() => void reimprimirOrcamento(r.id)}
+                          className={actionBtnDanger}
+                          title={
+                            r.vendaId
+                              ? "Frete de venda: cancele pela venda"
+                              : "Excluir frete"
+                          }
+                          disabled={!!r.vendaId}
+                          onClick={() => {
+                            if (r.vendaId) {
+                              toast.message(
+                                "Frete de venda: edite ou cancele pela tela da venda",
+                              );
+                              return;
+                            }
+                            setToDelete(r);
+                          }}
                         >
-                          <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
-                          {imprimindoId === r.id ? "…" : "Orçamento"}
+                          Excluir
                         </button>
-                      ) : (
-                        <Link
-                          href={`/vendas/${r.vendaId}`}
-                          className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                          title="Abrir venda"
-                        >
-                          Abrir venda
-                        </Link>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -303,6 +360,24 @@ function FretesContent() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Excluir frete avulso?"
+        description={
+          toDelete
+            ? `Frete de ${
+                toDelete.cliente.nomeFantasia?.trim() ||
+                toDelete.cliente.razaoSocial
+              } (${formatMoney(toDelete.valor)}). Títulos e pagamentos ligados a este frete também serão removidos.`
+            : ""
+        }
+        confirmText={deleting ? "Excluindo…" : "Excluir"}
+        tone="danger"
+        busy={deleting}
+        onConfirm={() => void confirmarExclusao()}
+        onCancel={() => setToDelete(null)}
+      />
     </div>
   );
 }

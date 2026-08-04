@@ -47,7 +47,7 @@ function normalizarItens(itensRaw) {
 // GET /api/ordens-carregamento
 router.get("/", async (req, res) => {
   try {
-    const { cliente, dataInicio, dataFim } = req.query;
+    const { cliente, pedido, numeroOc, dataInicio, dataFim } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: 50,
       maxTake: 200,
@@ -56,6 +56,13 @@ router.get("/", async (req, res) => {
     if (cliente && String(cliente).trim()) {
       const term = String(cliente).trim();
       where.clienteNome = { contains: term, mode: "insensitive" };
+    }
+    if (pedido && String(pedido).trim()) {
+      where.pedido = { contains: String(pedido).trim(), mode: "insensitive" };
+    }
+    if (numeroOc != null && String(numeroOc).trim()) {
+      const n = parseInt(String(numeroOc).replace(/\D/g, ""), 10);
+      if (Number.isFinite(n) && n > 0) where.numeroOc = n;
     }
     if (dataInicio || dataFim) {
       where.dataEmissao = {};
@@ -233,6 +240,127 @@ router.post("/", async (req, res) => {
     });
 
     res.status(201).json(ordem);
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+// PUT /api/ordens-carregamento/:id
+router.put("/:id", async (req, res) => {
+  try {
+    const id = parseIntField(req.params.id, "id", { min: 1 });
+    const tenantId = req.tenantId;
+    const existing = await prisma.ordemCarregamento.findFirst({
+      where: { id, tenantId },
+    });
+    if (!existing) return res.status(404).json({ error: "Ordem não encontrada" });
+
+    const body = req.body || {};
+    const clienteNome = strOrNull(body.clienteNome) || existing.clienteNome;
+    const clienteEndereco =
+      body.clienteEndereco !== undefined
+        ? strOrNull(body.clienteEndereco)
+        : existing.clienteEndereco;
+    const clienteCidade =
+      body.clienteCidade !== undefined
+        ? strOrNull(body.clienteCidade)
+        : existing.clienteCidade;
+    const clienteUf =
+      body.clienteUf !== undefined ? strOrNull(body.clienteUf) : existing.clienteUf;
+    let clienteId =
+      body.clienteId != null ? parseInt(body.clienteId, 10) : existing.clienteId;
+    let motoristaId =
+      body.motoristaId != null
+        ? parseInt(body.motoristaId, 10)
+        : existing.motoristaId;
+    const motoristaNome =
+      body.motoristaNome !== undefined
+        ? strOrNull(body.motoristaNome)
+        : existing.motoristaNome;
+    const motoristaPlaca =
+      body.motoristaPlaca !== undefined
+        ? strOrNull(body.motoristaPlaca)
+        : existing.motoristaPlaca;
+    const motoristaCidade =
+      body.motoristaCidade !== undefined
+        ? strOrNull(body.motoristaCidade)
+        : existing.motoristaCidade;
+    const motoristaUf =
+      body.motoristaUf !== undefined
+        ? strOrNull(body.motoristaUf)
+        : existing.motoristaUf;
+    const doct =
+      body.doct !== undefined ? strOrNull(body.doct) : existing.doct;
+    const pedido =
+      body.pedido !== undefined ? strOrNull(body.pedido) : existing.pedido;
+    const observacoes =
+      body.observacoes !== undefined
+        ? strOrNull(body.observacoes)
+        : existing.observacoes;
+    const dataEmissao = body.dataEmissao
+      ? new Date(body.dataEmissao)
+      : existing.dataEmissao;
+
+    if (!clienteNome) {
+      return res.status(400).json({ error: "Informe o nome do cliente" });
+    }
+
+    const itensNorm =
+      body.itens !== undefined ? normalizarItens(body.itens) : null;
+
+    if (Number.isFinite(clienteId) && clienteId > 0) {
+      const c = await prisma.cliente.findFirst({
+        where: { id: clienteId, tenantId },
+      });
+      if (!c) return res.status(404).json({ error: "Cliente não encontrado" });
+    } else {
+      clienteId = null;
+    }
+
+    if (Number.isFinite(motoristaId) && motoristaId > 0) {
+      const m = await prisma.motorista.findFirst({
+        where: { id: motoristaId, tenantId },
+      });
+      if (!m) return res.status(404).json({ error: "Motorista não encontrado" });
+    } else {
+      motoristaId = null;
+    }
+
+    const ordem = await prisma.$transaction(async (tx) => {
+      if (itensNorm) {
+        await tx.ordemCarregamentoItem.deleteMany({ where: { ordemId: id } });
+        await tx.ordemCarregamentoItem.createMany({
+          data: itensNorm.map((i) => ({
+            ordemId: id,
+            descricao: i.descricao,
+            quantidade: i.quantidade,
+            unidade: i.unidade,
+          })),
+        });
+      }
+      return tx.ordemCarregamento.update({
+        where: { id },
+        data: {
+          dataEmissao,
+          doct,
+          pedido,
+          clienteId,
+          clienteNome,
+          clienteEndereco,
+          clienteCidade,
+          clienteUf,
+          motoristaId,
+          motoristaNome,
+          motoristaPlaca,
+          motoristaCidade,
+          motoristaUf,
+          observacoes,
+        },
+        include: { itens: true },
+      });
+    });
+
+    res.json(ordem);
   } catch (e) {
     handleRouteError(res, e);
   }
