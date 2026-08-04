@@ -23,6 +23,7 @@ export type NavPermissionKey =
   | 'financeiro'
   | 'cheques'
   | 'fretes'
+  | 'carregamento'
   | 'motoristas'
   | 'vendedores'
   | 'rel_vendas'
@@ -65,6 +66,7 @@ export const NAV_PERMISSION_OPTIONS: { key: NavPermissionKey; label: string; gro
   { key: 'vendas', label: 'Vendas', group: 'Principal' },
   { key: 'financeiro', label: 'Financeiro', group: 'Principal' },
   { key: 'fretes', label: 'Fretes', group: 'Avançado' },
+  { key: 'carregamento', label: 'Carregamento', group: 'Avançado' },
   { key: 'motoristas', label: 'Motoristas', group: 'Avançado' },
   { key: 'vendedores', label: 'Vendedores', group: 'Avançado' },
   { key: 'rel_vendas', label: 'Relatório de Vendas', group: 'Relatórios' },
@@ -84,6 +86,13 @@ export const MAIN_NAV: MainNavItem[] = [
   { href: '/vendas', label: 'Vendas', icon: ShoppingCartIcon, navKey: 'vendas' },
   { href: '/financeiro', label: 'Financeiro', icon: BanknotesIcon, navKey: 'financeiro' },
   { href: '/fretes', label: 'Fretes', icon: TruckIcon, navKey: 'fretes', advancedOnly: true },
+  {
+    href: '/carregamento',
+    label: 'Carregamento',
+    icon: ClipboardDocumentListIcon,
+    navKey: 'carregamento',
+    advancedOnly: true,
+  },
   {
     href: '/motoristas',
     label: 'Motoristas',
@@ -140,7 +149,9 @@ export function filterMainNavForSidebar(
   let out = items;
   if (hideAdvanced) out = out.filter((i) => !i.advancedOnly);
   if (options?.isAdmin !== true) out = out.filter((i) => !i.adminOnly);
-  if (options?.freteEnabled === false) out = out.filter((i) => i.navKey !== 'fretes');
+  if (options?.freteEnabled === false) {
+    out = out.filter((i) => i.navKey !== 'fretes' && i.navKey !== 'carregamento');
+  }
   out = out.filter((i) =>
     canAccessNavKey(i.navKey, {
       isAdmin: options?.isAdmin,

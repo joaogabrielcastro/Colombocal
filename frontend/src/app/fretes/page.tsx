@@ -14,7 +14,6 @@ import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import {
   openFreteAvulsoPrint,
-  openFreteAvulsoCarregamentoPrint,
   type FreteAvulsoImpressao,
 } from "@/lib/frete-avulso-print";
 import { PrinterIcon } from "@heroicons/react/24/outline";
@@ -46,9 +45,6 @@ function FretesContent() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [imprimindoId, setImprimindoId] = useState<number | null>(null);
-  const [imprimindoTipo, setImprimindoTipo] = useState<"orcamento" | "carregamento" | null>(
-    null,
-  );
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
@@ -90,31 +86,16 @@ function FretesContent() {
     carregar();
   }, [page, reciboEmitido, vendaFiltro, clienteFiltro]);
 
-  const imprimirAvulso = async (
-    id: number,
-    tipo: "orcamento" | "carregamento",
-  ) => {
+  const reimprimirOrcamento = async (id: number) => {
     setImprimindoId(id);
-    setImprimindoTipo(tipo);
     try {
       const resumo = await api.get<FreteAvulsoImpressao>(`/fretes/${id}/impressao`);
-      if (tipo === "carregamento") openFreteAvulsoCarregamentoPrint(resumo);
-      else openFreteAvulsoPrint(resumo);
-      toast.success(
-        tipo === "carregamento"
-          ? "Abrindo ordem de carregamento"
-          : "Abrindo impressão",
-      );
+      openFreteAvulsoPrint(resumo);
+      toast.success("Abrindo impressão");
     } catch (e) {
-      reportApiError(e, {
-        title:
-          tipo === "carregamento"
-            ? "Não foi possível imprimir o carregamento"
-            : "Não foi possível reimprimir o frete",
-      });
+      reportApiError(e, { title: "Não foi possível reimprimir o frete" });
     } finally {
       setImprimindoId(null);
-      setImprimindoTipo(null);
     }
   };
 
@@ -126,8 +107,8 @@ function FretesContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Histórico de fretes</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Avulso: imprima orçamento ou carregamento aqui. Frete da venda: use
-            Abrir venda.
+            Orçamento e pagamento de frete. A ordem de carregamento (pátio) fica
+            em Carregamento.
           </p>
         </div>
       </div>
@@ -226,7 +207,7 @@ function FretesContent() {
                   <th className="table-header w-24 bg-slate-50">Ordem</th>
                   <th className="table-header text-right">Valor</th>
                   <th className="table-header">Frete pago</th>
-                  <th className="table-header text-right min-w-[11rem]">Ações</th>
+                  <th className="table-header text-right min-w-[9rem]">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -271,38 +252,21 @@ function FretesContent() {
                     </td>
                     <td className="table-cell text-right">
                       {!r.vendaId ? (
-                        <div className="inline-flex flex-wrap justify-end gap-1.5">
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                            title="Reimprimir orçamento de frete"
-                            disabled={imprimindoId === r.id}
-                            onClick={() => void imprimirAvulso(r.id, "orcamento")}
-                          >
-                            <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
-                            {imprimindoId === r.id && imprimindoTipo === "orcamento"
-                              ? "…"
-                              : "Orçamento"}
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                            title="Imprimir ordem de carregamento"
-                            disabled={imprimindoId === r.id}
-                            onClick={() => void imprimirAvulso(r.id, "carregamento")}
-                          >
-                            <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
-                            {imprimindoId === r.id &&
-                            imprimindoTipo === "carregamento"
-                              ? "…"
-                              : "Carregamento"}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          title="Reimprimir orçamento de frete"
+                          disabled={imprimindoId === r.id}
+                          onClick={() => void reimprimirOrcamento(r.id)}
+                        >
+                          <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
+                          {imprimindoId === r.id ? "…" : "Orçamento"}
+                        </button>
                       ) : (
                         <Link
                           href={`/vendas/${r.vendaId}`}
                           className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                          title="O.S. e ordem de carregamento ficam na venda"
+                          title="Abrir venda"
                         >
                           Abrir venda
                         </Link>

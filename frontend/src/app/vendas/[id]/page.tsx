@@ -17,7 +17,8 @@ import {
   toInputDate,
   type Venda,
 } from "@/lib/utils";
-import { freteLinha, quantidadeEmSacos } from "@/lib/frete";
+import { freteLinha } from "@/lib/frete";
+import { openOrdemCarregamentoPrint } from "@/lib/ordem-carregamento-print";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -46,6 +47,7 @@ export default function VendaDetailPage() {
     id: number;
     label: string;
   } | null>(null);
+  const [gerandoOc, setGerandoOc] = useState(false);
 
   const carregar = () => api.get<Venda>(`/vendas/${id}`).then(setVenda);
 
@@ -348,140 +350,40 @@ export default function VendaDetailPage() {
     w.print();
   };
 
-  const imprimirOrdemCarregamento = () => {
+  const gerarOrdemCarregamento = async () => {
     if (!venda) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    const numPub = vendaOrdemTexto(venda);
-
-    const clienteNome = venda.cliente.nomeFantasia || venda.cliente.razaoSocial;
-    const enderecoCliente = [
-      venda.cliente.endereco,
-      venda.cliente.cidade,
-      venda.cliente.estado,
-    ]
-      .filter(Boolean)
-      .join(" - ");
-
-    let totalSacos = 0;
-    const itensRows = venda.itens
-      .map((item) => {
-        const sacos = quantidadeEmSacos({
-          quantidade: item.quantidade,
-          unidade: item.produto.unidade,
-          pesoKg: item.produto.pesoKg,
-        });
-        totalSacos += sacos;
-        const qtdTxt = `${sacos.toLocaleString("pt-BR", {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 3,
-        })} saco`;
-        return `
-        <tr>
-          <td>${escapeHtml(item.produto.nome)}</td>
-          <td style="text-align:right">${escapeHtml(qtdTxt)}</td>
-        </tr>`;
-      })
-      .join("");
-
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Ordem de Carregamento - Venda ${numPub}</title>
-  <style>
-    * { box-sizing: border-box; }
-    @page { size: A4; margin: 6mm; }
-    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 4px 6px; font-size: 11px; }
-    .sheet { max-height: 13.8cm; overflow: hidden; }
-    h1 { margin:0; font-size: 14px; font-weight: 700; line-height: 1.15; }
-    .meta { margin-top: 1px; color:#4b5563; font-size: 10px; }
-    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 5px; }
-    .box { border:1px solid #d1d5db; border-radius: 3px; padding: 3px 5px; }
-    .box-full { grid-column: 1 / -1; }
-    .label { color:#6b7280; font-size: 8px; text-transform: uppercase; font-weight: 700; line-height: 1.15; }
-    .value { margin-top: 1px; font-size: 11px; line-height: 1.2; font-weight: 600; }
-    table { width:100%; border-collapse: collapse; margin-top: 5px; }
-    th, td { border:1px solid #d1d5db; padding: 2px 4px; font-size: 10px; }
-    th { background:#f3f4f6; text-align:left; font-size: 9px; text-transform: uppercase; }
-    .totais { margin-top: 5px; padding: 3px 5px; border:1px solid #d1d5db; border-radius: 3px; font-size: 10px; line-height: 1.25; }
-    .totais strong { font-weight: 700; }
-    .obs { margin-top: 5px; border:1px dashed #d1d5db; border-radius: 3px; padding: 3px 5px; min-height: 18px; font-size: 10px; }
-    .assinatura { margin-top: 10px; }
-    .linha { border-top:1px solid #9ca3af; padding-top: 3px; text-align:center; font-size: 9px; color:#374151; max-width: 220px; margin: 0 auto; }
-    @media print {
-      body { padding: 0; }
-      .sheet { max-height: 13.8cm; page-break-inside: avoid; }
+    setGerandoOc(true);
+    try {
+      const ordem = await api.post<{
+        id: number;
+        numeroOc: number;
+        dataEmissao: string;
+        doct?: string | null;
+        pedido?: string | null;
+        clienteNome: string;
+        clienteEndereco?: string | null;
+        clienteCidade?: string | null;
+        clienteUf?: string | null;
+        motoristaNome?: string | null;
+        motoristaPlaca?: string | null;
+        motoristaCidade?: string | null;
+        motoristaUf?: string | null;
+        observacoes?: string | null;
+        itens: {
+          descricao: string;
+          quantidade: number | string;
+          unidade?: string | null;
+        }[];
+      }>("/ordens-carregamento", { vendaId: venda.id });
+      toast.success(
+        `OC ${String(ordem.numeroOc).padStart(6, "0")} gerada`,
+      );
+      openOrdemCarregamentoPrint(ordem);
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível gerar a OC" });
+    } finally {
+      setGerandoOc(false);
     }
-  </style>
-</head>
-<body>
-  <div class="sheet">
-    <h1>Ordem de Carregamento</h1>
-    <div class="meta">Venda ${numPub} • Data ${formatDate(venda.dataVenda)}</div>
-
-    <div class="grid">
-      <div class="box">
-        <div class="label">Cliente</div>
-        <div class="value">${escapeHtml(clienteNome)}</div>
-      </div>
-      <div class="box">
-        <div class="label">Motorista</div>
-        <div class="value">${escapeHtml(venda.motorista?.nome || "-")}</div>
-      </div>
-      <div class="box">
-        <div class="label">Telefone</div>
-        <div class="value">${escapeHtml(venda.cliente.telefone || "-")}</div>
-      </div>
-      <div class="box">
-        <div class="label">Veículo / Placa</div>
-        <div class="value">${escapeHtml(
-          [venda.motorista?.veiculo, venda.motorista?.placa].filter(Boolean).join(" - ") || "-",
-        )}</div>
-      </div>
-      <div class="box box-full">
-        <div class="label">Endereço / Local</div>
-        <div class="value">${escapeHtml(enderecoCliente || "-")}</div>
-      </div>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Produto</th>
-          <th style="text-align:right">Qtd (sacos)</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itensRows}
-      </tbody>
-    </table>
-
-    <div class="totais">
-      <div>Total sacos: <strong>${escapeHtml(
-        totalSacos.toLocaleString("pt-BR", {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 3,
-        }),
-      )}</strong></div>
-    </div>
-
-    <div class="obs">
-      <div class="label">Observações</div>
-      <div style="margin-top:2px;">${escapeHtml(venda.observacoes || "Sem observações.")}</div>
-    </div>
-
-    <div class="assinatura">
-      <div class="linha">Conferido / Carregado por</div>
-    </div>
-  </div>
-</body>
-</html>`;
-
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    w.print();
   };
 
   if (loading) return <DetailPageSkeleton />;
@@ -555,10 +457,16 @@ export default function VendaDetailPage() {
             <PrinterIcon className="w-4 h-4" />
             Imprimir O.S.
           </button>
-          <button onClick={imprimirOrdemCarregamento} className="btn-secondary">
-            <PrinterIcon className="w-4 h-4" />
-            Imprimir carregamento
-          </button>
+          {freteEnabled ? (
+            <button
+              onClick={() => void gerarOrdemCarregamento()}
+              className="btn-secondary"
+              disabled={gerandoOc}
+            >
+              <PrinterIcon className="w-4 h-4" />
+              {gerandoOc ? "Gerando OC…" : "Gerar OC"}
+            </button>
+          ) : null}
           {venda.podeEditar ? (
             <Link href={`/vendas/${id}/editar`} className="btn-secondary">
               <PencilIcon className="w-4 h-4" />

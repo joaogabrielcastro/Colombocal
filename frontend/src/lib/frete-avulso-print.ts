@@ -1,7 +1,5 @@
 /** HTML de impressão do frete avulso (meia folha, layout limpo). */
 
-import { quantidadeEmSacos } from "@/lib/frete";
-
 export type FreteAvulsoImpressaoItem = {
   produtoId?: number;
   produtoNome?: string;
@@ -53,12 +51,6 @@ function dataLonga(v: unknown): string {
   });
 }
 
-function dataCurta(v: unknown): string {
-  const d = v ? new Date(v as string | Date) : new Date();
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("pt-BR");
-}
-
 function numOrdem(id: number): string {
   return String(id).padStart(6, "0");
 }
@@ -69,13 +61,6 @@ function qtdLabel(qtd: unknown, unidade?: string | null): string {
     ? n.toLocaleString("pt-BR", { maximumFractionDigits: 3 })
     : String(qtd ?? "");
   return unidade ? `${q} ${unidade}` : q;
-}
-
-function sacosLabel(n: number): string {
-  return `${n.toLocaleString("pt-BR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 3,
-  })} saco`;
 }
 
 export function buildFreteAvulsoPrintHtml(resumo: FreteAvulsoImpressao): string {
@@ -273,146 +258,11 @@ export function buildFreteAvulsoPrintHtml(resumo: FreteAvulsoImpressao): string 
 </html>`;
 }
 
-/** Ordem de carregamento do frete avulso — sempre em sacos, sem preços. */
-export function buildFreteAvulsoCarregamentoHtml(
-  resumo: FreteAvulsoImpressao,
-): string {
-  const itens = Array.isArray(resumo.itens) ? resumo.itens : [];
-  let totalSacos = 0;
-  const rows =
-    itens.length > 0
-      ? itens
-          .map((i) => {
-            const sacos = quantidadeEmSacos({
-              quantidade: i.quantidade ?? 0,
-              unidade: i.unidade,
-              pesoKg: i.pesoKg,
-            });
-            totalSacos += sacos;
-            return `<tr>
-              <td>${esc(i.produtoNome || "-")}</td>
-              <td style="text-align:right">${esc(sacosLabel(sacos))}</td>
-            </tr>`;
-          })
-          .join("")
-      : `<tr><td colspan="2" style="text-align:center;color:#9ca3af">Nenhum item neste frete</td></tr>`;
-
-  const endereco =
-    resumo.clienteEndereco ||
-    [resumo.clienteCidade, resumo.clienteEstado].filter(Boolean).join(" - ") ||
-    "-";
-  const veiculo =
-    [resumo.motoristaVeiculo, resumo.motoristaPlaca].filter(Boolean).join(" - ") ||
-    "-";
-  const obs = String(resumo.observacao || "").trim() || "Sem observações.";
-  const num = numOrdem(resumo.freteId);
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Ordem de Carregamento - Frete #${esc(num)}</title>
-  <style>
-    * { box-sizing: border-box; }
-    @page { size: A4; margin: 6mm; }
-    body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 4px 6px; font-size: 11px; }
-    .sheet { max-height: 13.8cm; overflow: hidden; }
-    h1 { margin:0; font-size: 14px; font-weight: 700; line-height: 1.15; }
-    .meta { margin-top: 1px; color:#4b5563; font-size: 10px; }
-    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 5px; }
-    .box { border:1px solid #d1d5db; border-radius: 3px; padding: 3px 5px; }
-    .box-full { grid-column: 1 / -1; }
-    .label { color:#6b7280; font-size: 8px; text-transform: uppercase; font-weight: 700; line-height: 1.15; }
-    .value { margin-top: 1px; font-size: 11px; line-height: 1.2; font-weight: 600; }
-    table { width:100%; border-collapse: collapse; margin-top: 5px; }
-    th, td { border:1px solid #d1d5db; padding: 2px 4px; font-size: 10px; }
-    th { background:#f3f4f6; text-align:left; font-size: 9px; text-transform: uppercase; }
-    .totais { margin-top: 5px; padding: 3px 5px; border:1px solid #d1d5db; border-radius: 3px; font-size: 10px; line-height: 1.25; }
-    .totais strong { font-weight: 700; }
-    .obs { margin-top: 5px; border:1px dashed #d1d5db; border-radius: 3px; padding: 3px 5px; min-height: 18px; font-size: 10px; }
-    .assinatura { margin-top: 10px; }
-    .linha { border-top:1px solid #9ca3af; padding-top: 3px; text-align:center; font-size: 9px; color:#374151; max-width: 220px; margin: 0 auto; }
-    @media print {
-      body { padding: 0; }
-      .sheet { max-height: 13.8cm; page-break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
-  <div class="sheet">
-    <h1>Ordem de Carregamento</h1>
-    <div class="meta">Frete avulso #${esc(num)} • Data ${esc(dataCurta(resumo.data))}</div>
-
-    <div class="grid">
-      <div class="box">
-        <div class="label">Cliente</div>
-        <div class="value">${esc(resumo.cliente)}</div>
-      </div>
-      <div class="box">
-        <div class="label">Motorista</div>
-        <div class="value">${esc(resumo.motorista || "-")}</div>
-      </div>
-      <div class="box">
-        <div class="label">Telefone</div>
-        <div class="value">${esc(resumo.clienteTelefone || "-")}</div>
-      </div>
-      <div class="box">
-        <div class="label">Veículo / Placa</div>
-        <div class="value">${esc(veiculo)}</div>
-      </div>
-      <div class="box box-full">
-        <div class="label">Endereço / Local</div>
-        <div class="value">${esc(endereco)}</div>
-      </div>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Produto</th>
-          <th style="text-align:right">Qtd (sacos)</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-
-    <div class="totais">
-      <div>Total sacos: <strong>${esc(
-        totalSacos.toLocaleString("pt-BR", {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 3,
-        }),
-      )}</strong></div>
-    </div>
-
-    <div class="obs">
-      <div class="label">Observações</div>
-      <div style="margin-top:2px;">${esc(obs)}</div>
-    </div>
-
-    <div class="assinatura">
-      <div class="linha">Conferido / Carregado por</div>
-    </div>
-  </div>
-</body>
-</html>`;
-}
-
-function openHtml(html: string): void {
+export function openFreteAvulsoPrint(resumo: FreteAvulsoImpressao): void {
   const w = window.open("", "_blank");
   if (!w) return;
-  w.document.write(html);
+  w.document.write(buildFreteAvulsoPrintHtml(resumo));
   w.document.close();
   w.focus();
   w.print();
-}
-
-export function openFreteAvulsoPrint(resumo: FreteAvulsoImpressao): void {
-  openHtml(buildFreteAvulsoPrintHtml(resumo));
-}
-
-export function openFreteAvulsoCarregamentoPrint(
-  resumo: FreteAvulsoImpressao,
-): void {
-  openHtml(buildFreteAvulsoCarregamentoHtml(resumo));
 }

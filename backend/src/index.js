@@ -142,6 +142,12 @@ app.use("/api/motoristas", requireTenantUser, requireNavKey("motoristas"), requi
 app.use("/api/vendedores", requireTenantUser, requireNavKey("vendedores"), require("./routes/vendedores"));
 app.use("/api/vendas", requireTenantUser, requireNavKey("vendas"), require("./routes/vendas"));
 app.use("/api/fretes", requireTenantUser, requireNavKey("fretes"), require("./routes/fretes"));
+app.use(
+  "/api/ordens-carregamento",
+  requireTenantUser,
+  requireNavKey("carregamento"),
+  require("./routes/ordens-carregamento"),
+);
 app.use("/api/config", requireTenantUser, require("./routes/config"));
 app.use("/api/users", requireTenantUser, requireAdmin, require("./routes/users"));
 app.use("/api/auditoria", requireTenantUser, require("./routes/auditoria"));

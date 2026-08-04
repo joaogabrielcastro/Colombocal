@@ -50,6 +50,51 @@ async function ensureDatabaseCompat() {
     ADD COLUMN IF NOT EXISTS "pesoKg" DECIMAL(10,3)
   `);
 
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "OrdemCarregamento" (
+      "id" SERIAL PRIMARY KEY,
+      "tenantId" INTEGER NOT NULL,
+      "numeroOc" INTEGER NOT NULL,
+      "dataEmissao" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "doct" TEXT,
+      "pedido" TEXT,
+      "vendaId" INTEGER,
+      "clienteId" INTEGER,
+      "clienteNome" TEXT NOT NULL,
+      "clienteEndereco" TEXT,
+      "clienteCidade" TEXT,
+      "clienteUf" TEXT,
+      "motoristaId" INTEGER,
+      "motoristaNome" TEXT,
+      "motoristaPlaca" TEXT,
+      "motoristaCidade" TEXT,
+      "motoristaUf" TEXT,
+      "observacoes" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "OrdemCarregamento_tenantId_numeroOc_key"
+      ON "OrdemCarregamento"("tenantId", "numeroOc")
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "OrdemCarregamento_tenantId_dataEmissao_idx"
+      ON "OrdemCarregamento"("tenantId", "dataEmissao")
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "OrdemCarregamentoItem" (
+      "id" SERIAL PRIMARY KEY,
+      "ordemId" INTEGER NOT NULL,
+      "descricao" TEXT NOT NULL,
+      "quantidade" DECIMAL(12,3) NOT NULL,
+      "unidade" TEXT NOT NULL DEFAULT 'SAC'
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "OrdemCarregamentoItem_ordemId_idx"
+      ON "OrdemCarregamentoItem"("ordemId")
+  `);
+
   // Cheque.numeroOrdem é único por tenant — remove índice global legado se existir
   await prisma.$executeRawUnsafe(`
     DROP INDEX IF EXISTS "Cheque_numeroOrdem_key"

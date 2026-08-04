@@ -30,6 +30,7 @@ model Tenant {
   configs         ConfigSistema[]
   eventos         FinanceiroEvento[]
   comissaoAjustes ComissaoAjusteVenda[]
+  ordensCarregamento OrdemCarregamento[]
 }
 
 model User {
@@ -82,6 +83,7 @@ model Cliente {
   pagamentos      Pagamento[]
   titulos         TituloReceber[]
   fretes          FreteMovimento[]
+  ordensCarregamento OrdemCarregamento[]
 
   @@unique([tenantId, cnpj])
   @@unique([tenantId, cpf])
@@ -150,6 +152,7 @@ model Motorista {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vendas Venda[]
+  ordensCarregamento OrdemCarregamento[]
 
   @@index([tenantId])
 }
@@ -203,6 +206,7 @@ model Venda {
   titulos        TituloReceber[]
   fretes         FreteMovimento[]
   comissaoAjuste ComissaoAjusteVenda?
+  ordensCarregamento OrdemCarregamento[]
 
   @@unique([tenantId, numeroVenda])
   @@index([tenantId, clienteId, dataVenda])
@@ -358,6 +362,54 @@ model ComissaoAjusteVenda {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   venda  Venda  @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+}
+
+/// Ordem de carregamento (pátio) — sem valor financeiro, independente de frete.
+model OrdemCarregamento {
+  id               Int      @id @default(autoincrement())
+  tenantId         Int
+  /// Número OC exibido (reinicia por tenant).
+  numeroOc         Int
+  dataEmissao      DateTime @default(now())
+  /// Campo legado “Doct” (opcional).
+  doct             String?
+  /// Referência de pedido / nº venda (texto livre ou espelho).
+  pedido           String?
+  vendaId          Int?
+  clienteId        Int?
+  clienteNome      String
+  clienteEndereco  String?
+  clienteCidade    String?
+  clienteUf        String?
+  motoristaId      Int?
+  motoristaNome    String?
+  motoristaPlaca   String?
+  motoristaCidade  String?
+  motoristaUf      String?
+  observacoes      String?
+  createdAt        DateTime @default(now())
+
+  tenant    Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venda     Venda?                    @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  cliente   Cliente?                  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  motorista Motorista?                @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
+  itens     OrdemCarregamentoItem[]
+
+  @@unique([tenantId, numeroOc])
+  @@index([tenantId, dataEmissao])
+  @@index([tenantId, clienteId])
+}
+
+model OrdemCarregamentoItem {
+  id         Int     @id @default(autoincrement())
+  ordemId    Int
+  descricao  String
+  quantidade Decimal @db.Decimal(12, 3)
+  unidade    String  @default("SAC")
+
+  ordem OrdemCarregamento @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+
+  @@index([ordemId])
 }
 
 /// Eventos de auditoria (append-only). Ver política de retenção em `services/financeiroEventos.js`.

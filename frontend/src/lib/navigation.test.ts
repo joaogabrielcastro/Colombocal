@@ -39,6 +39,7 @@ describe("filterMainNavForSidebar", () => {
       "/vendas",
       "/financeiro",
       "/fretes",
+      "/carregamento",
       "/motoristas",
       "/vendedores",
       "/auditoria",
@@ -48,17 +49,20 @@ describe("filterMainNavForSidebar", () => {
   it("rótulo Financeiro (não Recebimentos)", () => {
     expect(MAIN_NAV.find((i) => i.navKey === "financeiro")?.label).toBe("Financeiro");
   });
-  it("esconde Fretes quando freteEnabled=false", () => {
+  it("esconde Fretes e Carregamento quando freteEnabled=false", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, false, {
       isAdmin: true,
       freteEnabled: false,
     });
     expect(out.some((i) => i.navKey === "fretes")).toBe(false);
+    expect(out.some((i) => i.navKey === "carregamento")).toBe(false);
   });
-  it("Fretes fica em Avançado quando hideAdvanced", () => {
+  it("Fretes e Carregamento ficam em Avançado quando hideAdvanced", () => {
     const main = filterMainNavForSidebar(MAIN_NAV, true, { isAdmin: true });
     expect(main.some((i) => i.navKey === "fretes")).toBe(false);
+    expect(main.some((i) => i.navKey === "carregamento")).toBe(false);
     expect(advancedMainNavItems(MAIN_NAV).some((i) => i.navKey === "fretes")).toBe(true);
+    expect(advancedMainNavItems(MAIN_NAV).some((i) => i.navKey === "carregamento")).toBe(true);
   });
   it("esconde itens adminOnly para não-admin", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, false, { isAdmin: false });

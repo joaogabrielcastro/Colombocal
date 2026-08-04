@@ -268,6 +268,7 @@ router.get("/", async (req, res) => {
     const where = { ...tw(req) };
     if (clienteId) where.clienteId = parseInt(clienteId, 10);
     if (vendaId) where.vendaId = parseInt(vendaId, 10);
+    if (req.query.avulso === "true") where.vendaId = null;
     if (reciboEmitido === "true") where.reciboEmitido = true;
     if (reciboEmitido === "false") where.reciboEmitido = false;
     if (cliente && String(cliente).trim()) {

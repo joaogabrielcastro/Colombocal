@@ -71,6 +71,25 @@ function calcularFreteAutomatico(itens, produtosPorId, fretePorSaco, fretePorTon
   }, 0);
 }
 
+/**
+ * Converte quantidade para sacos (ordem de carregamento).
+ * Aceita produto+quantidade ou campos soltos.
+ */
+function quantidadeEmSacos(params) {
+  const qtd = toNum(params.quantidade);
+  if (qtd <= 0) return 0;
+  const unidade = normalizarUnidade(params.unidade ?? params.produto?.unidade);
+  if (unidade === "saco") return qtd;
+  const pesoFromProduto = pesoKgProduto(params.produto);
+  const pesoSaco = (() => {
+    const p = toNum(params.pesoKg) || pesoFromProduto;
+    return p > 0 ? p : PESO_SACO_PADRAO_KG;
+  })();
+  if (unidade === "ton") return (qtd * 1000) / pesoSaco;
+  if (unidade === "kg") return qtd / pesoSaco;
+  return qtd;
+}
+
 module.exports = {
   toNum,
   pesoKgProduto,
@@ -78,5 +97,6 @@ module.exports = {
   freteUnitarioPorPeso,
   freteLinha,
   calcularFreteAutomatico,
+  quantidadeEmSacos,
   PESO_SACO_PADRAO_KG,
 };

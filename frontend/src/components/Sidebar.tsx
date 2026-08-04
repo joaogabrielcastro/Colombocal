@@ -91,7 +91,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
   });
   const advancedMain = advancedMainNavItems(MAIN_NAV).filter(
     (i) =>
-      (freteEnabled || i.navKey !== 'fretes') &&
+      (freteEnabled || (i.navKey !== 'fretes' && i.navKey !== 'carregamento')) &&
       (!i.adminOnly || isAdmin) &&
       !mainVisible.some((v) => v.href === i.href) &&
       filterMainNavForSidebar([i], false, { ...navOpts, freteEnabled }).length > 0,
