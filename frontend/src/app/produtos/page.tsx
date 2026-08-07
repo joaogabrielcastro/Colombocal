@@ -1,19 +1,22 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PlusIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { formatMoney, type Produto } from "@/lib/utils";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ListScaffold } from "@/components/ui/list-scaffold";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
 
 function ProdutosPageContent() {
   const searchParams = useSearchParams();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState("");
+  const [buscaInput, setBuscaInput] = useState("");
   const [editando, setEditando] = useState<null | Produto>(null);
   const [form, setForm] = useState<Partial<Produto>>({});
   const [salvando, setSalvando] = useState(false);
@@ -24,8 +27,10 @@ function ProdutosPageContent() {
 
   const carregar = () => {
     setLoading(true);
+    const params = new URLSearchParams({ ativo: "true" });
+    if (busca.trim()) params.set("busca", busca.trim());
     api
-      .get<Produto[]>("/produtos?ativo=true")
+      .get<Produto[]>(`/produtos?${params.toString()}`)
       .then(setProdutos)
       .catch((e) => {
         reportApiError(e, {
@@ -38,7 +43,8 @@ function ProdutosPageContent() {
   };
   useEffect(() => {
     carregar();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega quando a busca aplicada muda
+  }, [busca]);
 
   useEffect(() => {
     if (searchParams.get("novo") === "1") {
@@ -48,6 +54,8 @@ function ProdutosPageContent() {
       setErro("");
     }
   }, [searchParams]);
+
+  const handleBuscar = () => setBusca(buscaInput.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +118,7 @@ function ProdutosPageContent() {
     <>
       <ListScaffold
         title="Produtos"
-        subtitle={`${produtos.length} produtos • sem controle de estoque no cadastro`}
+        subtitle={`${produtos.length} produto${produtos.length === 1 ? "" : "s"}${busca ? " encontrados" : ""} • sem controle de estoque no cadastro`}
         actions={(
           <button
           onClick={() => {
@@ -125,6 +133,38 @@ function ProdutosPageContent() {
           Novo Produto
           </button>
         )}
+        filters={(
+          <FilterBar>
+            <div className="p-4 flex gap-2">
+              <div className="relative flex-1">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome ou código..."
+                  value={buscaInput}
+                  onChange={(e) => setBuscaInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
+                  className="input-field pl-9"
+                />
+              </div>
+              <button type="button" onClick={handleBuscar} className="btn-primary">
+                Buscar
+              </button>
+              {busca ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBuscaInput("");
+                    setBusca("");
+                  }}
+                  className="btn-secondary"
+                >
+                  Limpar
+                </button>
+              ) : null}
+            </div>
+          </FilterBar>
+        )}
         content={(
           <div className="card overflow-hidden">
             {loading ? (
@@ -134,20 +174,26 @@ function ProdutosPageContent() {
             ) : produtos.length === 0 ? (
               <div className="p-6">
                 <EmptyState
-                  title="Nenhum produto ativo"
-                  description="Cadastre produtos para usar nas vendas."
+                  title={busca ? "Nenhum produto encontrado" : "Nenhum produto ativo"}
+                  description={
+                    busca
+                      ? "Tente outro nome ou código, ou limpe a busca."
+                      : "Cadastre produtos para usar nas vendas."
+                  }
                   action={
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={() => {
-                        setMostrarForm(true);
-                        setEditando(null);
-                        setForm({ unidade: "ton" });
-                      }}
-                    >
-                      Novo produto
-                    </button>
+                    !busca ? (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => {
+                          setMostrarForm(true);
+                          setEditando(null);
+                          setForm({ unidade: "ton" });
+                        }}
+                      >
+                        Novo produto
+                      </button>
+                    ) : undefined
                   }
                 />
               </div>
