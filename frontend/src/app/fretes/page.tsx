@@ -125,7 +125,7 @@ function FretesContent() {
     "inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50";
 
   return (
-    <div className="p-6 w-full max-w-[90rem] mx-auto">
+    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Histórico de fretes</h1>

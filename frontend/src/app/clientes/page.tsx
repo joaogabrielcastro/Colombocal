@@ -101,7 +101,7 @@ export default function ClientesPage() {
         <div className="card overflow-hidden">
         {loading ? (
           <div className="p-4">
-            <TableListSkeleton rows={10} cols={6} />
+            <TableListSkeleton rows={10} cols={freteEnabled ? 6 : 5} />
           </div>
         ) : clientes.length === 0 ? (
           <div className="p-6">

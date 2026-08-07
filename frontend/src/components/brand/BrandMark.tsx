@@ -124,7 +124,8 @@ export function BrandWordmark({
       } ${className}`}
       style={{ fontFamily: "var(--font-brand, Inter, system-ui, sans-serif)" }}
     >
-      colombocal
+      colombo
+      <span className={light ? "text-[#E8B84A]" : "text-[#C1272D]"}>cal</span>
     </span>
   );
 }

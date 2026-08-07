@@ -63,7 +63,7 @@ export function TableListSkeleton({
   cols?: number;
 }) {
   return (
-    <div className="card overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-gray-100">
       <div className="flex gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
         {Array.from({ length: cols }).map((_, i) => (
           <SkeletonBox key={i} className="h-3 flex-1 max-w-[120px]" />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Cliente } from "@/lib/utils";
 import api from "@/lib/api";
@@ -14,10 +15,16 @@ export function useClientesListaQuery({
   page: number;
   pageSize: number;
 }) {
-  const tenantId = getAuthTenantId();
-  return useQuery({
+  // Evita hydration mismatch: no SSR não há tenant no storage → query disabled
+  // → isLoading=false → EmptyState; no cliente a query liga e isLoading=true.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const tenantId = mounted ? getAuthTenantId() : null;
+
+  const query = useQuery({
     queryKey: ["clientes", tenantId, { busca, page, pageSize }],
-    enabled: tenantId != null,
+    enabled: mounted && tenantId != null,
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",
@@ -31,4 +38,12 @@ export function useClientesListaQuery({
       return api.get<{ clientes: Cliente[]; total: number }>(`/clientes?${params}`);
     },
   });
+
+  const waitingTenant = mounted && tenantId != null && query.isPending;
+  const isLoading = !mounted || query.isLoading || waitingTenant;
+
+  return {
+    ...query,
+    isLoading,
+  };
 }

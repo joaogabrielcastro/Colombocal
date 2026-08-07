@@ -2,8 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Bars3Icon } from '@heroicons/react/24/outline';
-import Sidebar from '@/components/Sidebar';
+import TopNav from '@/components/TopNav';
 import BrandLogo from '@/components/BrandLogo';
 import { AUTH_SESSION_EVENT, getAuthTenantId, getAuthToken } from '@/lib/auth-token';
 
@@ -34,7 +33,6 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isCadastro = pathname === '/cadastro';
   const isPublicShell = isLogin || isSetup || isCadastro;
 
-  // Valores estáveis no 1º render (SSR = cliente) — token/tenant só após mount
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
   const [sessionKey, setSessionKey] = useState('boot');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -87,22 +85,13 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div key={sessionKey} className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="lg:hidden flex items-center gap-3 px-3 py-2.5 border-b border-gray-200 bg-white flex-shrink-0">
-          <button
-            type="button"
-            className="p-2 rounded-lg text-gray-700 hover:bg-gray-100"
-            aria-label="Abrir menu"
-            onClick={() => setMobileNavOpen(true)}
-          >
-            <Bars3Icon className="w-6 h-6" />
-          </button>
-          <BrandLogo variant="compact" />
-        </header>
-        <main className="flex-1 overflow-y-auto">{children}</main>
-      </div>
+    <div key={sessionKey} className="flex flex-col h-screen bg-gray-50">
+      <TopNav
+        mobileOpen={mobileNavOpen}
+        onOpenMobile={() => setMobileNavOpen(true)}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
+      <main className="flex-1 overflow-y-auto min-h-0">{children}</main>
     </div>
   );
 }
