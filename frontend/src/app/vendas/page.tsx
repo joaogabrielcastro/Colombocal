@@ -420,7 +420,7 @@ function VendasPageContent() {
                 ) : null}
                 <th className="table-header text-right whitespace-nowrap">Total</th>
                 <th className="table-header whitespace-nowrap">Status</th>
-                <th className="table-header text-right whitespace-nowrap min-w-[10rem]">Ações</th>
+                <th className="table-header text-right whitespace-nowrap min-w-[14rem]">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -484,21 +484,25 @@ function VendasPageContent() {
                     )}
                   </td>
                   <td className="table-cell text-right">
-                    <div className="inline-flex flex-wrap justify-end gap-x-2 gap-y-0.5 text-xs">
+                    <div className="inline-flex flex-nowrap items-center justify-end gap-x-2.5 text-xs whitespace-nowrap">
                       <Link
                         href={`/vendas/${v.id}`}
                         className="text-blue-600 hover:underline font-medium"
                       >
                         Ver
                       </Link>
-                      <span className="text-gray-300">·</span>
+                      <span className="text-gray-300" aria-hidden>
+                        ·
+                      </span>
                       <Link
                         href={`/vendas/nova?clienteId=${v.clienteId}`}
                         className="text-green-700 hover:underline"
                       >
                         Nova
                       </Link>
-                      <span className="text-gray-300">·</span>
+                      <span className="text-gray-300" aria-hidden>
+                        ·
+                      </span>
                       <Link
                         href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
                         className="text-gray-600 hover:underline"
