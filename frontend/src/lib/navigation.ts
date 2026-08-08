@@ -30,6 +30,9 @@ export type NavPermissionKey =
   | 'rel_financeiro'
   | 'rel_comissoes'
   | 'rel_titulos'
+  | 'rel_fretes'
+  | 'rel_carregamento'
+  | 'rel_motoristas'
   | 'auditoria';
 
 /** Migração: chaves legadas → canônicas. */
@@ -56,6 +59,8 @@ type ReportNavItem = {
   label: string;
   navKey: NavPermissionKey;
   advancedOnly?: boolean;
+  /** Só aparece quando o tenant tem frete/pátio. */
+  requiresFrete?: boolean;
 };
 
 /** Opções para o admin marcar por usuário (usuários = só admin, não listado). */
@@ -72,6 +77,9 @@ export const NAV_PERMISSION_OPTIONS: { key: NavPermissionKey; label: string; gro
   { key: 'rel_vendas', label: 'Relatório de Vendas', group: 'Relatórios' },
   { key: 'rel_financeiro', label: 'Contas a receber', group: 'Relatórios' },
   { key: 'rel_comissoes', label: 'Comissões', group: 'Relatórios' },
+  { key: 'rel_fretes', label: 'Relatório de Fretes', group: 'Relatórios' },
+  { key: 'rel_carregamento', label: 'Relatório de Carregamento', group: 'Relatórios' },
+  { key: 'rel_motoristas', label: 'Relatório de Motoristas', group: 'Relatórios' },
   { key: 'auditoria', label: 'Auditoria', group: 'Sistema' },
 ];
 
@@ -126,6 +134,24 @@ export const REPORT_NAV: ReportNavItem[] = [
   { href: '/relatorios/vendas', label: 'Relatório de Vendas', navKey: 'rel_vendas' },
   { href: '/relatorios/financeiro', label: 'Contas a receber', navKey: 'rel_financeiro' },
   { href: '/relatorios/comissoes', label: 'Comissões', navKey: 'rel_comissoes' },
+  {
+    href: '/relatorios/fretes',
+    label: 'Relatório de Fretes',
+    navKey: 'rel_fretes',
+    requiresFrete: true,
+  },
+  {
+    href: '/relatorios/carregamento',
+    label: 'Relatório de Carregamento',
+    navKey: 'rel_carregamento',
+    requiresFrete: true,
+  },
+  {
+    href: '/relatorios/motoristas',
+    label: 'Relatório de Motoristas',
+    navKey: 'rel_motoristas',
+    requiresFrete: true,
+  },
 ];
 
 export const CONFIG_NAV_HREF = '/configuracoes';
@@ -168,10 +194,13 @@ export function advancedMainNavItems(items: MainNavItem[]): MainNavItem[] {
 export function filterReportsForSidebar(
   items: ReportNavItem[],
   hideAdvanced: boolean,
-  options?: { isAdmin?: boolean; navPermissions?: string[] | null },
+  options?: { isAdmin?: boolean; navPermissions?: string[] | null; freteEnabled?: boolean },
 ): ReportNavItem[] {
   let out = items;
   if (hideAdvanced) out = out.filter((i) => !i.advancedOnly);
+  if (options?.freteEnabled === false) {
+    out = out.filter((i) => !i.requiresFrete);
+  }
   out = out.filter((i) =>
     canAccessNavKey(i.navKey, {
       isAdmin: options?.isAdmin,
@@ -188,7 +217,7 @@ export function advancedReportItems(items: ReportNavItem[]): ReportNavItem[] {
 /** Qualquer aba de relatório visível (para mostrar seção Relatórios). */
 export function hasVisibleReports(
   hideAdvanced: boolean,
-  options?: { isAdmin?: boolean; navPermissions?: string[] | null },
+  options?: { isAdmin?: boolean; navPermissions?: string[] | null; freteEnabled?: boolean },
 ): boolean {
   return filterReportsForSidebar(REPORT_NAV, hideAdvanced, options).length > 0;
 }

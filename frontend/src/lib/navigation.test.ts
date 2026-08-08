@@ -90,6 +90,13 @@ describe("REPORT_NAV Contas a receber unificado", () => {
     expect(REPORT_NAV.filter((i) => i.navKey === "rel_financeiro")).toHaveLength(1);
     expect(REPORT_NAV.some((i) => i.href.includes("/titulos"))).toBe(false);
   });
+  it("inclui fretes, carregamento e motoristas (com frete)", () => {
+    expect(REPORT_NAV.some((i) => i.navKey === "rel_fretes" && i.requiresFrete)).toBe(true);
+    expect(REPORT_NAV.some((i) => i.navKey === "rel_carregamento" && i.requiresFrete)).toBe(
+      true,
+    );
+    expect(REPORT_NAV.some((i) => i.navKey === "rel_motoristas" && i.requiresFrete)).toBe(true);
+  });
 });
 
 describe("canAccessNavKey alias rel_titulos", () => {
@@ -107,6 +114,14 @@ describe("filterReportsForSidebar / hasVisibleReports", () => {
   it("esconde relatórios avançados", () => {
     const out = filterReportsForSidebar(REPORT_NAV, true, { isAdmin: true });
     expect(out.some((i) => i.advancedOnly)).toBe(false);
+  });
+  it("esconde relatórios de frete quando freteEnabled=false", () => {
+    const out = filterReportsForSidebar(REPORT_NAV, false, {
+      isAdmin: true,
+      freteEnabled: false,
+    });
+    expect(out.some((i) => i.requiresFrete)).toBe(false);
+    expect(out.some((i) => i.navKey === "rel_vendas")).toBe(true);
   });
   it("hasVisibleReports true para admin", () => {
     expect(hasVisibleReports(false, { isAdmin: true })).toBe(true);

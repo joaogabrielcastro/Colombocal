@@ -213,7 +213,10 @@ export default function TopNav({
       : []),
   ].filter((l) => has(l.href) || l.href === '/');
 
-  const reports = filterReportsForSidebar(REPORT_NAV, false, navOpts);
+  const reports = filterReportsForSidebar(REPORT_NAV, false, {
+    ...navOpts,
+    freteEnabled,
+  });
   const showReports = reports.length > 0;
 
   const mais: NavLink[] = [

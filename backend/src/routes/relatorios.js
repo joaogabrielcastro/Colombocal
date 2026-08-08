@@ -16,6 +16,7 @@ const {
 } = require("../services/comissao");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { getDateRange } = require("../utils/dateRangeQuery");
+const { requestAllowsFrete } = require("../utils/tenantRequest");
 
 /** Limite de linhas de venda no relatório de comissões (UI + memória). */
 const COMISSOES_DEFAULT_TAKE = 500;
@@ -27,7 +28,21 @@ const relatorioNavByPrefix = [
   ["/financeiro", "rel_financeiro"],
   // Hub Contas a receber: visão por título usa a mesma permissão
   ["/titulos", "rel_financeiro"],
+  ["/fretes", "rel_fretes"],
+  ["/carregamento", "rel_carregamento"],
+  ["/motoristas", "rel_motoristas"],
 ];
+
+async function requireFreteRelatorio(req, res, next) {
+  try {
+    if (!(await requestAllowsFrete(req))) {
+      return res.status(403).json({ error: "Relatório indisponível para esta organização" });
+    }
+    next();
+  } catch (e) {
+    next(e);
+  }
+}
 
 router.use((req, res, next) => {
   if (req.path.startsWith("/exports/")) return next();
@@ -549,6 +564,352 @@ router.post("/titulos/export-async", async (req, res) => {
 
     const jobId = await enqueueExportJob("titulos_csv", req.tenantId, payload);
     res.status(202).json({ jobId, status: "pending" });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/relatorios/fretes
+router.get("/fretes", requireFreteRelatorio, async (req, res) => {
+  try {
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 500,
+      maxTake: 1000,
+    });
+    const where = { tenantId: req.tenantId };
+    const range = getDateRange(req.query.dataInicio, req.query.dataFim);
+    if (Object.keys(range).length) where.data = range;
+    if (req.query.clienteId) {
+      const cid = parseInt(String(req.query.clienteId), 10);
+      if (Number.isFinite(cid) && cid > 0) where.clienteId = cid;
+    }
+    if (req.query.avulso === "true") where.vendaId = null;
+    if (req.query.avulso === "false") where.vendaId = { not: null };
+    if (req.query.reciboEmitido === "true") where.reciboEmitido = true;
+    if (req.query.reciboEmitido === "false") where.reciboEmitido = false;
+    if (req.query.cliente && String(req.query.cliente).trim()) {
+      const term = String(req.query.cliente).trim();
+      where.cliente = {
+        OR: [
+          { nomeFantasia: { contains: term, mode: "insensitive" } },
+          { razaoSocial: { contains: term, mode: "insensitive" } },
+          { cnpj: { contains: term } },
+          { cpf: { contains: term } },
+        ],
+      };
+    }
+
+    const [agg, comReciboAgg, fretes, totalRegistros, porClienteAgg] = await Promise.all([
+      prisma.freteMovimento.aggregate({
+        where,
+        _sum: { valor: true },
+        _count: { id: true },
+      }),
+      prisma.freteMovimento.aggregate({
+        where: { ...where, reciboEmitido: true },
+        _sum: { valor: true },
+        _count: { id: true },
+      }),
+      prisma.freteMovimento.findMany({
+        where,
+        include: {
+          cliente: {
+            select: { id: true, razaoSocial: true, nomeFantasia: true },
+          },
+          venda: {
+            select: {
+              id: true,
+              numeroVenda: true,
+              motorista: { select: { id: true, nome: true, placa: true } },
+            },
+          },
+        },
+        orderBy: [{ data: "desc" }, { id: "desc" }],
+        take,
+        skip,
+      }),
+      prisma.freteMovimento.count({ where }),
+      prisma.freteMovimento.groupBy({
+        by: ["clienteId"],
+        where,
+        _sum: { valor: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    const clienteIds = porClienteAgg.map((x) => x.clienteId).filter(Boolean);
+    const clientes = clienteIds.length
+      ? await prisma.cliente.findMany({
+          where: { tenantId: req.tenantId, id: { in: clienteIds } },
+          select: { id: true, razaoSocial: true, nomeFantasia: true },
+        })
+      : [];
+    const clienteById = new Map(clientes.map((c) => [c.id, c]));
+
+    const totalValor = parseFloat(String(agg._sum.valor || 0));
+    const totalComRecibo = parseFloat(String(comReciboAgg._sum.valor || 0));
+
+    setPaginationHeaders(res, { total: totalRegistros, take, skip });
+    res.json({
+      totalRegistros,
+      totalValor,
+      quantidadeComRecibo: comReciboAgg._count.id || 0,
+      totalComRecibo,
+      quantidadeSemRecibo: Math.max(0, (agg._count.id || 0) - (comReciboAgg._count.id || 0)),
+      totalSemRecibo: Math.max(0, totalValor - totalComRecibo),
+      porCliente: porClienteAgg
+        .map((row) => {
+          const c = clienteById.get(row.clienteId);
+          return {
+            clienteId: row.clienteId,
+            nome: c?.nomeFantasia || c?.razaoSocial || `Cliente #${row.clienteId}`,
+            quantidade: row._count.id,
+            total: parseFloat(String(row._sum.valor || 0)),
+          };
+        })
+        .sort((a, b) => b.total - a.total),
+      fretes: fretes.map((f) => ({
+        id: f.id,
+        data: f.data,
+        valor: parseFloat(String(f.valor || 0)),
+        reciboEmitido: !!f.reciboEmitido,
+        reciboNumero: f.reciboNumero,
+        observacao: f.observacao,
+        cliente: f.cliente,
+        venda: f.venda
+          ? {
+              id: f.venda.id,
+              numeroVenda: f.venda.numeroVenda,
+              motorista: f.venda.motorista,
+            }
+          : null,
+        avulso: f.vendaId == null,
+      })),
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/relatorios/carregamento
+router.get("/carregamento", requireFreteRelatorio, async (req, res) => {
+  try {
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 500,
+      maxTake: 1000,
+    });
+    const where = { tenantId: req.tenantId };
+    const range = getDateRange(req.query.dataInicio, req.query.dataFim);
+    if (Object.keys(range).length) where.dataEmissao = range;
+    if (req.query.motoristaId) {
+      const mid = parseInt(String(req.query.motoristaId), 10);
+      if (Number.isFinite(mid) && mid > 0) where.motoristaId = mid;
+    }
+    if (req.query.cliente && String(req.query.cliente).trim()) {
+      const term = String(req.query.cliente).trim();
+      where.clienteNome = { contains: term, mode: "insensitive" };
+    }
+    if (req.query.numeroOc != null && String(req.query.numeroOc).trim()) {
+      const n = parseInt(String(req.query.numeroOc).replace(/\D/g, ""), 10);
+      if (Number.isFinite(n) && n > 0) where.numeroOc = n;
+    }
+
+    const [ordens, totalRegistros] = await Promise.all([
+      prisma.ordemCarregamento.findMany({
+        where,
+        include: { itens: true },
+        orderBy: [{ dataEmissao: "desc" }, { numeroOc: "desc" }],
+        take,
+        skip,
+      }),
+      prisma.ordemCarregamento.count({ where }),
+    ]);
+
+    const allForAgg = await prisma.ordemCarregamento.findMany({
+      where,
+      select: {
+        id: true,
+        clienteNome: true,
+        motoristaId: true,
+        motoristaNome: true,
+        itens: { select: { quantidade: true } },
+      },
+    });
+
+    const porClienteMap = new Map();
+    const porMotoristaMap = new Map();
+    let totalQuantidade = 0;
+    for (const o of allForAgg) {
+      const qtd = o.itens.reduce((a, i) => a + parseFloat(String(i.quantidade || 0)), 0);
+      totalQuantidade += qtd;
+      const cKey = o.clienteNome || "—";
+      const cRow = porClienteMap.get(cKey) || { nome: cKey, quantidade: 0, totalItens: 0 };
+      cRow.quantidade += 1;
+      cRow.totalItens += qtd;
+      porClienteMap.set(cKey, cRow);
+
+      const mKey = o.motoristaId != null ? `id:${o.motoristaId}` : `nome:${o.motoristaNome || "Sem motorista"}`;
+      const mRow = porMotoristaMap.get(mKey) || {
+        motoristaId: o.motoristaId,
+        nome: o.motoristaNome || "Sem motorista",
+        quantidade: 0,
+        totalItens: 0,
+      };
+      mRow.quantidade += 1;
+      mRow.totalItens += qtd;
+      porMotoristaMap.set(mKey, mRow);
+    }
+
+    setPaginationHeaders(res, { total: totalRegistros, take, skip });
+    res.json({
+      totalRegistros,
+      totalQuantidade,
+      porCliente: [...porClienteMap.values()].sort((a, b) => b.quantidade - a.quantidade),
+      porMotorista: [...porMotoristaMap.values()].sort((a, b) => b.quantidade - a.quantidade),
+      ordens: ordens.map((o) => {
+        const totalItens = o.itens.reduce(
+          (a, i) => a + parseFloat(String(i.quantidade || 0)),
+          0,
+        );
+        return {
+          id: o.id,
+          numeroOc: o.numeroOc,
+          dataEmissao: o.dataEmissao,
+          pedido: o.pedido,
+          clienteNome: o.clienteNome,
+          clienteCidade: o.clienteCidade,
+          clienteUf: o.clienteUf,
+          motoristaNome: o.motoristaNome,
+          motoristaPlaca: o.motoristaPlaca,
+          vendaId: o.vendaId,
+          totalItens,
+          itens: o.itens.map((i) => ({
+            descricao: i.descricao,
+            quantidade: parseFloat(String(i.quantidade || 0)),
+            unidade: i.unidade,
+          })),
+        };
+      }),
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/relatorios/motoristas — desempenho no período (vendas + OC)
+router.get("/motoristas", requireFreteRelatorio, async (req, res) => {
+  try {
+    const range = getDateRange(req.query.dataInicio, req.query.dataFim);
+    const vendaWhere = {
+      tenantId: req.tenantId,
+      motoristaId: { not: null },
+    };
+    if (Object.keys(range).length) vendaWhere.dataVenda = range;
+
+    const ocWhere = {
+      tenantId: req.tenantId,
+      motoristaId: { not: null },
+    };
+    if (Object.keys(range).length) ocWhere.dataEmissao = range;
+
+    const [motoristas, vendasAgg, ocs] = await Promise.all([
+      prisma.motorista.findMany({
+        where: { tenantId: req.tenantId },
+        orderBy: { nome: "asc" },
+      }),
+      prisma.venda.groupBy({
+        by: ["motoristaId"],
+        where: vendaWhere,
+        _sum: { valorTotal: true, frete: true },
+        _count: { id: true },
+      }),
+      prisma.ordemCarregamento.findMany({
+        where: ocWhere,
+        select: {
+          motoristaId: true,
+          itens: { select: { quantidade: true } },
+        },
+      }),
+    ]);
+
+    const vendaByMot = new Map(
+      vendasAgg
+        .filter((x) => x.motoristaId != null)
+        .map((x) => [
+          x.motoristaId,
+          {
+            quantidade: x._count.id,
+            valorProdutos: parseFloat(String(x._sum.valorTotal || 0)),
+            frete: parseFloat(String(x._sum.frete || 0)),
+          },
+        ]),
+    );
+
+    const ocByMot = new Map();
+    for (const o of ocs) {
+      if (o.motoristaId == null) continue;
+      const row = ocByMot.get(o.motoristaId) || { quantidade: 0, totalItens: 0 };
+      row.quantidade += 1;
+      row.totalItens += o.itens.reduce(
+        (a, i) => a + parseFloat(String(i.quantidade || 0)),
+        0,
+      );
+      ocByMot.set(o.motoristaId, row);
+    }
+
+    const lista = motoristas
+      .map((m) => {
+        const v = vendaByMot.get(m.id) || {
+          quantidade: 0,
+          valorProdutos: 0,
+          frete: 0,
+        };
+        const c = ocByMot.get(m.id) || { quantidade: 0, totalItens: 0 };
+        return {
+          id: m.id,
+          nome: m.nome,
+          placa: m.placa,
+          veiculo: m.veiculo,
+          ativo: m.ativo,
+          vendas: v,
+          carregamentos: c,
+        };
+      })
+      .filter((m) => {
+        const temMovimento =
+          m.vendas.quantidade > 0 || m.carregamentos.quantidade > 0;
+        if (req.query.todos === "true") return m.ativo || temMovimento;
+        return temMovimento;
+      });
+
+    const totais = lista.reduce(
+      (acc, m) => {
+        acc.vendas += m.vendas.quantidade;
+        acc.valorProdutos += m.vendas.valorProdutos;
+        acc.frete += m.vendas.frete;
+        acc.carregamentos += m.carregamentos.quantidade;
+        acc.itensCarregamento += m.carregamentos.totalItens;
+        return acc;
+      },
+      {
+        vendas: 0,
+        valorProdutos: 0,
+        frete: 0,
+        carregamentos: 0,
+        itensCarregamento: 0,
+      },
+    );
+
+    res.json({
+      totalMotoristas: lista.length,
+      totais,
+      motoristas: lista.sort(
+        (a, b) =>
+          b.vendas.quantidade +
+          b.carregamentos.quantidade -
+          (a.vendas.quantidade + a.carregamentos.quantidade),
+      ),
+    });
   } catch (error) {
     handleRouteError(res, error);
   }

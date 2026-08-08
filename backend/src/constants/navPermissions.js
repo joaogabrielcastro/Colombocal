@@ -12,6 +12,9 @@ const NAV_PERMISSION_KEYS = [
   "rel_vendas",
   "rel_financeiro",
   "rel_comissoes",
+  "rel_fretes",
+  "rel_carregamento",
+  "rel_motoristas",
   "auditoria",
 ];
 
