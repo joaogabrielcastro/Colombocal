@@ -76,12 +76,14 @@ export function VendaOrdem({
 export function VendaOrdemCell({
   venda,
   size = "md",
+  className = "",
 }: {
   venda: VendaOrdemRef;
   size?: keyof typeof SIZE_CLASS;
+  className?: string;
 }) {
   return (
-    <td className="table-cell bg-slate-50/90 align-middle whitespace-nowrap">
+    <td className={`table-cell bg-slate-50/90 align-middle whitespace-nowrap ${className}`.trim()}>
       <VendaOrdem venda={venda} size={size} />
     </td>
   );

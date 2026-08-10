@@ -403,24 +403,47 @@ function VendasPageContent() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm">
+            <colgroup>
+              <col className="w-[4.5rem]" />
+              <col className="w-[5.5rem]" />
+              <col />
+              <col className="w-[8rem]" />
+              {freteEnabled ? <col className="w-[6.5rem]" /> : null}
+              <col className="w-[3rem]" />
+              {freteEnabled ? (
+                <>
+                  <col className="w-[5.5rem]" />
+                  <col className="w-[5.5rem]" />
+                </>
+              ) : null}
+              <col className="w-[6.5rem]" />
+              <col className="w-[6rem]" />
+              <col className="w-[11rem]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="table-header whitespace-nowrap bg-slate-50">Ordem</th>
-                <th className="table-header whitespace-nowrap">Data</th>
-                <th className="table-header min-w-[14rem]">Cliente</th>
-                <th className="table-header min-w-[9rem]">Vendedor</th>
-                <th className="table-header min-w-[8rem]">Motorista</th>
-                <th className="table-header text-center whitespace-nowrap">Itens</th>
+                <th className="table-header whitespace-nowrap bg-slate-50 !px-2">Ordem</th>
+                <th className="table-header whitespace-nowrap !px-2">Data</th>
+                <th className="table-header !px-2">Cliente</th>
+                <th className="table-header !px-2">Vendedor</th>
+                {freteEnabled ? (
+                  <th className="table-header !px-2">Motorista</th>
+                ) : null}
+                <th className="table-header text-center whitespace-nowrap !px-2">Itens</th>
                 {freteEnabled ? (
                   <>
-                <th className="table-header text-right whitespace-nowrap">Frete</th>
-                <th className="table-header min-w-[9rem] whitespace-nowrap">Frete pago</th>
+                <th className="table-header text-right whitespace-nowrap !px-2">Frete</th>
+                <th className="table-header text-right whitespace-nowrap !px-2" title="Frete pago / recibo">
+                  Recibo
+                </th>
                   </>
                 ) : null}
-                <th className="table-header text-right whitespace-nowrap">Total</th>
-                <th className="table-header whitespace-nowrap">Status</th>
-                <th className="table-header text-right whitespace-nowrap min-w-[14rem]">Ações</th>
+                <th className="table-header text-right whitespace-nowrap !px-2">Total</th>
+                <th className="table-header whitespace-nowrap !px-2">Status</th>
+                <th className="table-header text-right whitespace-nowrap !px-2 sticky right-0 bg-slate-50 z-[1]">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -438,53 +461,77 @@ function VendasPageContent() {
                       : "em aberto";
                 const clienteNome =
                   v.cliente.nomeFantasia || v.cliente.razaoSocial;
+                const fretePagoCurto = (() => {
+                  const linha = formatFreteReciboLinha(v);
+                  if (linha === "Pagamento pendente") return "Pendente";
+                  if (linha.startsWith("Pago em ")) return linha.replace("Pago em ", "");
+                  return linha;
+                })();
                 return (
-                <tr key={v.id} className="table-row">
-                  <VendaOrdemCell venda={v} size="sm" />
-                  <td className="table-cell whitespace-nowrap">{formatDate(v.dataVenda)}</td>
-                  <td className="table-cell">
-                    <p className="font-medium text-gray-900" title={clienteNome}>
+                <tr key={v.id} className="table-row group">
+                  <VendaOrdemCell venda={v} size="sm" className="!px-2 !py-2" />
+                  <td className="table-cell whitespace-nowrap !px-2 !py-2">{formatDate(v.dataVenda)}</td>
+                  <td className="table-cell !px-2 !py-2">
+                    <p className="font-medium text-gray-900 truncate" title={clienteNome}>
                       {clienteNome}
                     </p>
                     {v.cliente.cidade ? (
-                      <p className="text-xs text-gray-400 mt-0.5">{v.cliente.cidade}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate" title={v.cliente.cidade}>
+                        {v.cliente.cidade}
+                      </p>
                     ) : null}
                   </td>
-                  <td className="table-cell whitespace-nowrap">{v.vendedor.nome}</td>
-                  <td className="table-cell whitespace-nowrap">{v.motorista?.nome || '—'}</td>
-                  <td className="table-cell text-center tabular-nums">
+                  <td className="table-cell !px-2 !py-2">
+                    <span className="block truncate" title={v.vendedor.nome}>
+                      {v.vendedor.nome}
+                    </span>
+                  </td>
+                  {freteEnabled ? (
+                  <td className="table-cell !px-2 !py-2">
+                    <span className="block truncate" title={v.motorista?.nome || undefined}>
+                      {v.motorista?.nome || "—"}
+                    </span>
+                  </td>
+                  ) : null}
+                  <td className="table-cell text-center tabular-nums !px-2 !py-2">
                     {v.itens?.length || 0}
                   </td>
                   {freteEnabled ? (
                     <>
-                  <td className="table-cell text-right whitespace-nowrap tabular-nums">
+                  <td className="table-cell text-right whitespace-nowrap tabular-nums !px-2 !py-2">
                     {formatMoney(v.frete)}
                   </td>
-                  <td className="table-cell whitespace-nowrap text-gray-600">
-                    {formatFreteReciboLinha(v)}
+                  <td
+                    className="table-cell text-right whitespace-nowrap text-gray-600 !px-2 !py-2 text-xs"
+                    title={formatFreteReciboLinha(v)}
+                  >
+                    {fretePagoCurto}
                   </td>
                     </>
                   ) : null}
-                  <td className="table-cell font-semibold text-green-700 text-right whitespace-nowrap tabular-nums">
+                  <td className="table-cell font-semibold text-green-700 text-right whitespace-nowrap tabular-nums !px-2 !py-2">
                     {formatMoney(v.valorTotal)}
                   </td>
-                  <td className="table-cell whitespace-nowrap">
+                  <td className="table-cell whitespace-nowrap !px-2 !py-2">
                     {status === "quitado" ? (
-                      <span className="inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                      <span className="inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-800">
                         Quitado
                       </span>
                     ) : status === "parcial" ? (
-                      <span className="inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                        Parcial · {formatMoney(saldo)}
+                      <span
+                        className="inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900"
+                        title={`Parcial · ${formatMoney(saldo)}`}
+                      >
+                        Parcial
                       </span>
                     ) : (
-                      <span className="inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">
-                        Em aberto
+                      <span className="inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-700">
+                        Aberto
                       </span>
                     )}
                   </td>
-                  <td className="table-cell text-right">
-                    <div className="inline-flex flex-nowrap items-center justify-end gap-x-2.5 text-xs whitespace-nowrap">
+                  <td className="table-cell text-right !px-2 !py-2 sticky right-0 bg-white group-hover:bg-gray-50 z-[1] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]">
+                    <div className="inline-flex flex-nowrap items-center justify-end gap-x-1.5 text-xs whitespace-nowrap">
                       <Link
                         href={`/vendas/${v.id}`}
                         className="text-blue-600 hover:underline font-medium"
@@ -518,12 +565,12 @@ function VendasPageContent() {
             <tfoot>
               <tr className="bg-gray-50 border-t-2 border-gray-200">
                 <td
-                  colSpan={freteEnabled ? 8 : 6}
-                  className="px-4 py-3 text-sm font-semibold text-right text-gray-600"
+                  colSpan={freteEnabled ? 8 : 5}
+                  className="px-2 py-3 text-sm font-semibold text-right text-gray-600"
                 >
                   Subtotal (só esta página):
                 </td>
-                <td className="px-4 py-3 font-bold text-green-700 text-right whitespace-nowrap tabular-nums">
+                <td className="px-2 py-3 font-bold text-green-700 text-right whitespace-nowrap tabular-nums">
                   {formatMoney(subtotalPagina)}
                 </td>
                 <td colSpan={2} />
