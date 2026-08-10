@@ -409,26 +409,26 @@ function VendasPageContent() {
                 <>
                   <col style={{ width: "4%" }} />
                   <col style={{ width: "7%" }} />
-                  <col style={{ width: "16%" }} />
-                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "15%" }} />
                   <col style={{ width: "11%" }} />
+                  <col style={{ width: "10%" }} />
                   <col style={{ width: "4%" }} />
                   <col style={{ width: "7%" }} />
                   <col style={{ width: "7%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "7%" }} />
-                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "15%" }} />
                 </>
               ) : (
                 <>
                   <col style={{ width: "5%" }} />
                   <col style={{ width: "8%" }} />
-                  <col style={{ width: "24%" }} />
-                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "22%" }} />
+                  <col style={{ width: "16%" }} />
                   <col style={{ width: "5%" }} />
                   <col style={{ width: "12%" }} />
                   <col style={{ width: "10%" }} />
-                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "16%" }} />
                 </>
               )}
             </colgroup>
@@ -542,22 +542,22 @@ function VendasPageContent() {
                     )}
                   </td>
                   <td className="table-cell text-right !px-2 !py-2 sticky right-0 bg-white group-hover:bg-gray-50 z-[1] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]">
-                    <div className="inline-flex flex-nowrap items-center justify-end gap-x-2.5 text-xs whitespace-nowrap">
+                    <div className="inline-flex flex-nowrap items-center justify-end gap-x-4 text-xs whitespace-nowrap">
                       <Link
                         href={`/vendas/${v.id}`}
-                        className="text-blue-600 hover:underline font-medium px-0.5"
+                        className="text-blue-600 hover:underline font-medium"
                       >
                         Ver
                       </Link>
                       <Link
                         href={`/vendas/nova?clienteId=${v.clienteId}`}
-                        className="text-green-700 hover:underline px-0.5"
+                        className="text-green-700 hover:underline"
                       >
                         Nova
                       </Link>
                       <Link
                         href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
-                        className="text-gray-600 hover:underline px-0.5"
+                        className="text-gray-600 hover:underline"
                       >
                         Receber
                       </Link>
