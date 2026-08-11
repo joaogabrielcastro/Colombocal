@@ -271,7 +271,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/clientes/:id/reconciliar-recebiveis — reaplica pagamentos nos títulos (baixa entre vendas)
+// POST /api/clientes/:id/reconciliar-recebiveis — reaplica pagamentos nos títulos (sem spill entre vendas)
 router.post("/:id/reconciliar-recebiveis", async (req, res) => {
   try {
     const clienteId = parseInt(req.params.id, 10);
@@ -286,7 +286,11 @@ router.post("/:id/reconciliar-recebiveis", async (req, res) => {
     await prisma.$transaction((tx) =>
       recalcularTodosTitulosCliente(tx, clienteId),
     );
-    res.json({ success: true, message: "Títulos reconciliados com os pagamentos." });
+    res.json({
+      success: true,
+      message:
+        "Títulos reconciliados: cada pagamento só baixa títulos da própria ordem (excedente = troco).",
+    });
   } catch (error) {
     handleRouteError(res, error);
   }

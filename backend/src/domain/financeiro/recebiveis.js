@@ -22,9 +22,9 @@ async function baixarEmTitulo(tx, titulo, restante) {
 }
 
 /**
- * Aplica valor nos títulos em aberto: primeiro nos da venda informada (se houver),
- * depois no restante dos títulos do mesmo cliente (outras vendas), por vencimento.
- * Assim, excedente de pagamento em uma venda pode quitar títulos de outras vendas.
+ * Aplica valor nos títulos em aberto.
+ * Com vendaId: só nos títulos dessa venda (excedente vira troco físico, não quita outras ordens).
+ * Sem vendaId: nos títulos abertos do cliente por vencimento (pagamento avulso).
  */
 async function aplicarPagamentoNosTitulos(tx, { clienteId, vendaId, valor }) {
   let restante = parseFloat(valor);
@@ -39,20 +39,15 @@ async function aplicarPagamentoNosTitulos(tx, { clienteId, vendaId, valor }) {
       restante = await baixarEmTitulo(tx, t, restante);
       if (restante <= EPS) return;
     }
-  }
-
-  if (restante <= EPS) return;
-
-  const whereDemais = {
-    clienteId,
-    status: { in: ["aberto", "parcial"] },
-  };
-  if (vendaId) {
-    whereDemais.vendaId = { not: vendaId };
+    // Excedente desta ordem não abate títulos de outras vendas.
+    return;
   }
 
   const titulosDemais = await tx.tituloReceber.findMany({
-    where: whereDemais,
+    where: {
+      clienteId,
+      status: { in: ["aberto", "parcial"] },
+    },
     orderBy: [{ vencimento: "asc" }, { id: "asc" }],
   });
   for (const t of titulosDemais) {
@@ -67,7 +62,7 @@ function getWhereByClienteVenda(clienteId, vendaId) {
 
 /**
  * Zera baixas nos títulos e reaplica todos os pagamentos do cliente (ordem data + id).
- * Garante alocação correta após mudanças e aplica crédito excedente entre vendas.
+ * Cada pagamento com vendaId só baixa títulos dessa venda.
  */
 async function recalcularTodosTitulosCliente(tx, clienteId) {
   const titulos = await tx.tituloReceber.findMany({ where: { clienteId } });

@@ -437,7 +437,11 @@ router.get("/financeiro", async (req, res) => {
       clientesDevedores: clientesDevedoresPage,
       clientesDevedoresCount,
       totalEmAberto,
-    } = await listarClientesDevedores(req.tenantId, { take, skip });
+    } = await listarClientesDevedores(req.tenantId, {
+      take,
+      skip,
+      busca: req.query.busca ? String(req.query.busca) : "",
+    });
 
     setPaginationHeaders(res, { total: clientesDevedoresCount, take, skip });
 

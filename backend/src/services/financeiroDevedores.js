@@ -5,15 +5,19 @@ const { EXPORT_MAX_ROWS } = require("./exportBatch");
  * Monta saldos em aberto via groupBy de títulos (sem carregar todos os clientes).
  * Com take/skip, só busca dados dos clientes da página.
  * Sem take, limita a EXPORT_MAX_ROWS (exports).
+ * @param {string} [busca] filtra por nome/documento do cliente
  */
-async function listarClientesDevedores(tenantId, { take = null, skip = 0 } = {}) {
+async function listarClientesDevedores(
+  tenantId,
+  { take = null, skip = 0, busca = "" } = {},
+) {
   const titulosAgg = await prisma.tituloReceber.groupBy({
     by: ["clienteId"],
     where: { tenantId },
     _sum: { valorOriginal: true, valorPago: true },
   });
 
-  const saldos = [];
+  let saldos = [];
   for (const a of titulosAgg) {
     const debito = parseFloat(String(a._sum.valorOriginal || 0));
     const credito = parseFloat(String(a._sum.valorPago || 0));
@@ -23,6 +27,25 @@ async function listarClientesDevedores(tenantId, { take = null, skip = 0 } = {})
     }
   }
   saldos.sort((a, b) => b.saldo - a.saldo);
+
+  const term = String(busca || "").trim();
+  if (term) {
+    const matching = await prisma.cliente.findMany({
+      where: {
+        tenantId,
+        ativo: true,
+        OR: [
+          { razaoSocial: { contains: term, mode: "insensitive" } },
+          { nomeFantasia: { contains: term, mode: "insensitive" } },
+          { cnpj: { contains: term } },
+          { cpf: { contains: term } },
+        ],
+      },
+      select: { id: true },
+    });
+    const idSet = new Set(matching.map((c) => c.id));
+    saldos = saldos.filter((s) => idSet.has(s.clienteId));
+  }
 
   const totalEmAberto = saldos.reduce((acc, s) => acc + s.saldo, 0);
   const pageSaldos =

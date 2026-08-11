@@ -33,10 +33,12 @@ function ContasAReceberHub() {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Contas a receber</h1>
-        <p className="text-gray-500 text-sm mt-1 max-w-2xl">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+          Contas a receber
+        </h1>
+        <p className="text-gray-500 text-sm mt-1.5 max-w-2xl">
           Quem deve e quanto — por cliente ou por título (parcela).
         </p>
       </div>
@@ -79,7 +81,7 @@ export default function FinanceiroPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
           <TableListSkeleton />
         </div>
       }

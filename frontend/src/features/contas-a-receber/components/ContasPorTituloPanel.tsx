@@ -195,14 +195,14 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div>
-      <p className="text-sm text-gray-500 mb-3 max-w-3xl">
+    <div className="space-y-5">
+      <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
         Parcelas em aberto por título (aging). O valor de uma linha pode diferir do
         saldo global da conta corrente do cliente.
       </p>
 
       {clienteId ? (
-        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <Link
             href={`/clientes/${clienteId}?aba=conta`}
             className="font-medium text-blue-700 underline hover:text-blue-900"
@@ -212,9 +212,9 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
         </div>
       ) : null}
 
-      <FilterBar className="p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-          <div className="md:col-span-3">
+      <FilterBar className="p-4 sm:p-5 mb-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-4">
+          <div className="xl:col-span-3">
             <SearchableSelect
               label="Cliente"
               value={clienteId}
@@ -226,8 +226,10 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               emptyHint="Digite para buscar ou deixe em branco para todos."
             />
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Nº venda (ordem)</label>
+          <div className="xl:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nº venda (ordem)
+            </label>
             <input
               type="text"
               inputMode="numeric"
@@ -237,8 +239,10 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               placeholder="ex: 1840"
             />
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Status</label>
+          <div className="xl:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Status
+            </label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
@@ -250,8 +254,10 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               <option value="quitado">Quitado</option>
             </select>
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Venc. início</label>
+          <div className="xl:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Venc. início
+            </label>
             <input
               type="date"
               value={dataVencInicio}
@@ -259,8 +265,10 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               className="input-field"
             />
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Venc. fim</label>
+          <div className="xl:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Venc. fim
+            </label>
             <input
               type="date"
               value={dataVencFim}
@@ -268,7 +276,7 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               className="input-field"
             />
           </div>
-          <div className="md:col-span-1 flex items-end">
+          <div className="xl:col-span-1 flex items-end">
             <button
               type="button"
               onClick={() => {
@@ -284,7 +292,7 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             </button>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-4">
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
           <label className="inline-flex items-center gap-2 text-sm text-gray-600">
             <input
               type="checkbox"
@@ -301,17 +309,19 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             />
             Ordenar por maior atraso
           </label>
-          <button
-            type="button"
-            onClick={() => void exportarCsvAsync()}
-            disabled={exportandoCsv}
-            className="btn-secondary ml-auto"
-          >
-            {exportandoCsv ? "Gerando CSV..." : "Exportar CSV"}
-          </button>
-          <button type="button" onClick={exportarExcel} className="btn-secondary">
-            Exportar Excel
-          </button>
+          <div className="flex flex-wrap gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={() => void exportarCsvAsync()}
+              disabled={exportandoCsv}
+              className="btn-secondary"
+            >
+              {exportandoCsv ? "Gerando CSV..." : "Exportar CSV"}
+            </button>
+            <button type="button" onClick={exportarExcel} className="btn-secondary">
+              Exportar Excel
+            </button>
+          </div>
         </div>
       </FilterBar>
 
@@ -322,133 +332,160 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
       ) : null}
 
       {dados ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
-          <div className="card p-3 text-center">
-            <p className="text-xs text-gray-500">Títulos</p>
-            <p className="font-bold">{dados.resumo.totalTitulos}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-3 lg:gap-4 mb-5">
+          <div className="card p-4 text-center min-w-0">
+            <p className="text-xs text-gray-500 mb-1">Títulos</p>
+            <p className="text-lg font-bold tabular-nums">{dados.resumo.totalTitulos}</p>
           </div>
-          <div className="card p-3 text-center">
-            <p className="text-xs text-gray-500">Em Aberto</p>
-            <p className="font-bold text-red-600">
+          <div className="card p-4 text-center min-w-0">
+            <p className="text-xs text-gray-500 mb-1">Em Aberto</p>
+            <p className="text-lg font-bold text-red-600 tabular-nums">
               {formatMoney(dados.resumo.valorEmAberto)}
             </p>
           </div>
-          <div className="card p-3 text-center">
-            <p className="text-xs text-gray-500">Vencidos</p>
-            <p className="font-bold text-red-700">
+          <div className="card p-4 text-center min-w-0">
+            <p className="text-xs text-gray-500 mb-1">Vencidos</p>
+            <p className="text-lg font-bold text-red-700 tabular-nums">
               {formatMoney(dados.resumo.faixas.vencidos)}
             </p>
           </div>
-          <div className="card p-3 text-center">
-            <p className="text-xs text-gray-500">0-30 dias</p>
-            <p className="font-bold">{formatMoney(dados.resumo.faixas.ate30)}</p>
+          <div className="card p-4 text-center min-w-0">
+            <p className="text-xs text-gray-500 mb-1">0-30 dias</p>
+            <p className="text-lg font-bold tabular-nums">
+              {formatMoney(dados.resumo.faixas.ate30)}
+            </p>
           </div>
-          <div className="card p-3 text-center">
-            <p className="text-xs text-gray-500">31-60</p>
-            <p className="font-bold">{formatMoney(dados.resumo.faixas.de31a60)}</p>
+          <div className="card p-4 text-center min-w-0">
+            <p className="text-xs text-gray-500 mb-1">31-60</p>
+            <p className="text-lg font-bold tabular-nums">
+              {formatMoney(dados.resumo.faixas.de31a60)}
+            </p>
           </div>
-          <div className="card p-3 text-center">
-            <p className="text-xs text-gray-500">61-90</p>
-            <p className="font-bold">{formatMoney(dados.resumo.faixas.de61a90)}</p>
+          <div className="card p-4 text-center min-w-0">
+            <p className="text-xs text-gray-500 mb-1">61-90</p>
+            <p className="text-lg font-bold tabular-nums">
+              {formatMoney(dados.resumo.faixas.de61a90)}
+            </p>
           </div>
-          <div className="card p-3 text-center">
-            <p className="text-xs text-gray-500">90+</p>
-            <p className="font-bold">{formatMoney(dados.resumo.faixas.acima90)}</p>
+          <div className="card p-4 text-center min-w-0">
+            <p className="text-xs text-gray-500 mb-1">90+</p>
+            <p className="text-lg font-bold tabular-nums">
+              {formatMoney(dados.resumo.faixas.acima90)}
+            </p>
           </div>
         </div>
       ) : null}
 
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-4">
+          <div className="p-5">
             <TableListSkeleton rows={12} cols={6} />
           </div>
         ) : !dados || dados.titulos.length === 0 ? (
-          <div className="p-4">
+          <div className="p-6">
             <EmptyState
               title="Nenhum título encontrado"
               description="Ajuste os filtros ou remova restrições para visualizar títulos."
             />
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="table-header">Título</th>
-                <th className="table-header">Cliente</th>
-                <th className="table-header w-28 bg-slate-50">Ordem</th>
-                <th className="table-header">Vencimento</th>
-                <th className="table-header text-right">Original</th>
-                <th className="table-header text-right">Pago</th>
-                <th className="table-header text-right">Aberto</th>
-                <th className="table-header">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {titulosOrdenados.map((t) => {
-                const aberto = Math.max(
-                  0,
-                  parseFloat(String(t.valorOriginal)) - parseFloat(String(t.valorPago)),
-                );
-                const diasAtraso = getDiasAtraso(t.vencimento, aberto);
-                return (
-                  <tr key={t.id} className="table-row">
-                    <td className="table-cell font-mono">{t.numero || `#${t.id}`}</td>
-                    <td className="table-cell">
-                      <Link
-                        href={`/clientes/${t.cliente.id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {t.cliente.nomeFantasia || t.cliente.razaoSocial}
-                      </Link>
-                      <div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[960px]">
+              <thead>
+                <tr className="border-b border-gray-200 bg-slate-50/80">
+                  <th className="table-header text-left px-4 py-3.5 whitespace-nowrap">
+                    Título
+                  </th>
+                  <th className="table-header text-left px-4 py-3.5 min-w-[220px] w-[28%]">
+                    Cliente
+                  </th>
+                  <th className="table-header text-left px-4 py-3.5 w-32 bg-slate-50">
+                    Ordem
+                  </th>
+                  <th className="table-header text-left px-4 py-3.5 whitespace-nowrap">
+                    Vencimento
+                  </th>
+                  <th className="table-header text-right px-4 py-3.5">Original</th>
+                  <th className="table-header text-right px-4 py-3.5">Pago</th>
+                  <th className="table-header text-right px-4 py-3.5">Aberto</th>
+                  <th className="table-header text-left px-4 py-3.5">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {titulosOrdenados.map((t) => {
+                  const aberto = Math.max(
+                    0,
+                    parseFloat(String(t.valorOriginal)) - parseFloat(String(t.valorPago)),
+                  );
+                  const diasAtraso = getDiasAtraso(t.vencimento, aberto);
+                  return (
+                    <tr key={t.id} className="table-row">
+                      <td className="table-cell px-4 py-3.5 font-mono whitespace-nowrap">
+                        {t.numero || `#${t.id}`}
+                      </td>
+                      <td className="table-cell px-4 py-3.5">
                         <Link
-                          href={`/financeiro/novo?clienteId=${t.cliente.id}`}
-                          className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                          href={`/clientes/${t.cliente.id}`}
+                          className="text-blue-600 hover:underline font-medium"
+                          title={t.cliente.nomeFantasia || t.cliente.razaoSocial}
                         >
-                          Receber
+                          {t.cliente.nomeFantasia || t.cliente.razaoSocial}
                         </Link>
-                      </div>
-                    </td>
-                    <td className="table-cell">
-                      {t.venda ? (
-                        <VendaOrdem venda={t.venda} size="sm" prefix="Venda" />
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td className="table-cell">{formatDate(t.vencimento)}</td>
-                    <td className="table-cell text-right">
-                      {formatMoney(t.valorOriginal)}
-                    </td>
-                    <td className="table-cell text-right">{formatMoney(t.valorPago)}</td>
-                    <td className="table-cell text-right font-semibold text-red-600">
-                      {formatMoney(aberto)}
-                      {diasAtraso > 0 ? (
-                        <div className="text-xs text-red-500">{diasAtraso} dias</div>
-                      ) : null}
-                    </td>
-                    <td className="table-cell">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          t.status === "quitado"
-                            ? "bg-green-100 text-green-700"
-                            : t.status === "parcial"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {t.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        <div className="mt-0.5">
+                          <Link
+                            href={`/financeiro/novo?clienteId=${t.cliente.id}`}
+                            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                          >
+                            Receber
+                          </Link>
+                        </div>
+                      </td>
+                      <td className="table-cell px-4 py-3.5">
+                        {t.venda ? (
+                          <VendaOrdem venda={t.venda} size="sm" prefix="Venda" />
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="table-cell px-4 py-3.5 whitespace-nowrap">
+                        {formatDate(t.vencimento)}
+                      </td>
+                      <td className="table-cell text-right px-4 py-3.5 tabular-nums">
+                        {formatMoney(t.valorOriginal)}
+                      </td>
+                      <td className="table-cell text-right px-4 py-3.5 tabular-nums">
+                        {formatMoney(t.valorPago)}
+                      </td>
+                      <td className="table-cell text-right px-4 py-3.5 font-semibold text-red-600 tabular-nums">
+                        {formatMoney(aberto)}
+                        {diasAtraso > 0 ? (
+                          <div className="text-xs font-normal text-red-500">
+                            {diasAtraso} dias
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="table-cell px-4 py-3.5">
+                        <span
+                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            t.status === "quitado"
+                              ? "bg-green-100 text-green-700"
+                              : t.status === "parcial"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {t.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
-      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+      <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600">
         <p>Total de registros (filtro): {total}</p>
         <div className="flex items-center gap-2">
           <button

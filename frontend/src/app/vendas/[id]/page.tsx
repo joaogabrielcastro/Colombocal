@@ -405,13 +405,30 @@ export default function VendaDetailPage() {
       if (!tipo.startsWith("troco_")) return acc;
       return acc + Math.abs(parseFloat(String(p.valor || 0)));
     }, 0) ?? 0;
-  const totalRecebidoLiquido = totalPagoVenda + totalTrocoVenda;
+  // Troco já entra negativo em totalPagoVenda — líquido = soma dos lançamentos desta ordem
+  const totalRecebidoNestaOrdem = totalPagoVenda;
   const totalTituloVenda =
     venda.titulos?.reduce(
       (acc, t) => acc + parseFloat(String(t.valorOriginal)),
       0,
     ) ?? parseFloat(String(venda.valorTotal));
-  const saldoVenda = totalPagoVenda - totalTituloVenda;
+  const totalPagoNosTitulos =
+    venda.titulos?.reduce(
+      (acc, t) => acc + parseFloat(String(t.valorPago ?? 0)),
+      0,
+    ) ?? 0;
+  const saldoAbertoTitulos =
+    venda.saldoEmAbertoTitulos != null
+      ? Math.max(0, parseFloat(String(venda.saldoEmAbertoTitulos)))
+      : Math.max(
+          0,
+          (venda.titulos ?? []).reduce((acc, t) => {
+            const vo = parseFloat(String(t.valorOriginal ?? 0));
+            const vp = parseFloat(String(t.valorPago ?? 0));
+            return acc + Math.max(0, vo - vp);
+          }, 0),
+        );
+  const quitadoPelosTitulos = saldoAbertoTitulos < 0.01 && totalTituloVenda > 0.01;
   const temBaixas =
     (venda.pagamentos?.length ?? 0) > 0 || (venda.cheques?.length ?? 0) > 0;
 
@@ -435,19 +452,20 @@ export default function VendaDetailPage() {
           </h1>
           <p className="text-gray-500 text-sm">{formatDate(venda.dataVenda)}</p>
           <p className="text-sm mt-1">
-            <span className="text-gray-500">Recebido: </span>
-            <strong className="text-green-700">{formatMoney(totalRecebidoLiquido)}</strong>
+            <span className="text-gray-500">Pago nos títulos: </span>
+            <strong className="text-green-700">{formatMoney(totalPagoNosTitulos)}</strong>
             <span className="text-gray-400"> · </span>
             <span className="text-gray-500">Saldo: </span>
-            <strong className={saldoVenda >= 0 ? "text-green-700" : "text-red-600"}>
-              {formatMoney(saldoVenda)}
-              {saldoVenda >= 0 ? " quitado" : " a receber"}
+            <strong className={quitadoPelosTitulos ? "text-green-700" : "text-red-600"}>
+              {quitadoPelosTitulos
+                ? "Quitado"
+                : `${formatMoney(saldoAbertoTitulos)} a receber`}
             </strong>
             {(venda.pagamentos?.length ?? 0) > 0 ? (
               <span className="text-gray-400">
                 {" "}
                 · {venda.pagamentos!.length} recebimento
-                {venda.pagamentos!.length === 1 ? "" : "s"}
+                {venda.pagamentos!.length === 1 ? "" : "s"} nesta ordem
               </span>
             ) : null}
           </p>
@@ -474,7 +492,7 @@ export default function VendaDetailPage() {
             </Link>
           ) : (
             <span
-              className="text-xs text-gray-500 max-w-[10rem] leading-tight"
+              className="text-xs text-gray-500 max-w-[12rem] leading-tight"
               title="Não é possível editar com baixas ou cheques vinculados"
             >
               Edição bloqueada (baixas/cheques)
@@ -758,16 +776,19 @@ export default function VendaDetailPage() {
           </Link>
         </div>
         <p className="text-sm text-gray-600 mb-3">
-          Recebido líquido: <strong>{formatMoney(totalRecebidoLiquido)}</strong>
+          Nesta ordem: <strong>{formatMoney(totalRecebidoNestaOrdem)}</strong>
           {totalTrocoVenda > 0 ? ` • Troco devolvido: ${formatMoney(totalTrocoVenda)}` : ""}
-          {" • "}Saldo:{" "}
+          {" • "}Saldo dos títulos:{" "}
           <span
             className={
-              saldoVenda >= 0 ? "text-green-700 font-semibold" : "text-red-600 font-semibold"
+              quitadoPelosTitulos
+                ? "text-green-700 font-semibold"
+                : "text-red-600 font-semibold"
             }
           >
-            {formatMoney(saldoVenda)}
-            {saldoVenda >= 0 ? " (quitado)" : " (a receber)"}
+            {quitadoPelosTitulos
+              ? "Quitado"
+              : `${formatMoney(saldoAbertoTitulos)} a receber`}
           </span>
         </p>
         {temBaixas ? (
@@ -776,7 +797,9 @@ export default function VendaDetailPage() {
           </p>
         ) : null}
         {(venda.pagamentos?.length ?? 0) === 0 && chequesSemPagamento.length === 0 ? (
-          <p className="text-gray-400 text-sm">Nenhum recebimento registrado nesta ordem.</p>
+          <p className="text-gray-400 text-sm">
+            Nenhum recebimento registrado nesta ordem.
+          </p>
         ) : (
           <ul className="divide-y divide-gray-100 text-sm">
             {(venda.pagamentos ?? []).map((p) => {
