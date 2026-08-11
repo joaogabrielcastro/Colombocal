@@ -73,16 +73,17 @@ export default function NovoFretePage() {
     if (!clienteSelecionado) return;
     setForm((s) => ({
       ...s,
-      precoSaco: s.precoSaco || String(clienteSelecionado.fretePadraoSaco ?? 0),
-      precoTonelada: s.precoTonelada || String(clienteSelecionado.fretePadraoTonelada ?? 0),
+      // Sempre atualiza tarifas ao trocar de cliente (igual à nova venda)
+      precoSaco: String(clienteSelecionado.fretePadraoSaco ?? 0),
+      precoTonelada: String(clienteSelecionado.fretePadraoTonelada ?? 0),
     }));
   }, [clienteSelecionado]);
 
-  const precoSaco = Number(form.precoSaco.replace(",", ".")) || 0;
-  const precoTonelada = Number(form.precoTonelada.replace(",", ".")) || 0;
+  const precoSaco = Number(String(form.precoSaco).replace(",", ".")) || 0;
+  const precoTonelada = Number(String(form.precoTonelada).replace(",", ".")) || 0;
   const subtotais = itens.map((item) => {
     const produto = produtos.find((p) => String(p.id) === item.produtoId);
-    const quantidade = Number(item.quantidade.replace(",", ".")) || 0;
+    const quantidade = Number(String(item.quantidade).replace(",", ".")) || 0;
     const subtotal = freteLinha({
       unidade: produto?.unidade,
       pesoKg: produto?.pesoKg,
@@ -93,7 +94,14 @@ export default function NovoFretePage() {
     return { produto, quantidade, subtotal };
   });
   const valorCalculado = subtotais.reduce((acc, item) => acc + item.subtotal, 0);
-  const valorFinal = Number(form.valorTotal.replace(",", ".")) || valorCalculado;
+  const valorOverrideRaw = String(form.valorTotal || "").trim();
+  const valorOverride = valorOverrideRaw
+    ? Number(valorOverrideRaw.replace(",", "."))
+    : null;
+  const valorFinal =
+    valorOverride != null && Number.isFinite(valorOverride) && valorOverride > 0
+      ? valorOverride
+      : valorCalculado;
 
   const salvar = async (printAfter: boolean) => {
     const clienteId = Number.parseInt(form.clienteId, 10);
@@ -101,29 +109,33 @@ export default function NovoFretePage() {
     const itensValidos = itens
       .map((item) => ({
         produtoId: Number.parseInt(item.produtoId, 10),
-        quantidade: Number(item.quantidade.replace(",", ".")),
+        quantidade: Number(String(item.quantidade).replace(",", ".")),
       }))
       .filter((item) => item.produtoId > 0 && Number.isFinite(item.quantidade) && item.quantidade > 0);
     if (!clienteId || !motoristaId || itensValidos.length === 0 || valorFinal <= 0) {
-      alert("Preencha cliente, motorista, pelo menos um item e valor.");
+      alert("Preencha cliente, motorista, pelo menos um item e confira as tarifas (total > 0).");
       return;
     }
     printAfter ? setImprimindo(true) : setSalvando(true);
     try {
-      const resp = await api.post<{ frete: { id: number }; resumoImpressao: any }>("/fretes/avulso", {
+      const payload: Record<string, unknown> = {
         clienteId,
         motoristaId,
         itens: itensValidos,
         precoSaco,
         precoTonelada,
-        valorTotal: valorFinal,
         dataMovimento: form.dataMovimento,
         vencimento: form.vencimento,
         observacao: form.observacao,
         pagoNoAto: form.pagoNoAto,
         pagamentoTipo: form.pagamentoTipo,
         pagamentoData: form.pagamentoData,
-      });
+      };
+      // Só envia override se o usuário digitou total final; senão o backend calcula
+      if (valorOverride != null && Number.isFinite(valorOverride) && valorOverride > 0) {
+        payload.valorTotal = valorOverride;
+      }
+      const resp = await api.post<{ frete: { id: number }; resumoImpressao: any }>("/fretes/avulso", payload);
       if (printAfter) openFreteAvulsoPrint(resp.resumoImpressao);
       router.push("/fretes");
     } catch (e) {
@@ -244,10 +256,14 @@ export default function NovoFretePage() {
               + Adicionar item
             </button>
           </div>
+          <p className="text-xs text-gray-500 mb-3">
+            Cálculo: saco normal = qtd × preço/saco · com pesoKg = qtd × preço/saco × (peso/20) ·
+            ton = qtd × preço/ton · (se preço/saco = 0 e há pesoKg, usa ton).
+          </p>
           <div className="space-y-2">
             {itens.map((item, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                <div className="md:col-span-7">
+              <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                <div className="md:col-span-6">
                   <SearchableSelect
                     hideLabel
                     label={`Produto item ${index + 1}`}
@@ -261,7 +277,7 @@ export default function NovoFretePage() {
                     placeholder="Buscar produto..."
                   />
                 </div>
-                <div className="md:col-span-3">
+                <div className="md:col-span-2">
                   <input
                     className="input-field"
                     placeholder="Quantidade"
@@ -270,6 +286,11 @@ export default function NovoFretePage() {
                       setItens((prev) => prev.map((it, i) => (i === index ? { ...it, quantidade: e.target.value } : it)))
                     }
                   />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="input-field bg-gray-50 text-sm tabular-nums">
+                    {formatMoney(subtotais[index]?.subtotal ?? 0)}
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <button type="button" className="btn-secondary w-full" onClick={() => removerItem(index)}>

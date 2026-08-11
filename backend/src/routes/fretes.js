@@ -15,6 +15,7 @@ const { registrarAuditoria } = require("../services/financeiroEventos");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
 const {
   freteLinha,
+  roundMoney,
 } = require("../domain/frete/calcularFrete");
 
 async function requireFreteTenant(req, res, next) {
@@ -39,6 +40,95 @@ function formatMoneyBr(v) {
   return Number.isFinite(n)
     ? n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
     : "R$ 0,00";
+}
+
+async function carregarItensFreteAvulso(tx, tenantId, body) {
+  const itensEntrada = Array.isArray(body?.itens) ? body.itens : null;
+  const itens = [];
+  if (itensEntrada && itensEntrada.length > 0) {
+    for (const item of itensEntrada) {
+      const produtoId = parseIntField(item?.produtoId, "produtoId", { min: 1 });
+      const quantidade = parseNumberField(item?.quantidade, "quantidade", { min: 0.001 });
+      const produto = await tx.produto.findFirst({ where: { id: produtoId, tenantId } });
+      if (!produto) {
+        const err = new Error(`Produto #${produtoId} não encontrado`);
+        err.status = 404;
+        throw err;
+      }
+      itens.push({ produto, quantidade });
+    }
+  } else if (body?.produtoId != null) {
+    const produtoId = parseIntField(body.produtoId, "produtoId", { min: 1 });
+    const quantidade = parseNumberField(body.quantidade, "quantidade", { min: 0.001 });
+    const produto = await tx.produto.findFirst({ where: { id: produtoId, tenantId } });
+    if (!produto) {
+      const err = new Error("Produto não encontrado");
+      err.status = 404;
+      throw err;
+    }
+    itens.push({ produto, quantidade });
+  }
+  if (!itens.length) {
+    const err = new Error("Informe ao menos um item para o frete");
+    err.status = 400;
+    throw err;
+  }
+  return itens;
+}
+
+function montarItensCalculados(itens, precoSaco, precoTonelada) {
+  return itens.map((it) => {
+    const subtotal = freteLinha({
+      produto: it.produto,
+      quantidade: it.quantidade,
+      fretePorSaco: precoSaco,
+      fretePorTonelada: precoTonelada,
+    });
+    return {
+      produtoId: it.produto.id,
+      produtoNome: it.produto.nome,
+      unidade: it.produto.unidade || "",
+      pesoKg:
+        it.produto.pesoKg != null ? parseFloat(String(it.produto.pesoKg)) : null,
+      quantidade: it.quantidade,
+      subtotal,
+    };
+  });
+}
+
+function montarObservacaoAvulso(motoristaNome, itensCalculados, observacaoLivre) {
+  return [
+    "Frete avulso",
+    `Motorista: ${motoristaNome}`,
+    ...itensCalculados.map(
+      (item) =>
+        `${item.produtoNome}: ${item.quantidade} ${item.unidade} (${formatMoneyBr(item.subtotal)})`,
+    ),
+    observacaoLivre,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+async function buscarPayloadAvulso(prismaClient, tenantId, freteId) {
+  const eventos = await prismaClient.financeiroEvento.findMany({
+    where: {
+      tenantId,
+      entidade: "FreteMovimento",
+      entidadeId: freteId,
+      tipo: { in: ["FRETE_AVULSO_ATUALIZADO", "FRETE_AVULSO_CRIADO"] },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+  for (const evento of eventos) {
+    const payload =
+      evento?.payload && typeof evento.payload === "object" ? evento.payload : null;
+    if (payload && (Array.isArray(payload.itens) || payload.motoristaId != null)) {
+      return payload;
+    }
+  }
+  return {};
 }
 
 // POST /api/fretes/avulso — cadastro avulso completo (cliente/motorista/produto)
@@ -139,8 +229,11 @@ router.post("/avulso", async (req, res) => {
           subtotal,
         };
       });
-      const valorCalculado = itensCalculados.reduce((acc, item) => acc + item.subtotal, 0);
-      const valorFinal = valorTotalInformado != null ? valorTotalInformado : valorCalculado;
+      const valorCalculado = roundMoney(
+        itensCalculados.reduce((acc, item) => acc + item.subtotal, 0),
+      );
+      const valorFinal =
+        valorTotalInformado != null ? roundMoney(valorTotalInformado) : valorCalculado;
 
       const observacao = [
         "Frete avulso",
@@ -351,18 +444,7 @@ router.get("/:id/impressao", async (req, res) => {
       });
     }
 
-    const evento = await prisma.financeiroEvento.findFirst({
-      where: {
-        tenantId,
-        tipo: "FRETE_AVULSO_CRIADO",
-        entidade: "FreteMovimento",
-        entidadeId: id,
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    const payload = evento?.payload && typeof evento.payload === "object"
-      ? evento.payload
-      : {};
+    const payload = await buscarPayloadAvulso(prisma, tenantId, id);
     let itens = Array.isArray(payload.itens) ? [...payload.itens] : [];
     // Completa pesoKg em itens legados (para ordem de carregamento em sacos)
     const produtoIds = [
@@ -458,10 +540,217 @@ router.get("/:id/impressao", async (req, res) => {
   }
 });
 
-// PATCH /api/fretes/:id — recibo e datas
+// PATCH /api/fretes/:id — avulso completo (itens/tarifas) ou só recibo/datas
 router.patch("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
+    const body = req.body || {};
+    const tenantId = req.tenantId;
+    const existing = await prisma.freteMovimento.findFirst({
+      where: { id, ...tw(req) },
+      include: { venda: true },
+    });
+    if (!existing) return res.status(404).json({ error: "Frete não encontrado" });
+
+    const querEdicaoCompleta =
+      !existing.vendaId &&
+      (Array.isArray(body.itens) ||
+        body.produtoId != null ||
+        body.clienteId != null ||
+        body.motoristaId != null ||
+        body.precoSaco != null ||
+        body.precoTonelada != null);
+
+    if (querEdicaoCompleta) {
+      const clienteId =
+        body.clienteId != null
+          ? parseIntField(body.clienteId, "clienteId", { min: 1 })
+          : existing.clienteId;
+      const motoristaId = parseIntField(body.motoristaId, "motoristaId", { min: 1 });
+      const precoSaco =
+        parseNumberField(body.precoSaco, "precoSaco", { required: false, min: 0 }) ?? 0;
+      const precoTonelada =
+        parseNumberField(body.precoTonelada, "precoTonelada", { required: false, min: 0 }) ??
+        0;
+      const valorTotalInformado =
+        parseNumberField(body.valorTotal, "valorTotal", { required: false, min: 0.01 }) ??
+        null;
+      const dataMovimento =
+        body.dataMovimento != null && String(body.dataMovimento).trim() !== ""
+          ? parseDateField(body.dataMovimento, "dataMovimento", { required: true })
+          : body.data != null && String(body.data).trim() !== ""
+            ? parseDateField(body.data, "data", { required: true })
+            : existing.data;
+      const observacaoLivre = String(
+        body.observacaoLivre != null ? body.observacaoLivre : body.observacao || "",
+      ).trim();
+      const pagoNoAto =
+        body.pagoNoAto !== undefined
+          ? !!body.pagoNoAto
+          : body.reciboEmitido !== undefined
+            ? !!body.reciboEmitido
+            : !!existing.reciboEmitido;
+      const pagamentoTipo = String(body.pagamentoTipo || "dinheiro");
+      const pagamentoData =
+        body.pagamentoData != null && String(body.pagamentoData).trim() !== ""
+          ? parseDateField(body.pagamentoData, "pagamentoData", { required: true })
+          : body.reciboData != null && String(body.reciboData).trim() !== ""
+            ? parseDateField(body.reciboData, "reciboData", { required: true })
+            : dataMovimento;
+      const reciboNumero =
+        body.reciboNumero !== undefined
+          ? body.reciboNumero || null
+          : existing.reciboNumero;
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const [cliente, motorista] = await Promise.all([
+          tx.cliente.findFirst({ where: { id: clienteId, tenantId } }),
+          tx.motorista.findFirst({ where: { id: motoristaId, tenantId } }),
+        ]);
+        if (!cliente) {
+          const err = new Error("Cliente não encontrado");
+          err.status = 404;
+          throw err;
+        }
+        if (!motorista) {
+          const err = new Error("Motorista não encontrado");
+          err.status = 404;
+          throw err;
+        }
+
+        const itens = await carregarItensFreteAvulso(tx, tenantId, body);
+        const itensCalculados = montarItensCalculados(itens, precoSaco, precoTonelada);
+        const valorCalculado = roundMoney(
+          itensCalculados.reduce((acc, item) => acc + item.subtotal, 0),
+        );
+        const valorFinal =
+          valorTotalInformado != null ? roundMoney(valorTotalInformado) : valorCalculado;
+        if (!(valorFinal > 0)) {
+          const err = new Error("Valor do frete deve ser maior que zero");
+          err.status = 400;
+          throw err;
+        }
+
+        const observacao = montarObservacaoAvulso(
+          motorista.nome,
+          itensCalculados,
+          observacaoLivre,
+        );
+
+        const f = await tx.freteMovimento.update({
+          where: { id },
+          data: {
+            clienteId,
+            valor: valorFinal,
+            data: dataMovimento,
+            observacao,
+            reciboEmitido: pagoNoAto,
+            reciboData: pagoNoAto ? pagamentoData : null,
+            reciboNumero: pagoNoAto ? reciboNumero : null,
+          },
+          include: {
+            cliente: true,
+            venda: true,
+          },
+        });
+
+        const numerosTitulo = [`FRETE-AVULSO-${id}`, `VALE-FRETE-${id}`];
+        const obsPagamento = `Pagamento de frete avulso #${id}`;
+
+        if (pagoNoAto) {
+          await tx.tituloReceber.deleteMany({
+            where: { tenantId, numero: { in: numerosTitulo }, status: "aberto" },
+          });
+          const pagExistente = await tx.pagamento.findFirst({
+            where: { tenantId, observacoes: obsPagamento },
+          });
+          if (pagExistente) {
+            await tx.pagamento.update({
+              where: { id: pagExistente.id },
+              data: {
+                clienteId,
+                valor: valorFinal,
+                data: pagamentoData,
+                tipo: pagamentoTipo === "transferencia" ? "transferencia" : "dinheiro",
+              },
+            });
+          } else {
+            await tx.pagamento.create({
+              data: {
+                tenantId,
+                clienteId,
+                vendaId: null,
+                tipo: pagamentoTipo === "transferencia" ? "transferencia" : "dinheiro",
+                valor: valorFinal,
+                data: pagamentoData,
+                observacoes: obsPagamento,
+              },
+            });
+          }
+        } else {
+          await tx.pagamento.deleteMany({
+            where: { tenantId, observacoes: obsPagamento },
+          });
+          const tituloAberto = await tx.tituloReceber.findFirst({
+            where: { tenantId, numero: { in: numerosTitulo }, status: "aberto" },
+          });
+          if (tituloAberto) {
+            await tx.tituloReceber.update({
+              where: { id: tituloAberto.id },
+              data: {
+                clienteId,
+                valorOriginal: valorFinal,
+                observacoes: observacao,
+              },
+            });
+          } else {
+            await tx.tituloReceber.create({
+              data: {
+                tenantId,
+                clienteId,
+                vendaId: null,
+                numero: `FRETE-AVULSO-${id}`,
+                vencimento: (() => {
+                  const d = new Date(dataMovimento);
+                  d.setDate(d.getDate() + 30);
+                  return d;
+                })(),
+                valorOriginal: valorFinal,
+                status: "aberto",
+                observacoes: observacao,
+              },
+            });
+          }
+        }
+
+        await registrarAuditoria(tx, req, {
+          tenantId,
+          tipo: "FRETE_AVULSO_ATUALIZADO",
+          entidade: "FreteMovimento",
+          entidadeId: id,
+          clienteId,
+          vendaId: null,
+          valor: valorFinal,
+          payload: {
+            motoristaId,
+            motoristaNome: motorista.nome,
+            itens: itensCalculados,
+            precoSaco,
+            precoTonelada,
+            valorCalculado,
+            valorFinal,
+            pagoNoAto,
+            observacaoLivre: observacaoLivre || null,
+          },
+        });
+
+        return f;
+      });
+
+      return res.json(updated);
+    }
+
+    // Patch parcial (recibo / valor / data) — frete de venda ou ajuste rápido
     const {
       reciboEmitido,
       reciboNumero,
@@ -469,14 +758,7 @@ router.patch("/:id", async (req, res) => {
       data,
       observacao,
       valor,
-    } = req.body;
-
-    const tenantId = req.tenantId;
-    const existing = await prisma.freteMovimento.findFirst({
-      where: { id, ...tw(req) },
-      include: { venda: true },
-    });
-    if (!existing) return res.status(404).json({ error: "Frete não encontrado" });
+    } = body;
 
     const dataPatch = {};
     if (reciboEmitido !== undefined) dataPatch.reciboEmitido = !!reciboEmitido;
@@ -739,7 +1021,13 @@ router.get("/:id", async (req, res) => {
       where: { id, ...tw(req) },
       include: {
         cliente: {
-          select: { id: true, razaoSocial: true, nomeFantasia: true },
+          select: {
+            id: true,
+            razaoSocial: true,
+            nomeFantasia: true,
+            fretePadraoSaco: true,
+            fretePadraoTonelada: true,
+          },
         },
         venda: {
           select: { id: true, numeroVenda: true, dataVenda: true },
@@ -747,7 +1035,30 @@ router.get("/:id", async (req, res) => {
       },
     });
     if (!frete) return res.status(404).json({ error: "Frete não encontrado" });
-    res.json(frete);
+
+    let avulso = null;
+    if (frete.vendaId == null) {
+      const payload = await buscarPayloadAvulso(prisma, req.tenantId, id);
+      const itens = Array.isArray(payload.itens) ? payload.itens : [];
+      avulso = {
+        motoristaId: payload.motoristaId != null ? Number(payload.motoristaId) : null,
+        motoristaNome: payload.motoristaNome != null ? String(payload.motoristaNome) : null,
+        precoSaco: payload.precoSaco != null ? Number(payload.precoSaco) : null,
+        precoTonelada: payload.precoTonelada != null ? Number(payload.precoTonelada) : null,
+        observacaoLivre:
+          payload.observacaoLivre != null ? String(payload.observacaoLivre) : null,
+        itens: itens.map((i) => ({
+          produtoId: Number(i.produtoId),
+          produtoNome: i.produtoNome || null,
+          quantidade: Number(i.quantidade),
+          unidade: i.unidade || "",
+          pesoKg: i.pesoKg != null ? Number(i.pesoKg) : null,
+          subtotal: i.subtotal != null ? Number(i.subtotal) : null,
+        })),
+      };
+    }
+
+    res.json({ ...frete, avulso });
   } catch (e) {
     handleRouteError(res, e);
   }

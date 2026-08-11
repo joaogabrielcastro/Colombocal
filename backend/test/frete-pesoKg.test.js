@@ -39,6 +39,27 @@ test("freteLinha sem pesoKg usa tarifa saco", () => {
   assert.equal(v, 15);
 });
 
+test("freteLinha arredonda para 2 casas", () => {
+  const v = freteLinha({
+    produto: { unidade: "saco", pesoKg: 7 },
+    quantidade: 3,
+    fretePorSaco: 2.5,
+    fretePorTonelada: 0,
+  });
+  // 3 × 2.5 × 7/20 = 2.625 → 2.63
+  assert.equal(v, 2.63);
+});
+
+test("freteLinha aceita unidade SAC", () => {
+  const v = freteLinha({
+    produto: { unidade: "SAC" },
+    quantidade: 4,
+    fretePorSaco: 1.25,
+    fretePorTonelada: 0,
+  });
+  assert.equal(v, 5);
+});
+
 test("calcularFreteAutomatico mistura saco normal e pintura com frete/saco", () => {
   const mapa = new Map([
     [1, { id: 1, unidade: "saco" }],

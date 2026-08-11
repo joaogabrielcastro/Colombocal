@@ -3,6 +3,11 @@ function toNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Arredonda valor monetário (2 casas). */
+function roundMoney(n) {
+  return Math.round((toNum(n) + Number.EPSILON) * 100) / 100;
+}
+
 /** Peso de referência do saco “normal” na Colombocal (para ratear frete/saco). */
 const PESO_SACO_PADRAO_KG = 20;
 
@@ -15,7 +20,7 @@ function normalizarUnidade(unidadeRaw) {
   const u = String(unidadeRaw || "")
     .trim()
     .toLowerCase();
-  if (["saco", "sacos", "sc"].includes(u)) return "saco";
+  if (["saco", "sacos", "sc", "sac"].includes(u)) return "saco";
   if (["ton", "tonelada", "toneladas", "t"].includes(u)) return "ton";
   if (["kg", "quilo", "quilos"].includes(u)) return "kg";
   return u;
@@ -44,18 +49,20 @@ function freteLinha({ produto, quantidade, fretePorSaco, fretePorTonelada }) {
   const tarifaSaco = toNum(fretePorSaco);
   const tarifaTon = toNum(fretePorTonelada);
   const pesoKg = pesoKgProduto(produto);
+  let bruto = 0;
   if (pesoKg > 0) {
-    return qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
+    bruto = qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
+  } else {
+    const unidade = normalizarUnidade(produto?.unidade);
+    if (unidade === "saco") bruto = qtd * tarifaSaco;
+    else if (unidade === "ton") bruto = qtd * tarifaTon;
+    else if (unidade === "kg") bruto = qtd * (tarifaTon / 1000);
   }
-  const unidade = normalizarUnidade(produto?.unidade);
-  if (unidade === "saco") return qtd * tarifaSaco;
-  if (unidade === "ton") return qtd * tarifaTon;
-  if (unidade === "kg") return qtd * (tarifaTon / 1000);
-  return 0;
+  return roundMoney(bruto);
 }
 
 function calcularFreteAutomatico(itens, produtosPorId, fretePorSaco, fretePorTonelada) {
-  return itens.reduce((acc, item) => {
+  const total = itens.reduce((acc, item) => {
     const produto =
       produtosPorId.get(item.produtoId) ||
       produtosPorId.get(Number(item.produtoId));
@@ -69,6 +76,7 @@ function calcularFreteAutomatico(itens, produtosPorId, fretePorSaco, fretePorTon
       })
     );
   }, 0);
+  return roundMoney(total);
 }
 
 /**
@@ -92,6 +100,7 @@ function quantidadeEmSacos(params) {
 
 module.exports = {
   toNum,
+  roundMoney,
   pesoKgProduto,
   normalizarUnidade,
   freteUnitarioPorPeso,

@@ -8,11 +8,16 @@ function toNum(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Arredonda valor monetário (2 casas). */
+export function roundMoney(n: unknown): number {
+  return Math.round((toNum(n) + Number.EPSILON) * 100) / 100;
+}
+
 function normalizarUnidade(unidadeRaw: unknown): string {
   const u = String(unidadeRaw || "")
     .trim()
     .toLowerCase();
-  if (["saco", "sacos", "sc"].includes(u)) return "saco";
+  if (["saco", "sacos", "sc", "sac"].includes(u)) return "saco";
   if (["ton", "tonelada", "toneladas", "t"].includes(u)) return "ton";
   if (["kg", "quilo", "quilos"].includes(u)) return "kg";
   return u;
@@ -67,12 +72,14 @@ export function freteLinha(params: {
   const tarifaSaco = toNum(params.fretePorSaco);
   const tarifaTon = toNum(params.fretePorTonelada);
   const pesoKg = toNum(params.pesoKg);
+  let bruto = 0;
   if (pesoKg > 0) {
-    return qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
+    bruto = qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
+  } else {
+    const unidade = normalizarUnidade(params.unidade);
+    if (unidade === "saco") bruto = qtd * tarifaSaco;
+    else if (unidade === "ton") bruto = qtd * tarifaTon;
+    else if (unidade === "kg") bruto = qtd * (tarifaTon / 1000);
   }
-  const unidade = normalizarUnidade(params.unidade);
-  if (unidade === "saco") return qtd * tarifaSaco;
-  if (unidade === "ton") return qtd * tarifaTon;
-  if (unidade === "kg") return qtd * (tarifaTon / 1000);
-  return 0;
+  return roundMoney(bruto);
 }
