@@ -7,6 +7,7 @@ import {
   formatMoney,
   vendaNumeroPublico,
 } from "@/lib/utils";
+import { downloadCsvPtBr } from "@/lib/csv";
 import type { RelVendas } from "../types";
 import type {
   ResumoCliente,
@@ -233,29 +234,19 @@ export function exportarRelatorioVendasPdf(
 }
 
 export function exportarRelatorioVendasCSV(data: RelVendas, dataInicio: string, dataFim: string) {
-  const header = "Ordem,Data,Cliente,Vendedor,Valor Total,Frete,Frete pago\n";
-  const rows = data.vendas
-    .map((v) =>
-      [
-        vendaNumeroPublico(v),
-        formatDate(v.dataVenda),
-        (v.cliente.nomeFantasia || v.cliente.razaoSocial).replace(/[,;"]/g, " "),
-        v.vendedor.nome.replace(/[,;"]/g, " "),
-        parseFloat(String(v.valorTotal)).toFixed(2),
-        parseFloat(String(v.frete)).toFixed(2),
-        formatFreteReciboLinha(v).replace(/[,;"]/g, " "),
-      ].join(","),
-    )
-    .join("\n");
-  const blob = new Blob(["\uFEFF" + header + rows], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `relatorio-vendas-${dataInicio}-${dataFim}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsvPtBr(
+    `relatorio-vendas-${dataInicio}-${dataFim}.csv`,
+    ["Ordem", "Data", "Cliente", "Vendedor", "Valor Total", "Frete", "Frete pago"],
+    data.vendas.map((v) => [
+      vendaNumeroPublico(v),
+      formatDate(v.dataVenda),
+      v.cliente.nomeFantasia || v.cliente.razaoSocial,
+      v.vendedor.nome,
+      parseFloat(String(v.valorTotal)),
+      parseFloat(String(v.frete)),
+      formatFreteReciboLinha(v),
+    ]),
+  );
 }
 
 export function exportarRelatorioVendasExcel(data: RelVendas, dataInicio: string, dataFim: string) {

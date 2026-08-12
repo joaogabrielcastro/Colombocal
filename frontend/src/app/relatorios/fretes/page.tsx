@@ -9,6 +9,7 @@ import api from "@/lib/api";
 import { formatDate, formatMoney, localDateInputValue } from "@/lib/utils";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
+import { downloadCsvPtBr } from "@/lib/csv";
 
 type FreteLinha = {
   id: number;
@@ -81,32 +82,21 @@ export default function RelatorioFretesPage() {
 
   const exportarCSV = () => {
     if (!data?.fretes.length) return;
-    const header =
-      "Data,Cliente,Tipo,Ordem,Motorista,Valor,Recibo,Nº recibo,Observação\n";
-    const rows = data.fretes
-      .map((f) =>
-        [
-          formatDate(f.data),
-          (f.cliente?.nomeFantasia || f.cliente?.razaoSocial || "").replace(/[,;"]/g, " "),
-          f.avulso ? "Avulso" : "Venda",
-          f.venda?.numeroVenda != null ? `#${f.venda.numeroVenda}` : "",
-          (f.venda?.motorista?.nome || "").replace(/[,;"]/g, " "),
-          f.valor.toFixed(2),
-          f.reciboEmitido ? "Sim" : "Não",
-          f.reciboNumero || "",
-          (f.observacao || "").replace(/[,;"]/g, " "),
-        ].join(","),
-      )
-      .join("\n");
-    const blob = new Blob(["\uFEFF" + header + rows], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `relatorio-fretes-${dataInicio}-${dataFim}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvPtBr(
+      `relatorio-fretes-${dataInicio}-${dataFim}.csv`,
+      ["Data", "Cliente", "Tipo", "Ordem", "Motorista", "Valor", "Recibo", "Nº recibo", "Observação"],
+      data.fretes.map((f) => [
+        formatDate(f.data),
+        f.cliente?.nomeFantasia || f.cliente?.razaoSocial || "",
+        f.avulso ? "Avulso" : "Venda",
+        f.venda?.numeroVenda != null ? `#${f.venda.numeroVenda}` : "",
+        f.venda?.motorista?.nome || "",
+        f.valor,
+        f.reciboEmitido ? "Sim" : "Não",
+        f.reciboNumero || "",
+        f.observacao || "",
+      ]),
+    );
   };
 
   return (

@@ -13,6 +13,7 @@ import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportC
 import { EmptyState } from "@/components/ui/empty-state";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { downloadCsvPtBr } from "@/lib/csv";
 
 interface ContaCliente {
   cliente: { id: number; razaoSocial: string; nomeFantasia?: string };
@@ -82,23 +83,16 @@ export function ContasPorClientePanel() {
 
   const exportarCSV = () => {
     if (!dados) return;
-    const csv =
-      "Cliente,Débitos,Pagamentos,Em aberto\n" +
-      dados.clientesDevedores
-        .map(
-          (c) =>
-            `${(c.cliente.nomeFantasia || c.cliente.razaoSocial).replace(/[,;"]/g, " ")},${c.debito.toFixed(2)},${c.credito.toFixed(2)},${c.saldo.toFixed(2)}`,
-        )
-        .join("\n");
-    const blob = new Blob(["\uFEFF" + csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "financeiro-devedores.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvPtBr(
+      "financeiro-devedores.csv",
+      ["Cliente", "Débitos", "Pagamentos", "Em aberto"],
+      dados.clientesDevedores.map((c) => [
+        c.cliente.nomeFantasia || c.cliente.razaoSocial,
+        c.debito,
+        c.credito,
+        c.saldo,
+      ]),
+    );
   };
 
   const exportarCsvAsync = async () => {

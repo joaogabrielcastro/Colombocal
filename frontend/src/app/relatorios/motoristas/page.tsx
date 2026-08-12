@@ -9,6 +9,7 @@ import api from "@/lib/api";
 import { formatMoney, localDateInputValue } from "@/lib/utils";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
+import { downloadCsvPtBr } from "@/lib/csv";
 
 type MotoristaLinha = {
   id: number;
@@ -66,31 +67,20 @@ export default function RelatorioMotoristasPage() {
 
   const exportarCSV = () => {
     if (!data?.motoristas.length) return;
-    const header =
-      "Motorista,Placa,Veículo,Vendas,Valor produtos,Frete,OCs,Itens OC\n";
-    const rows = data.motoristas
-      .map((m) =>
-        [
-          m.nome.replace(/[,;"]/g, " "),
-          m.placa || "",
-          (m.veiculo || "").replace(/[,;"]/g, " "),
-          m.vendas.quantidade,
-          m.vendas.valorProdutos.toFixed(2),
-          m.vendas.frete.toFixed(2),
-          m.carregamentos.quantidade,
-          m.carregamentos.totalItens,
-        ].join(","),
-      )
-      .join("\n");
-    const blob = new Blob(["\uFEFF" + header + rows], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `relatorio-motoristas-${dataInicio}-${dataFim}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvPtBr(
+      `relatorio-motoristas-${dataInicio}-${dataFim}.csv`,
+      ["Motorista", "Placa", "Veículo", "Vendas", "Valor produtos", "Frete", "OCs", "Itens OC"],
+      data.motoristas.map((m) => [
+        m.nome,
+        m.placa || "",
+        m.veiculo || "",
+        m.vendas.quantidade,
+        m.vendas.valorProdutos,
+        m.vendas.frete,
+        m.carregamentos.quantidade,
+        m.carregamentos.totalItens,
+      ]),
+    );
   };
 
   return (

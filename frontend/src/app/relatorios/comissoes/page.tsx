@@ -10,6 +10,8 @@ import { VendaOrdemCell } from "@/components/VendaOrdem";
 import api from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
+import { toast } from "sonner";
+import { downloadCsvPtBr } from "@/lib/csv";
 import * as XLSX from "xlsx";
 
 interface VendaComissaoLinha {
@@ -32,11 +34,38 @@ interface ComissaoVendedor {
   quantidadeVendas: number;
 }
 
-type ComissaoModo = "emissao" | "caixa";
+function cellInt(row: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    const raw = row[key];
+    if (raw == null || raw === "") continue;
+    const n = parseInt(String(raw).replace(/[^\d-]/g, ""), 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
+}
+
+function cellMoney(row: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    const raw = row[key];
+    if (raw == null || raw === "") continue;
+    const n = parseFloat(String(raw).replace(",", "."));
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
+function cellText(row: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const raw = row[key];
+    if (raw == null) continue;
+    const s = String(raw).trim();
+    if (s) return s;
+  }
+  return "";
+}
 
 export default function ComissoesPage() {
   const [dados, setDados] = useState<ComissaoVendedor[]>([]);
-  const [modo, setModo] = useState<ComissaoModo>("emissao");
   const [loading, setLoading] = useState(false);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
@@ -51,68 +80,23 @@ export default function ComissoesPage() {
     const fim = localDateInputValue(hoje);
     setDataInicio(ini);
     setDataFim(fim);
-    let cancelled = false;
-    (async () => {
-      let m: ComissaoModo = "emissao";
-      try {
-        const c = await api.get<{ comissaoModo: ComissaoModo }>("/config");
-        m = c.comissaoModo === "caixa" ? "caixa" : "emissao";
-        if (!cancelled) setModo(m);
-      } catch {
-        /* default emissao */
-      }
-      if (cancelled) return;
-      const params = new URLSearchParams();
-      params.set("dataInicio", ini);
-      params.set("dataFim", fim);
-      params.set("modo", m);
-      setLoading(true);
-      try {
-        const r = await api.get<{
-          modo: ComissaoModo;
-          resultado: ComissaoVendedor[];
-        }>(`/relatorios/comissoes?${params}`);
-        if (!cancelled) {
-          setModo(r.modo);
-          setDados(r.resultado);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          reportApiError(e, { title: "Não foi possível carregar comissões" });
-          setDados([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    buscar(ini, fim);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial do mês
   }, []);
 
   const exportarCSV = () => {
     if (!dados.length) return;
-    const header = "Vendedor,Qtd Vendas,Total Vendas,Comissão %,Comissão R$\n";
-    const rows = dados
-      .map((d) =>
-        [
-          d.vendedor.nome.replace(/[,;"]/g, " "),
-          d.quantidadeVendas,
-          d.totalVendas.toFixed(2),
-          d.percentual.toFixed(2),
-          d.comissao.toFixed(2),
-        ].join(","),
-      )
-      .join("\n");
-    const blob = new Blob(["\uFEFF" + header + rows], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `comissoes-${dataInicio}-${dataFim}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvPtBr(
+      `comissoes-${dataInicio}-${dataFim}.csv`,
+      ["Vendedor", "Qtd Vendas", "Total Vendas", "Comissão %", "Comissão R$"],
+      dados.map((d) => [
+        d.vendedor.nome,
+        d.quantidadeVendas,
+        d.totalVendas,
+        d.percentual,
+        d.comissao,
+      ]),
+    );
   };
 
   const exportarTemplateAjustes = (alvo?: ComissaoVendedor) => {
@@ -122,6 +106,7 @@ export default function ComissoesPage() {
         vendedor: d.vendedor.nome,
         vendedorId: d.vendedor.id,
         vendaId: v.id,
+        ordem: v.numeroVenda ?? v.id,
         dataVenda: formatDate(v.dataVenda),
         cliente: v.cliente?.nomeFantasia || v.cliente?.razaoSocial || "",
         baseComissao: parseFloat(String(v.valorTotal || 0)),
@@ -152,47 +137,64 @@ export default function ComissoesPage() {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
         defval: "",
+        raw: true,
       });
       const ajustes = rows
         .map((r) => ({
-          vendaId: parseInt(String(r.vendaId || r.VendaId || r.VENDAID || 0), 10),
-          ajusteValor: parseFloat(
-            String(
-              r.ajusteComissaoValor ||
-                r.ajustevalor ||
-                r.ajuste ||
-                r.AjusteComissaoValor ||
-                0,
-            ).replace(",", "."),
-          ),
-          motivo: String(r.motivoAjuste || r.motivo || r.MotivoAjuste || "").trim(),
+          vendaId: cellInt(r, ["vendaId", "VendaId", "VENDAID", "id"]),
+          numeroVenda: cellInt(r, [
+            "ordem",
+            "Ordem",
+            "numeroVenda",
+            "NumeroVenda",
+            "nVenda",
+          ]),
+          ajusteValor: cellMoney(r, [
+            "ajusteComissaoValor",
+            "ajustevalor",
+            "ajuste",
+            "AjusteComissaoValor",
+          ]),
+          motivo: cellText(r, ["motivoAjuste", "motivo", "MotivoAjuste"]),
         }))
-        .filter((a) => Number.isFinite(a.vendaId) && a.vendaId > 0 && Number.isFinite(a.ajusteValor));
+        .filter(
+          (a) =>
+            (a.vendaId > 0 || a.numeroVenda > 0) && Number.isFinite(a.ajusteValor),
+        );
 
       if (!ajustes.length) {
-        alert("Nenhum ajuste válido encontrado no arquivo.");
+        toast.error("Nenhum ajuste válido encontrado no arquivo.");
         return;
       }
-      await api.post("/relatorios/comissoes/ajustes-lote", { ajustes });
+      const resp = await api.post<{
+        success: boolean;
+        total: number;
+        ignorados?: number[];
+      }>("/relatorios/comissoes/ajustes-lote", { ajustes });
+      const ignorados = resp.ignorados?.length ?? 0;
+      if (ignorados > 0) {
+        toast.success(
+          `${resp.total} ajuste(s) importado(s). ${ignorados} linha(s) ignorada(s) (venda não encontrada).`,
+        );
+      } else {
+        toast.success(`${resp.total} ajuste(s) importado(s).`);
+      }
       buscar();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível importar o Excel" });
     } finally {
       setImportando(false);
     }
   };
 
-  const buscar = (ini?: string, fim?: string, m?: ComissaoModo) => {
+  const buscar = (ini?: string, fim?: string) => {
     const params = new URLSearchParams();
     if (ini ?? dataInicio) params.set("dataInicio", ini ?? dataInicio);
     if (fim ?? dataFim) params.set("dataFim", fim ?? dataFim);
-    const modoUse = m ?? modo;
-    params.set("modo", modoUse);
     setLoading(true);
     api
-      .get<{ modo: ComissaoModo; resultado: ComissaoVendedor[] }>(
-        `/relatorios/comissoes?${params}`,
-      )
+      .get<{ resultado: ComissaoVendedor[] }>(`/relatorios/comissoes?${params}`)
       .then((r) => {
-        setModo(r.modo);
         setDados(r.resultado);
       })
       .catch((e) => {
@@ -200,11 +202,6 @@ export default function ComissoesPage() {
         setDados([]);
       })
       .finally(() => setLoading(false));
-  };
-
-  const salvarModoPadrao = async () => {
-    await api.put("/config", { comissaoModo: modo });
-    buscar();
   };
 
   const totalComissao = dados.reduce((acc, d) => acc + d.comissao, 0);
@@ -238,10 +235,7 @@ export default function ComissoesPage() {
     const fim = dataFim
       ? new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR")
       : "";
-    const modoLabel =
-      modo === "caixa"
-        ? "Caixa (proporcional ao recebido na ordem)"
-        : "Emissão (valor na venda)";
+    const modoLabel = "Emissão (valor na venda)";
 
     const rowsHtml = d.vendas
       .map((v) => {
@@ -250,20 +244,29 @@ export default function ComissoesPage() {
           dataVenda?: string;
           valorTotal?: unknown;
           comissaoCalculada?: number;
+          comissaoFinal?: number;
+          ajusteComissaoValor?: number;
+          ajusteComissaoMotivo?: string | null;
           itens?: Array<{ quantidade?: unknown }>;
         };
-        const comLinha =
+        const comBase =
           vx.comissaoCalculada ??
           (parseFloat(String(vx.valorTotal ?? 0)) * d.percentual) / 100;
+        const ajuste = parseFloat(String(vx.ajusteComissaoValor ?? 0)) || 0;
+        const comFinal =
+          vx.comissaoFinal ?? comBase + ajuste;
         const qtd = quantidadeItensVenda(vx);
         const cliente =
           vx.cliente?.nomeFantasia?.trim() || vx.cliente?.razaoSocial || "—";
+        const motivo = String(vx.ajusteComissaoMotivo || "").trim();
         return `<tr>
           <td>${escapeHtml(formatDate(String(vx.dataVenda ?? "")))}</td>
           <td class="num">${escapeHtml(formatMoney(parseFloat(String(vx.valorTotal ?? 0))))}</td>
-          <td class="num">${escapeHtml(formatMoney(comLinha))}</td>
+          <td class="num">${escapeHtml(formatMoney(comBase))}</td>
+          <td class="num">${escapeHtml(formatMoney(ajuste))}</td>
+          <td class="num"><strong>${escapeHtml(formatMoney(comFinal))}</strong></td>
           <td class="num">${qtd.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</td>
-          <td>${escapeHtml(cliente)}</td>
+          <td>${escapeHtml(cliente)}${motivo ? `<div class="motivo">${escapeHtml(motivo)}</div>` : ""}</td>
         </tr>`;
       })
       .join("");
@@ -290,6 +293,7 @@ export default function ComissoesPage() {
     td.num, th.num { text-align: right; white-space: nowrap; }
     .tt { margin-top: 12px; font-weight: 700; }
     .hint { margin-top: 16px; font-size: 10px; color: #666; }
+    .motivo { font-size: 10px; color: #555; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -305,12 +309,14 @@ export default function ComissoesPage() {
       <tr>
         <th>Emissão</th>
         <th class="num">Base cálculo</th>
+        <th class="num">Comissão base</th>
+        <th class="num">Ajuste</th>
         <th class="num">Comissão</th>
         <th class="num">Quantidade</th>
         <th>Cliente</th>
       </tr>
     </thead>
-    <tbody>${rowsHtml || `<tr><td colspan="5" style="text-align:center;color:#666">Nenhuma venda no período.</td></tr>`}</tbody>
+    <tbody>${rowsHtml || `<tr><td colspan="7" style="text-align:center;color:#666">Nenhuma venda no período.</td></tr>`}</tbody>
   </table>
   <div class="tt">
     TT REPRESENTANTE — Base: ${escapeHtml(formatMoney(d.totalVendas))} · Comissão: ${escapeHtml(formatMoney(d.comissao))} · Quantidade: ${totalQtd.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 })} · Vendas: ${d.quantidadeVendas}
@@ -324,21 +330,21 @@ export default function ComissoesPage() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
           Comissões por Vendedor
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Modo atual:{" "}
-          <strong>{modo === "caixa" ? "sobre caixa (pago na ordem)" : "emissão (valor na venda)"}</strong>
+        <p className="text-sm text-gray-500 mt-1.5">
+          Comissão sobre o valor da venda (produtos). Ajustes de frete/caminhão entram
+          pelo Excel.
         </p>
       </div>
 
-      <div className="card p-4 mb-6 print:hidden">
-        <div className="flex gap-3 flex-wrap">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
+      <div className="card p-4 sm:p-5 mb-6 print:hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-4">
+          <div className="xl:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Data Início
             </label>
             <input
@@ -348,8 +354,10 @@ export default function ComissoesPage() {
               className="input-field"
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Data Fim</label>
+          <div className="xl:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Data Fim
+            </label>
             <input
               type="date"
               value={dataFim}
@@ -357,191 +365,188 @@ export default function ComissoesPage() {
               className="input-field"
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Regra</label>
-            <select
-              value={modo}
-              onChange={(e) => {
-                const m = e.target.value as ComissaoModo;
-                setModo(m);
-                buscar(undefined, undefined, m);
-              }}
-              className="input-field min-w-44"
-            >
-              <option value="emissao">Emissão (histórico na venda)</option>
-              <option value="caixa">Caixa (proporcional ao recebido)</option>
-            </select>
-          </div>
-          <div className="flex items-end gap-2 flex-wrap">
-            <button onClick={() => buscar()} className="btn-primary">
+          <div className="xl:col-span-8 flex flex-wrap items-end gap-2">
+            <button type="button" onClick={() => buscar()} className="btn-primary">
               <MagnifyingGlassIcon className="w-4 h-4" /> Calcular
             </button>
-            <button type="button" onClick={salvarModoPadrao} className="btn-secondary text-sm">
-              Salvar regra padrão
-            </button>
-            {dados.length > 0 && (
-              <button
-                type="button"
-                onClick={exportarCSV}
-                className="btn-secondary flex items-center gap-1"
-              >
-                <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
-              </button>
-            )}
-            {dados.length > 0 && (
-              <label className="btn-secondary flex items-center gap-1 cursor-pointer">
-                {importando ? "Importando..." : "Importar Excel Ajustado"}
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void importarAjustes(file);
-                    e.currentTarget.value = "";
-                  }}
-                />
-              </label>
-            )}
+            {dados.length > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={exportarCSV}
+                  className="btn-secondary flex items-center gap-1.5"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+                </button>
+                <label className="btn-secondary flex items-center gap-1.5 cursor-pointer">
+                  {importando ? "Importando..." : "Importar Excel Ajustado"}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void importarAjustes(file);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
 
       {loading && (
-        <div className="card p-4">
+        <div className="card p-5">
           <TableListSkeleton rows={8} cols={5} />
         </div>
       )}
 
       {!loading && dados.length > 0 && (
         <>
-          {/* Resumo */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="card p-4 text-center">
-              <p className="text-sm text-gray-500">Total em Vendas</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6 mb-5">
+            <div className="card p-5 sm:p-6">
+              <p className="text-sm text-gray-500 mb-1">Total em Vendas</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight tabular-nums">
                 {formatMoney(totalVendas)}
               </p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-sm text-gray-500">Total em Comissões</p>
-              <p className="text-2xl font-bold text-orange-600 mt-1">
+            <div className="card p-5 sm:p-6">
+              <p className="text-sm text-gray-500 mb-1">Total em Comissões</p>
+              <p className="text-2xl sm:text-3xl font-bold text-orange-600 tracking-tight tabular-nums">
                 {formatMoney(totalComissao)}
               </p>
             </div>
           </div>
 
-          {/* Por vendedor */}
-          {dados.map((d) => (
-            <div key={d.vendedor.id} className="card mb-3 overflow-hidden">
-              <div className="flex flex-wrap items-stretch justify-between gap-2 px-5 py-4 border-b border-gray-100">
-                <button
-                  type="button"
-                  className="flex-1 min-w-[200px] text-left rounded-lg hover:bg-gray-50 transition-colors px-2 py-1 -ml-2"
-                  onClick={() =>
-                    setExpandido(
-                      expandido === d.vendedor.id ? null : d.vendedor.id,
-                    )
-                  }
-                >
-                  <p className="font-semibold text-gray-900">
-                    {d.vendedor.nome}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {d.quantidadeVendas} vendas • comissão:{" "}
-                    {d.percentual.toFixed(2)}%
-                  </p>
-                </button>
-                <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-                  <div className="text-right">
+          <div className="space-y-3">
+            {dados.map((d) => (
+              <div key={d.vendedor.id} className="card overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(9rem,0.55fr)_minmax(9rem,0.55fr)_auto] gap-3 lg:gap-6 items-center px-4 sm:px-5 py-4 border-b border-gray-100">
+                  <button
+                    type="button"
+                    className="min-w-0 text-left rounded-lg hover:bg-gray-50 transition-colors px-2 py-1 -mx-2"
+                    onClick={() =>
+                      setExpandido(
+                        expandido === d.vendedor.id ? null : d.vendedor.id,
+                      )
+                    }
+                  >
+                    <p className="font-semibold text-gray-900 truncate" title={d.vendedor.nome}>
+                      {d.vendedor.nome}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {d.quantidadeVendas} vendas • comissão:{" "}
+                      {d.percentual.toFixed(2)}%
+                    </p>
+                  </button>
+                  <div className="lg:text-right">
                     <p className="text-xs text-gray-500">Vendas</p>
-                    <p className="font-semibold">
+                    <p className="font-semibold tabular-nums text-base sm:text-lg">
                       {formatMoney(d.totalVendas)}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="lg:text-right">
                     <p className="text-xs text-gray-500">Comissão</p>
-                    <p className="font-bold text-orange-600">
+                    <p className="font-bold text-orange-600 tabular-nums text-base sm:text-lg">
                       {formatMoney(d.comissao)}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => imprimirRepresentante(d)}
-                    className="btn-secondary flex items-center gap-1 text-sm shrink-0 print:hidden"
-                    title="Abre só este representante; no navegador use Salvar como PDF"
-                  >
-                    <PrinterIcon className="w-4 h-4" />
-                    PDF (este)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => exportarTemplateAjustes(d)}
-                    className="btn-secondary flex items-center gap-1 text-sm shrink-0 print:hidden"
-                    title="Exporta planilha de ajustes somente deste vendedor"
-                  >
-                    <ArrowDownTrayIcon className="w-4 h-4" />
-                    Excel (este)
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2 print:hidden lg:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => imprimirRepresentante(d)}
+                      className="btn-secondary flex items-center gap-1.5 text-sm"
+                      title="Abre só este representante; no navegador use Salvar como PDF"
+                    >
+                      <PrinterIcon className="w-4 h-4" />
+                      PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportarTemplateAjustes(d)}
+                      className="btn-secondary flex items-center gap-1.5 text-sm"
+                      title="Exporta planilha de ajustes somente deste vendedor"
+                    >
+                      <ArrowDownTrayIcon className="w-4 h-4" />
+                      Excel
+                    </button>
+                  </div>
                 </div>
-              </div>
-              {expandido === d.vendedor.id && d.vendas.length > 0 && (
-                <div className="border-t border-gray-100">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="table-header w-24 bg-slate-50">Ordem</th>
-                        <th className="table-header">Data</th>
-                        <th className="table-header">Cliente</th>
-                        <th className="table-header text-right">Total</th>
-                        <th className="table-header text-right">Comissão base</th>
-                        <th className="table-header text-right">Ajuste (Excel)</th>
-                        <th className="table-header text-right">Comissão final</th>
-                        <th className="table-header">Motivo ajuste</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {d.vendas.map((v: any) => (
-                        <tr key={v.id} className="table-row bg-gray-50">
-                          <VendaOrdemCell venda={v} />
-                          <td className="table-cell">
-                            {formatDate(v.dataVenda)}
-                          </td>
-                          <td className="table-cell">
-                            {v.cliente.nomeFantasia || v.cliente.razaoSocial}
-                          </td>
-                          <td className="table-cell text-right">
-                            {formatMoney(v.valorTotal)}
-                          </td>
-                          <td className="table-cell text-right text-orange-600">
-                            {formatMoney(
-                              v.comissaoCalculada ??
-                                (parseFloat(String(v.valorTotal)) * d.percentual) / 100,
-                            )}
-                          </td>
-                          <td
-                            className={`table-cell text-right ${(parseFloat(String(v.ajusteComissaoValor || 0)) || 0) === 0 ? "text-gray-400" : "text-amber-700 font-semibold"}`}
-                          >
-                            {formatMoney(v.ajusteComissaoValor ?? 0)}
-                          </td>
-                          <td className="table-cell text-right text-orange-700 font-semibold">
-                            {formatMoney(
-                              v.comissaoFinal ??
-                                (v.comissaoCalculada ??
-                                  (parseFloat(String(v.valorTotal)) * d.percentual) / 100),
-                            )}
-                          </td>
-                          <td className="table-cell text-xs text-gray-600">
-                            {v.ajusteComissaoMotivo || "-"}
-                          </td>
+                {expandido === d.vendedor.id && d.vendas.length > 0 && (
+                  <div className="border-t border-gray-100 overflow-x-auto">
+                    <table className="w-full min-w-[880px]">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-slate-50/80">
+                          <th className="table-header text-left px-4 py-3 w-28">
+                            Ordem
+                          </th>
+                          <th className="table-header text-left px-4 py-3">Data</th>
+                          <th className="table-header text-left px-4 py-3 min-w-[180px]">
+                            Cliente
+                          </th>
+                          <th className="table-header text-right px-4 py-3">Total</th>
+                          <th className="table-header text-right px-4 py-3">
+                            Comissão base
+                          </th>
+                          <th className="table-header text-right px-4 py-3">
+                            Ajuste (Excel)
+                          </th>
+                          <th className="table-header text-right px-4 py-3">
+                            Comissão final
+                          </th>
+                          <th className="table-header text-left px-4 py-3">
+                            Motivo ajuste
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ))}
+                      </thead>
+                      <tbody>
+                        {d.vendas.map((v: any) => (
+                          <tr key={v.id} className="table-row bg-gray-50">
+                            <VendaOrdemCell venda={v} />
+                            <td className="table-cell px-4 py-3">
+                              {formatDate(v.dataVenda)}
+                            </td>
+                            <td className="table-cell px-4 py-3">
+                              {v.cliente.nomeFantasia || v.cliente.razaoSocial}
+                            </td>
+                            <td className="table-cell text-right px-4 py-3 tabular-nums">
+                              {formatMoney(v.valorTotal)}
+                            </td>
+                            <td className="table-cell text-right px-4 py-3 text-orange-600 tabular-nums">
+                              {formatMoney(
+                                v.comissaoCalculada ??
+                                  (parseFloat(String(v.valorTotal)) * d.percentual) /
+                                    100,
+                              )}
+                            </td>
+                            <td
+                              className={`table-cell text-right px-4 py-3 tabular-nums ${(parseFloat(String(v.ajusteComissaoValor || 0)) || 0) === 0 ? "text-gray-400" : "text-amber-700 font-semibold"}`}
+                            >
+                              {formatMoney(v.ajusteComissaoValor ?? 0)}
+                            </td>
+                            <td className="table-cell text-right px-4 py-3 text-orange-700 font-semibold tabular-nums">
+                              {formatMoney(
+                                v.comissaoFinal ??
+                                  (v.comissaoCalculada ??
+                                    (parseFloat(String(v.valorTotal)) *
+                                      d.percentual) /
+                                      100),
+                              )}
+                            </td>
+                            <td className="table-cell px-4 py-3 text-xs text-gray-600">
+                              {v.ajusteComissaoMotivo || "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </>
       )}
     </div>

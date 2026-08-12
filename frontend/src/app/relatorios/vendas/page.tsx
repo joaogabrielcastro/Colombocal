@@ -114,9 +114,9 @@ export default function RelatorioVendasPage() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
           Relatório de Vendas
         </h1>
         <div className="mt-2">

@@ -10,6 +10,7 @@ import api from "@/lib/api";
 import { formatDate, localDateInputValue } from "@/lib/utils";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
+import { downloadCsvPtBr } from "@/lib/csv";
 
 type OcLinha = {
   id: number;
@@ -75,36 +76,22 @@ export default function RelatorioCarregamentoPage() {
 
   const exportarCSV = () => {
     if (!data?.ordens.length) return;
-    const header =
-      "OC,Data,Cliente,Cidade,UF,Motorista,Placa,Pedido,Qtd itens,Itens\n";
-    const rows = data.ordens
-      .map((o) =>
-        [
-          o.numeroOc,
-          formatDate(o.dataEmissao),
-          (o.clienteNome || "").replace(/[,;"]/g, " "),
-          (o.clienteCidade || "").replace(/[,;"]/g, " "),
-          o.clienteUf || "",
-          (o.motoristaNome || "").replace(/[,;"]/g, " "),
-          o.motoristaPlaca || "",
-          (o.pedido || "").replace(/[,;"]/g, " "),
-          o.totalItens,
-          o.itens
-            .map((i) => `${i.descricao} ${i.quantidade} ${i.unidade}`)
-            .join(" | ")
-            .replace(/[,;"]/g, " "),
-        ].join(","),
-      )
-      .join("\n");
-    const blob = new Blob(["\uFEFF" + header + rows], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `relatorio-carregamento-${dataInicio}-${dataFim}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvPtBr(
+      `relatorio-carregamento-${dataInicio}-${dataFim}.csv`,
+      ["OC", "Data", "Cliente", "Cidade", "UF", "Motorista", "Placa", "Pedido", "Qtd itens", "Itens"],
+      data.ordens.map((o) => [
+        o.numeroOc,
+        formatDate(o.dataEmissao),
+        o.clienteNome || "",
+        o.clienteCidade || "",
+        o.clienteUf || "",
+        o.motoristaNome || "",
+        o.motoristaPlaca || "",
+        o.pedido || "",
+        o.totalItens,
+        o.itens.map((i) => `${i.descricao} ${i.quantidade} ${i.unidade}`).join(" | "),
+      ]),
+    );
   };
 
   return (

@@ -88,9 +88,9 @@ test("GET /api/relatorios/comissoes emissao e caixa", async () => {
   assert.equal(emissao.body.truncated, false);
   assert.ok(Number(emissao.headers["x-total-count"]) >= 1);
 
-  const caixa = await agent.get("/api/relatorios/comissoes").query({ modo: "caixa" });
-  assert.equal(caixa.status, 200);
-  assert.equal(caixa.body.modo, "caixa");
+  const caixaIgnorado = await agent.get("/api/relatorios/comissoes").query({ modo: "caixa" });
+  assert.equal(caixaIgnorado.status, 200);
+  assert.equal(caixaIgnorado.body.modo, "emissao");
 
   const porVendedor = await agent
     .get("/api/relatorios/comissoes")
@@ -126,6 +126,25 @@ test("POST /api/relatorios/comissoes/ajustes-lote", async () => {
     .post("/api/relatorios/comissoes/ajustes-lote")
     .send({ ajustes: [{ vendaId: 999999, ajusteValor: 1 }] });
   assert.equal(vendaOutroTenant.status, 400);
+
+  const porNumero = await agent.post("/api/relatorios/comissoes/ajustes-lote").send({
+    ajustes: [{ numeroVenda: venda.numeroVenda, ajusteValor: 7, motivo: "ordem" }],
+  });
+  assert.equal(porNumero.status, 200);
+  const ajusteNum = await prisma.comissaoAjusteVenda.findUnique({
+    where: { vendaId: venda.id },
+  });
+  assert.equal(Number(ajusteNum.ajusteValor), 7);
+
+  const misto = await agent.post("/api/relatorios/comissoes/ajustes-lote").send({
+    ajustes: [
+      { vendaId: venda.id, ajusteValor: 3, motivo: "ok" },
+      { vendaId: 999999, ajusteValor: 1 },
+    ],
+  });
+  assert.equal(misto.status, 200);
+  assert.equal(misto.body.total, 1);
+  assert.deepEqual(misto.body.ignorados, [999999]);
 });
 
 test("GET /api/relatorios/financeiro lista devedores", async () => {

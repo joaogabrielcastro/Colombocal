@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
 const { handleRouteError, parsePagination, setPaginationHeaders } = require("../utils/api");
-const { getConfig } = require("../services/configSistema");
 const {
   enqueueExportJob,
   getExportJob,
@@ -10,10 +9,7 @@ const {
 } = require("../services/exportJobs");
 const { listarClientesDevedores } = require("../services/financeiroDevedores");
 const { requireNavKey } = require("../middleware/navPermission");
-const {
-  comissaoPorEmissao,
-  comissaoPorCaixa,
-} = require("../services/comissao");
+const { comissaoPorEmissao } = require("../services/comissao");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { getDateRange } = require("../utils/dateRangeQuery");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
@@ -225,23 +221,16 @@ router.post("/vendas/export-async", async (req, res) => {
   }
 });
 
-// GET /api/relatorios/comissoes
-// modo=emissao | caixa — emissao: comissão na venda; caixa: proporcional ao recebido na ordem
+// GET /api/relatorios/comissoes — comissão na emissão (valor da venda).
 // Paginação por vendas do período (take/skip) para limitar memória.
 router.get("/comissoes", async (req, res) => {
   try {
-    const { dataInicio, dataFim, vendedorId, modo: modoQ } = req.query;
+    const { dataInicio, dataFim, vendedorId } = req.query;
     const { take, skip } = parsePagination(req.query, {
       defaultTake: COMISSOES_DEFAULT_TAKE,
       maxTake: COMISSOES_MAX_TAKE,
     });
-    const stored = await getConfig(prisma, req.tenantId, "COMISSAO_MODO");
-    const modo =
-      modoQ === "caixa" || modoQ === "emissao"
-        ? modoQ
-        : stored === "caixa"
-          ? "caixa"
-          : "emissao";
+    const modo = "emissao";
 
     const where = { tenantId: req.tenantId, ativo: true };
     if (vendedorId) where.id = parseInt(vendedorId, 10);
@@ -315,10 +304,7 @@ router.get("/comissoes", async (req, res) => {
       const lista = vendasByVendedor.get(key);
       const pags = pagByVenda.get(venda.id) || [];
       const vCalc = vendaParaCalculo(venda);
-      const comissaoLinha =
-        modo === "caixa"
-          ? comissaoPorCaixa(vCalc, pags)
-          : comissaoPorEmissao(vCalc);
+      const comissaoLinha = comissaoPorEmissao(vCalc);
       lista.push({
         ...venda,
         ajusteComissaoValor: parseFloat(
@@ -374,6 +360,11 @@ router.get("/comissoes", async (req, res) => {
   }
 });
 
+function toPositiveInt(value) {
+  const n = parseInt(String(value ?? "").replace(/[^\d-]/g, ""), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 // POST /api/relatorios/comissoes/ajustes-lote
 router.post("/comissoes/ajustes-lote", async (req, res) => {
   try {
@@ -381,34 +372,71 @@ router.post("/comissoes/ajustes-lote", async (req, res) => {
     if (!ajustes.length) {
       return res.status(400).json({ error: "Nenhum ajuste informado" });
     }
-    const ids = ajustes
-      .map((a) => parseInt(String(a?.vendaId || 0), 10))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    if (!ids.length) {
+
+    const ids = [];
+    const numeros = [];
+    for (const a of ajustes) {
+      const id = toPositiveInt(a?.vendaId);
+      const num = toPositiveInt(a?.numeroVenda ?? a?.ordem);
+      if (id) ids.push(id);
+      if (num) numeros.push(num);
+    }
+    if (!ids.length && !numeros.length) {
       return res.status(400).json({ error: "vendaId inválido no lote" });
     }
-    const vendaIdsSolicitados = new Set(ids);
+
+    const or = [];
+    if (ids.length) or.push({ id: { in: [...new Set(ids)] } });
+    if (numeros.length) or.push({ numeroVenda: { in: [...new Set(numeros)] } });
+    if (ids.length) or.push({ numeroVenda: { in: [...new Set(ids)] } });
 
     const vendasDoTenant = await prisma.venda.findMany({
-      where: { tenantId: req.tenantId, id: { in: [...vendaIdsSolicitados] } },
-      select: { id: true },
+      where: { tenantId: req.tenantId, OR: or },
+      select: { id: true, numeroVenda: true },
     });
-    if (vendasDoTenant.length !== vendaIdsSolicitados.size) {
+    const byId = new Map(vendasDoTenant.map((v) => [v.id, v]));
+    const byNumero = new Map();
+    for (const v of vendasDoTenant) {
+      if (v.numeroVenda != null) byNumero.set(v.numeroVenda, v);
+    }
+
+    const resolved = [];
+    const ignorados = [];
+    for (const item of ajustes) {
+      const id = toPositiveInt(item?.vendaId);
+      const num = toPositiveInt(item?.numeroVenda ?? item?.ordem);
+      const venda =
+        (id && byId.get(id)) ||
+        (id && byNumero.get(id)) ||
+        (num && byNumero.get(num)) ||
+        (num && byId.get(num)) ||
+        null;
+      if (!venda) {
+        if (id || num) ignorados.push(id || num);
+        continue;
+      }
+      resolved.push({ vendaId: venda.id, item });
+    }
+
+    if (!resolved.length) {
       return res.status(400).json({
-        error: "Uma ou mais vendas não existem ou não pertencem ao seu ambiente",
+        error:
+          "Nenhuma venda do arquivo foi encontrada neste ambiente. Use o Excel exportado (colunas vendaId e ordem).",
+        ignorados,
       });
     }
 
     await prisma.$transaction(async (tx) => {
-      for (const item of ajustes) {
-        const vendaId = parseInt(String(item?.vendaId || 0), 10);
-        if (!Number.isFinite(vendaId) || vendaId <= 0) continue;
+      for (const { vendaId, item } of resolved) {
         const ajusteValor = parseFloat(String(item?.ajusteValor ?? 0));
         const motivo =
           item?.motivo == null ? null : String(item.motivo).trim().slice(0, 500);
         await tx.comissaoAjusteVenda.upsert({
           where: { vendaId },
-          update: { ajusteValor: Number.isFinite(ajusteValor) ? ajusteValor : 0, motivo },
+          update: {
+            ajusteValor: Number.isFinite(ajusteValor) ? ajusteValor : 0,
+            motivo,
+          },
           create: {
             tenantId: req.tenantId,
             vendaId,
@@ -419,7 +447,11 @@ router.post("/comissoes/ajustes-lote", async (req, res) => {
       }
     });
 
-    res.json({ success: true, total: ids.length });
+    res.json({
+      success: true,
+      total: resolved.length,
+      ignorados,
+    });
   } catch (error) {
     handleRouteError(res, error);
   }
