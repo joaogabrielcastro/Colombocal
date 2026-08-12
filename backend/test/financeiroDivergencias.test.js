@@ -41,3 +41,35 @@ test("medirDivergenciaCliente: tolerância padrão", () => {
   assert.equal(m.divergente, false);
   assert.ok(TOLERANCIA_PADRAO >= 0.01);
 });
+
+test("medirDivergenciaCliente: frete avulso pendente alinha com título sem venda", () => {
+  // Caso SOFFCOLOR: venda 11293,83 + frete 5430 = títulos 16723,83
+  const m = medirDivergenciaCliente({
+    clienteId: 4,
+    totalDebitos: 11293.83,
+    totalCreditos: 0,
+    totalFretesAvulsosPendentes: 5430,
+    titulos: [
+      { valorOriginal: 11293.83, valorPago: 0 },
+      { valorOriginal: 5430, valorPago: 0 },
+    ],
+  });
+  assert.equal(m.divergente, false);
+  assert.equal(m.contaCorrente, 16723.83);
+  assert.equal(m.titulosEmAberto, 16723.83);
+  assert.equal(m.fretesAvulsosPendentes, 5430);
+});
+
+test("medirDivergenciaCliente: sem frete na conta ainda diverge (legado)", () => {
+  const m = medirDivergenciaCliente({
+    clienteId: 5,
+    totalDebitos: 11293.83,
+    totalCreditos: 0,
+    titulos: [
+      { valorOriginal: 11293.83, valorPago: 0 },
+      { valorOriginal: 5430, valorPago: 0 },
+    ],
+  });
+  assert.equal(m.divergente, true);
+  assert.equal(m.diferenca, 5430);
+});

@@ -2,6 +2,9 @@ const { AppError } = require("../../shared/errors/appError");
 const { recalcularTitulos } = require("../../services/recebiveis");
 const { registrarEventoFinanceiro } = require("../../services/financeiroEventos");
 const {
+  limparTrocosOrfaosDoRecebimento,
+} = require("../../domain/financeiro/limparTrocosOrfaos");
+const {
   findPagamentoById,
   deletePagamentoById,
 } = require("../../infra/prisma/repositories/pagamentoRepository");
@@ -19,7 +22,20 @@ async function excluirPagamento(prisma, pagamentoId, tenantId, auditActor) {
       });
     }
 
+    const eraPositivo = parseFloat(String(pagamento.valor)) > 0;
+    const dataRef = pagamento.data || pagamento.createdAt || new Date();
+
     await deletePagamentoById(tx, pagamentoId, tenantId);
+
+    if (eraPositivo) {
+      await limparTrocosOrfaosDoRecebimento(tx, {
+        tenantId,
+        vendaId: pagamento.vendaId ?? null,
+        clienteId: pagamento.clienteId,
+        dataRef,
+      });
+    }
+
     await registrarEventoFinanceiro(tx, {
       tenantId,
       auditActor,

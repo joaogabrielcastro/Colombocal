@@ -92,7 +92,7 @@ async function registrarCheque(prisma, payload) {
         valor: -trocoValor,
         data: dataPagamento,
         observacoes:
-          `Troco de cheque da venda #${novoCheque.vendaId} ` +
+          `Troco de cheque #${novoCheque.id} da venda #${novoCheque.vendaId} ` +
           `(${trocoTipo === "transferencia" ? "pix/transferência" : "dinheiro"})`,
       });
     }

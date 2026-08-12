@@ -3,18 +3,22 @@ const { saldoContaCorrente, totalTitulosEmAberto } = require("../domain/financei
 const TOLERANCIA_PADRAO = 0.01;
 
 /**
- * Compara conta corrente (vendas − pagamentos) com títulos em aberto.
- * Diferença > tolerância = divergência (histórico/legado/frete vale etc.).
+ * Compara conta corrente esperada com títulos em aberto.
+ * Conta = (vendas + fretes avulsos pendentes) − pagamentos.
+ * Frete avulso gera título sem venda; sem somá-lo, a dashboard marcava falso positivo.
  * @param {{
  *   clienteId: number,
  *   totalDebitos: number,
  *   totalCreditos: number,
+ *   totalFretesAvulsosPendentes?: number,
  *   titulos: Array<{ valorOriginal: unknown, valorPago: unknown }>,
  * }} row
  * @param {number} [tolerancia]
  */
 function medirDivergenciaCliente(row, tolerancia = TOLERANCIA_PADRAO) {
-  const contaCorrente = saldoContaCorrente(row.totalDebitos, row.totalCreditos);
+  const fretes = Number(row.totalFretesAvulsosPendentes) || 0;
+  const debitosEsperados = (Number(row.totalDebitos) || 0) + fretes;
+  const contaCorrente = saldoContaCorrente(debitosEsperados, row.totalCreditos);
   const titulosEmAberto = totalTitulosEmAberto(row.titulos || []);
   const diferenca = Math.round((titulosEmAberto - contaCorrente) * 100) / 100;
   const abs = Math.abs(diferenca);
@@ -22,6 +26,7 @@ function medirDivergenciaCliente(row, tolerancia = TOLERANCIA_PADRAO) {
     clienteId: row.clienteId,
     contaCorrente,
     titulosEmAberto,
+    fretesAvulsosPendentes: fretes,
     diferenca,
     divergente: abs > tolerancia,
   };
@@ -38,7 +43,7 @@ async function listarDivergenciasContaTitulos(
   tenantId,
   { take = 5, tolerancia = TOLERANCIA_PADRAO } = {},
 ) {
-  const [vendasAgg, pagsAgg, titulosAgg] = await Promise.all([
+  const [vendasAgg, pagsAgg, titulosAgg, fretesAgg] = await Promise.all([
     prisma.venda.groupBy({
       by: ["clienteId"],
       where: { tenantId },
@@ -54,6 +59,12 @@ async function listarDivergenciasContaTitulos(
       where: { tenantId },
       _sum: { valorOriginal: true, valorPago: true },
     }),
+    // Frete avulso pendente gera título sem venda — entra no lado "conta".
+    prisma.freteMovimento.groupBy({
+      by: ["clienteId"],
+      where: { tenantId, vendaId: null, reciboEmitido: false },
+      _sum: { valor: true },
+    }),
   ]);
 
   const debitos = new Map(
@@ -64,6 +75,12 @@ async function listarDivergenciasContaTitulos(
   );
   const creditos = new Map(
     pagsAgg.map((a) => [a.clienteId, parseFloat(String(a._sum.valor || 0))]),
+  );
+  const fretesPendentes = new Map(
+    fretesAgg.map((a) => [
+      a.clienteId,
+      parseFloat(String(a._sum.valor || 0)),
+    ]),
   );
   const titulosPorCliente = new Map(
     titulosAgg.map((a) => [
@@ -78,6 +95,7 @@ async function listarDivergenciasContaTitulos(
   const ids = new Set([
     ...debitos.keys(),
     ...creditos.keys(),
+    ...fretesPendentes.keys(),
     ...titulosPorCliente.keys(),
   ]);
 
@@ -92,6 +110,7 @@ async function listarDivergenciasContaTitulos(
         clienteId,
         totalDebitos: debitos.get(clienteId) || 0,
         totalCreditos: creditos.get(clienteId) || 0,
+        totalFretesAvulsosPendentes: fretesPendentes.get(clienteId) || 0,
         // totalTitulosEmAberto espera lista; um título sintético agrega o mesmo.
         titulos: [t],
       },

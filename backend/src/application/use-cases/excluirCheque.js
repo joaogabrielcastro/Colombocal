@@ -2,6 +2,9 @@ const { AppError } = require("../../shared/errors/appError");
 const { recalcularTitulos } = require("../../services/recebiveis");
 const { registrarEventoFinanceiro } = require("../../services/financeiroEventos");
 const {
+  limparTrocosOrfaosDoRecebimento,
+} = require("../../domain/financeiro/limparTrocosOrfaos");
+const {
   deletePagamentosByChequeId,
 } = require("../../infra/prisma/repositories/pagamentoRepository");
 const {
@@ -22,8 +25,22 @@ async function excluirCheque(prisma, chequeId, tenantId, auditActor) {
       });
     }
 
+    const dataRef =
+      cheque.pagamento?.data ||
+      cheque.dataRecebimento ||
+      cheque.createdAt ||
+      new Date();
+
     await deletePagamentosByChequeId(tx, chequeId, tenantId);
     await deleteChequeById(tx, chequeId, tenantId);
+
+    await limparTrocosOrfaosDoRecebimento(tx, {
+      tenantId,
+      vendaId: cheque.vendaId ?? null,
+      clienteId: cheque.clienteId,
+      dataRef,
+    });
+
     await registrarEventoFinanceiro(tx, {
       tenantId,
       auditActor,

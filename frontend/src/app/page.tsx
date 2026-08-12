@@ -363,8 +363,10 @@ export default function DashboardPage() {
                 com diferença entre conta corrente e títulos
               </p>
               <p className="text-xs text-amber-900/80 mt-1 leading-snug">
-                Cobrança oficial = títulos. Use &quot;Recalcular títulos&quot; na
-                conta do cliente para realinhar baixas.
+                Cobrança oficial = títulos. Frete avulso já entra na conta.
+                &quot;Recalcular títulos&quot; só realinha baixas de pagamento —
+                se a diferença continuar, confira títulos órfãos em Contas a
+                receber.
               </p>
               {d.divergenciasFinanceiras.amostra.length > 0 ? (
                 <ul className="mt-2 space-y-1">
