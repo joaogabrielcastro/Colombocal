@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
 const { requireAdmin } = require("../middleware/auth");
-const { getConfig, setConfig, DEFAULTS } = require("../services/configSistema");
+const { setConfig } = require("../services/configSistema");
 const { executarResetFinanceiroLegacy } = require("../services/resetFinanceiroLegacy");
 const {
   getTenantFeatures,
@@ -95,15 +95,11 @@ router.put("/tenant-features", requireAdmin, async (req, res) => {
 // GET /api/config — regras visíveis na UI
 router.get("/", async (req, res) => {
   try {
-    const comissaoModo =
-      (await getConfig(prisma, req.tenantId, "COMISSAO_MODO")) ||
-      DEFAULTS.COMISSAO_MODO;
+    // Comissão por caixa foi descontinuada; produto usa apenas emissão.
     res.json({
-      comissaoModo: comissaoModo === "caixa" ? "caixa" : "emissao",
+      comissaoModo: "emissao",
       descricaoComissao: {
         emissao: "Comissão pela emissão da ordem (valor histórico na venda).",
-        caixa:
-          "Comissão proporcional ao recebido na ordem (pagamentos vinculados à venda).",
       },
     });
   } catch (e) {
@@ -115,16 +111,16 @@ router.get("/", async (req, res) => {
 router.put("/", requireAdmin, async (req, res) => {
   try {
     const { comissaoModo } = req.body;
-    if (comissaoModo && !["emissao", "caixa"].includes(comissaoModo)) {
-      return res.status(400).json({ error: "comissaoModo inválido" });
+    if (comissaoModo != null && comissaoModo !== "emissao") {
+      return res.status(400).json({
+        error:
+          "Modo de comissão inválido ou descontinuado. Use apenas \"emissao\".",
+      });
     }
-    if (comissaoModo) {
-      await setConfig(prisma, req.tenantId, "COMISSAO_MODO", comissaoModo);
+    if (comissaoModo === "emissao") {
+      await setConfig(prisma, req.tenantId, "COMISSAO_MODO", "emissao");
     }
-    const modo =
-      (await getConfig(prisma, req.tenantId, "COMISSAO_MODO")) ||
-      DEFAULTS.COMISSAO_MODO;
-    res.json({ comissaoModo: modo });
+    res.json({ comissaoModo: "emissao" });
   } catch (e) {
     handleRouteError(res, e);
   }

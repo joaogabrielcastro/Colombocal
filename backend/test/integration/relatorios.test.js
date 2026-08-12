@@ -6,6 +6,7 @@ const {
   resetDb,
   seedTenant,
   seedVendedor,
+  seedMotorista,
   seedProduto,
   seedCliente,
 } = require("../helpers/testServer");
@@ -15,9 +16,10 @@ test.beforeEach(async () => {
   await resetDb();
   const tenant = await seedTenant();
   const vendedor = await seedVendedor(tenant.id, { comissaoPercentual: 10 });
+  const motorista = await seedMotorista(tenant.id);
   const cliente = await seedCliente(tenant.id, { vendedorId: vendedor.id });
   const produto = await seedProduto(tenant.id, { unidade: "ton", precoPadrao: 100 });
-  ctx = { tenant, vendedor, cliente, produto };
+  ctx = { tenant, vendedor, motorista, cliente, produto };
 });
 
 async function criarVenda(over = {}) {
@@ -68,6 +70,22 @@ test("GET /api/relatorios/vendas com filtros e busca", async () => {
   assert.equal(porOrdem.status, 200);
 });
 
+test("GET /api/relatorios/vendas filtra por motoristaId", async () => {
+  await criarVenda({ motoristaId: ctx.motorista.id });
+  await criarVenda(); // sem motorista
+
+  const comMotorista = await agent.get("/api/relatorios/vendas").query({
+    motoristaId: ctx.motorista.id,
+  });
+  assert.equal(comMotorista.status, 200);
+  assert.equal(comMotorista.body.quantidade, 1);
+  assert.equal(comMotorista.body.totalFaturamento, 200);
+
+  const outro = await agent.get("/api/relatorios/vendas").query({ motoristaId: 99999 });
+  assert.equal(outro.status, 200);
+  assert.equal(outro.body.quantidade, 0);
+});
+
 test("GET /api/relatorios/comissoes emissao e caixa", async () => {
   const venda = await criarVenda();
   await prisma.pagamento.create({
@@ -113,6 +131,10 @@ test("POST /api/relatorios/comissoes/ajustes-lote", async () => {
   assert.equal(ok.body.total, 1);
   const ajuste = await prisma.comissaoAjusteVenda.findUnique({ where: { vendaId: venda.id } });
   assert.equal(Number(ajuste.ajusteValor), 5);
+  const auditAjuste = await prisma.financeiroEvento.findFirst({
+    where: { tipo: "COMISSAO_AJUSTE_LOTE" },
+  });
+  assert.ok(auditAjuste);
 
   const vazio = await agent.post("/api/relatorios/comissoes/ajustes-lote").send({ ajustes: [] });
   assert.equal(vazio.status, 400);
@@ -191,6 +213,7 @@ test("export-async de vendas gera CSV para download", async () => {
   assert.equal(dl.status, 200);
   assert.match(dl.headers["content-type"], /csv/);
   assert.match(dl.text, /Ordem,Data,Cliente/);
+  assert.match(dl.text, /Frete pago/);
 });
 
 test("export-async de financeiro e titulos", async () => {
@@ -198,12 +221,21 @@ test("export-async de financeiro e titulos", async () => {
   const fin = await agent.post("/api/relatorios/financeiro/export-async").send({});
   const finJob = await waitJob(fin.body.jobId);
   assert.equal(finJob.status, "completed");
+  const finDl = await agent.get(`/api/relatorios/exports/${fin.body.jobId}/download`);
+  assert.equal(finDl.status, 200);
+  assert.match(finDl.text, /Original \(titulos\)/);
+  assert.match(finDl.text, /Pago \(titulos\)/);
+  assert.match(finDl.text, /Em aberto \(titulos\)/);
+  assert.doesNotMatch(finDl.text, /Debitos,Pagamentos/);
 
   const tit = await agent.post("/api/relatorios/titulos/export-async").send({ somenteEmAberto: true });
   const titJob = await waitJob(tit.body.jobId);
   assert.equal(titJob.status, "completed");
   const dl = await agent.get(`/api/relatorios/exports/${tit.body.jobId}/download`);
   assert.equal(dl.status, 200);
+  assert.match(dl.text, /Valor Original/);
+  assert.match(dl.text, /Valor Pago/);
+  assert.match(dl.text, /Valor em Aberto/);
 });
 
 test("exports/:jobId 404 e download antes de concluir 409", async () => {

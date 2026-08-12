@@ -39,6 +39,8 @@ const TABLES = [
   "Pagamento",
   "Cheque",
   "MovimentacaoEstoque",
+  "OrdemCarregamentoItem",
+  "OrdemCarregamento",
   "ItemVenda",
   "Venda",
   "ComissaoClienteProduto",

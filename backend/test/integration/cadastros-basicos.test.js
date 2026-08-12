@@ -102,6 +102,10 @@ test("GET /api/dashboard agrega métricas", async () => {
   assert.equal(res.body.totalChequesRegistrados, 200);
   assert.equal(res.body.totalProdutosAtivos, 1);
   assert.equal(res.body.ultimasVendas.length, 1);
+  assert.equal(res.body.ultimasVendas[0].saldoOrdem, 500);
+  assert.equal(res.body.ultimasVendas[0].quitada, false);
+  assert.ok(res.body.divergenciasFinanceiras);
+  assert.equal(typeof res.body.divergenciasFinanceiras.clientesComDivergencia, "number");
   assert.equal(res.body.faturamentoPorMes.length, 6);
   assert.ok(res.body.onboarding);
   assert.equal(res.body.onboarding.clientes, 1);

@@ -1,5 +1,6 @@
 const DEFAULTS = {
-  COMISSAO_MODO: "emissao", // emissao | caixa
+  // Produto: comissão sempre por emissão. Modo "caixa" descontinuado (não usado em produção).
+  COMISSAO_MODO: "emissao",
 };
 
 async function getConfig(prisma, tenantId, chave) {

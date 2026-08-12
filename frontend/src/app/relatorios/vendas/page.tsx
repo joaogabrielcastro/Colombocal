@@ -27,6 +27,7 @@ export default function RelatorioVendasPage() {
   const [dataFim, setDataFim] = useState("");
   const [busca, setBusca] = useState("");
   const [vendedorId, setVendedorId] = useState("");
+  const [motoristaId, setMotoristaId] = useState("");
   const [clienteId, setClienteId] = useState("");
   const [produtoId, setProdutoId] = useState("");
   const [filtrosAplicados, setFiltrosAplicados] = useState({
@@ -34,10 +35,11 @@ export default function RelatorioVendasPage() {
     dataFim: "",
     busca: "",
     vendedorId: "",
+    motoristaId: "",
     clienteId: "",
     produtoId: "",
   });
-  const { vendedores, clientes, produtos } = useRelatorioVendasLookups();
+  const { vendedores, clientes, produtos, motoristas } = useRelatorioVendasLookups();
   const {
     data: dataRaw,
     isLoading: loading,
@@ -105,6 +107,7 @@ export default function RelatorioVendasPage() {
       dataFim,
       busca,
       vendedorId,
+      motoristaId,
       clienteId,
       produtoId,
       ...override,
@@ -136,9 +139,11 @@ export default function RelatorioVendasPage() {
         dataFim={dataFim}
         busca={busca}
         vendedorId={vendedorId}
+        motoristaId={motoristaId}
         clienteId={clienteId}
         produtoId={produtoId}
         vendedores={vendedores}
+        motoristas={motoristas}
         clientes={clientes}
         produtos={produtos}
         data={data}
@@ -146,17 +151,20 @@ export default function RelatorioVendasPage() {
         setDataFim={setDataFim}
         setBusca={setBusca}
         setVendedorId={setVendedorId}
+        setMotoristaId={setMotoristaId}
         setClienteId={setClienteId}
         setProdutoId={setProdutoId}
         onBuscar={() => buscar()}
         onLimpar={() => {
           setBusca("");
           setVendedorId("");
+          setMotoristaId("");
           setClienteId("");
           setProdutoId("");
           buscar({
             busca: "",
             vendedorId: "",
+            motoristaId: "",
             clienteId: "",
             produtoId: "",
           });

@@ -20,6 +20,7 @@ const params: RelatorioVendasParams = {
   dataFim: "2026-12-31",
   busca: "  cal  ",
   vendedorId: "3",
+  motoristaId: "7",
   clienteId: "4",
   produtoId: "5",
 };
@@ -54,6 +55,7 @@ describe("useRelatorioVendasQuery", () => {
     const url = apiFetchWithMeta.mock.calls[0][0] as string;
     expect(url).toContain("busca=cal");
     expect(url).toContain("vendedorId=3");
+    expect(url).toContain("motoristaId=7");
     expect(url).toContain("take=500");
   });
 
@@ -67,6 +69,7 @@ describe("useRelatorioVendasQuery", () => {
       dataFim: "",
       busca: "   ",
       vendedorId: "",
+      motoristaId: "",
       clienteId: "",
       produtoId: "",
     };

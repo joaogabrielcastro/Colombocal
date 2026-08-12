@@ -39,6 +39,7 @@ export type RelatorioVendasParams = {
   dataFim: string;
   busca: string;
   vendedorId: string;
+  motoristaId: string;
   clienteId: string;
   produtoId: string;
 };

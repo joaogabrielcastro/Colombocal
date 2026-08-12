@@ -9,6 +9,8 @@ import {
   filterReportsForSidebar,
   advancedReportItems,
   hasVisibleReports,
+  canAccessPath,
+  resolvePathNavAccess,
 } from "./navigation";
 
 describe("canAccessNavKey", () => {
@@ -140,5 +142,28 @@ describe("NAV_PERMISSION_OPTIONS", () => {
     expect(grupos.has("Relatórios")).toBe(true);
     expect(grupos.has("Avançado")).toBe(true);
     expect(grupos.has("Sistema")).toBe(true);
+  });
+});
+
+describe("canAccessPath / resolvePathNavAccess", () => {
+  it("mapeia rotas principais e relatórios", () => {
+    expect(resolvePathNavAccess("/clientes/12").navKey).toBe("clientes");
+    expect(resolvePathNavAccess("/relatorios/comissoes").navKey).toBe("rel_comissoes");
+    expect(resolvePathNavAccess("/relatorios/titulos").navKey).toBe("rel_financeiro");
+    expect(resolvePathNavAccess("/usuarios").adminOnly).toBe(true);
+  });
+  it("bloqueia deep-link sem permissão", () => {
+    expect(
+      canAccessPath("/relatorios/comissoes", {
+        isAdmin: false,
+        navPermissions: ["clientes", "vendas"],
+      }),
+    ).toBe(false);
+  });
+  it("admin acessa usuários; member não", () => {
+    expect(canAccessPath("/usuarios", { isAdmin: true })).toBe(true);
+    expect(canAccessPath("/configuracoes", { isAdmin: false, navPermissions: null })).toBe(
+      false,
+    );
   });
 });

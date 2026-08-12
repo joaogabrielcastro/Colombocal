@@ -1,8 +1,7 @@
 /**
  * Regras explícitas de comissão (sem NF).
- * - emissao: prioriza comissaoValor na venda; se zero, usa valorTotal ×
- *   comissaoPercentualAplicado (importações legadas costumam omitir comissaoValor).
- * - caixa: proporcional ao recebido na ordem, sobre o mesmo total de comissão da ordem.
+ * Produto: apenas emissão (snapshot na venda).
+ * comissaoPorCaixa permanece para testes legados; não é usado em rotas.
  */
 
 function parseMoney(v) {
@@ -37,7 +36,7 @@ function comissaoPorCaixa(venda, pagamentosDaVenda) {
   return Math.round(comissaoTotal * ratio * 100) / 100;
 }
 
-function agregarComissoesPorVendedor(vendas, pagamentosPorVendaId, modo) {
+function agregarComissoesPorVendedor(vendas, pagamentosPorVendaId, _modo) {
   const byVid = new Map();
   for (const v of vendas) {
     const vid = v.vendedorId;
@@ -47,12 +46,8 @@ function agregarComissoesPorVendedor(vendas, pagamentosPorVendaId, modo) {
     const agg = byVid.get(vid);
     agg.totalVendas += parseMoney(v.valorTotal);
     agg.count += 1;
-    const pags = pagamentosPorVendaId.get(v.id) || [];
-    const c =
-      modo === "caixa"
-        ? comissaoPorCaixa(v, pags)
-        : comissaoPorEmissao(v);
-    agg.comissao += c;
+    // Modo caixa descontinuado — sempre emissão.
+    agg.comissao += comissaoPorEmissao(v);
   }
   return byVid;
 }

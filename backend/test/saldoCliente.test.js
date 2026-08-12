@@ -25,7 +25,7 @@ test("saldoContaCorrente: debitos - creditos, nunca negativo", () => {
   assert.equal(saldoContaCorrente(500, 600), 0);
 });
 
-test("resumoFinanceiroCliente une conta corrente e títulos", () => {
+test("resumoFinanceiroCliente: títulos são SSOT; conta corrente é auxiliar", () => {
   const r = resumoFinanceiroCliente({
     totalDebitos: 1000,
     totalCreditos: 400,
@@ -33,6 +33,6 @@ test("resumoFinanceiroCliente une conta corrente e títulos", () => {
   });
   assert.equal(r.contaCorrente.saldo, 600);
   assert.equal(r.titulosReceber.emAberto, 600);
-  assert.ok(r.contaCorrente.ajuda.length > 10);
-  assert.ok(r.titulosReceber.ajuda.length > 10);
+  assert.match(r.contaCorrente.rotulo, /auxiliar/i);
+  assert.match(r.titulosReceber.ajuda, /verdade/i);
 });

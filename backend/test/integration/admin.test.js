@@ -100,7 +100,7 @@ test("PATCH /api/users/:id/nav-permissions", async () => {
 });
 
 // ---------- config ----------
-test("GET/PUT /api/config", async () => {
+test("GET/PUT /api/config — comissão apenas por emissão", async () => {
   const get = await agent.get("/api/config");
   assert.equal(get.status, 200);
   assert.equal(get.body.comissaoModo, "emissao");
@@ -108,12 +108,17 @@ test("GET/PUT /api/config", async () => {
   const invalido = await agent.put("/api/config").send({ comissaoModo: "xpto" });
   assert.equal(invalido.status, 400);
 
-  const put = await agent.put("/api/config").send({ comissaoModo: "caixa" });
+  const caixaDescontinuado = await agent
+    .put("/api/config")
+    .send({ comissaoModo: "caixa" });
+  assert.equal(caixaDescontinuado.status, 400);
+
+  const put = await agent.put("/api/config").send({ comissaoModo: "emissao" });
   assert.equal(put.status, 200);
-  assert.equal(put.body.comissaoModo, "caixa");
+  assert.equal(put.body.comissaoModo, "emissao");
 
   const getDepois = await agent.get("/api/config");
-  assert.equal(getDepois.body.comissaoModo, "caixa");
+  assert.equal(getDepois.body.comissaoModo, "emissao");
 });
 
 test("POST /api/config/reset-financeiro-legacy respeita secret", async () => {

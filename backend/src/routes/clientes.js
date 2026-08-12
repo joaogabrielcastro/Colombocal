@@ -17,6 +17,7 @@ const { percentualPadraoCliente } = require("../services/comissaoCadastro");
 const { tenantAllowsClienteCpf } = require("../constants/tenantFeatures");
 const { resumoFinanceiroCliente } = require("../domain/financeiro/saldoCliente");
 const { recalcularTodosTitulosCliente } = require("../services/recebiveis");
+const { registrarAuditoria } = require("../services/financeiroEventos");
 
 /** Converte Decimal/string do Prisma em número JSON seguro para o front */
 function toMoneyNumber(v) {
@@ -349,17 +350,39 @@ router.post("/", async (req, res) => {
     }
 
     if (existente && !existente.ativo) {
-      const reativado = await prisma.cliente.update({
-        where: { id: existente.id },
-        data: { ...data, ativo: true },
-        include: { vendedor: true },
+      const reativado = await prisma.$transaction(async (tx) => {
+        const c = await tx.cliente.update({
+          where: { id: existente.id },
+          data: { ...data, ativo: true },
+          include: { vendedor: true },
+        });
+        await registrarAuditoria(tx, req, {
+          tenantId: req.tenantId,
+          tipo: "CLIENTE_ATUALIZADO",
+          entidade: "Cliente",
+          entidadeId: c.id,
+          clienteId: c.id,
+          payload: { reativado: true, razaoSocial: c.razaoSocial },
+        });
+        return c;
       });
       return res.status(200).json(reativado);
     }
 
-    const cliente = await prisma.cliente.create({
-      data,
-      include: { vendedor: true },
+    const cliente = await prisma.$transaction(async (tx) => {
+      const c = await tx.cliente.create({
+        data,
+        include: { vendedor: true },
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "CLIENTE_CRIADO",
+        entidade: "Cliente",
+        entidadeId: c.id,
+        clienteId: c.id,
+        payload: { razaoSocial: c.razaoSocial, tipoPessoa: c.tipoPessoa },
+      });
+      return c;
     });
     res.status(201).json(cliente);
   } catch (error) {
@@ -381,34 +404,45 @@ router.put("/:id", async (req, res) => {
     });
     if (!atual) return res.status(404).json({ error: "Cliente não encontrado" });
 
-    const cliente = await prisma.cliente.update({
-      where: { id },
-      data: {
-        razaoSocial: b.razaoSocial,
-        nomeFantasia: b.nomeFantasia,
-        telefone: b.telefone,
-        cidade: b.cidade,
-        estado: b.estado,
-        endereco: b.endereco,
-        observacoes: b.observacoes,
-        fretePadrao: b.fretePadraoSaco, // legado
-        fretePadraoSaco: b.fretePadraoSaco,
-        fretePadraoTonelada: b.fretePadraoTonelada,
-        ativo: b.ativo,
-        vendedorId:
-          b.vendedorId === undefined
-            ? undefined
-            : b.vendedorId === null
-              ? null
-              : b.vendedorId,
-        comissaoFixaPercentual:
-          b.comissaoFixaPercentual === undefined
-            ? undefined
-            : b.comissaoFixaPercentual === null
-              ? null
-              : parseFloat(String(b.comissaoFixaPercentual)),
-      },
-      include: { vendedor: true },
+    const cliente = await prisma.$transaction(async (tx) => {
+      const c = await tx.cliente.update({
+        where: { id },
+        data: {
+          razaoSocial: b.razaoSocial,
+          nomeFantasia: b.nomeFantasia,
+          telefone: b.telefone,
+          cidade: b.cidade,
+          estado: b.estado,
+          endereco: b.endereco,
+          observacoes: b.observacoes,
+          fretePadrao: b.fretePadraoSaco, // legado
+          fretePadraoSaco: b.fretePadraoSaco,
+          fretePadraoTonelada: b.fretePadraoTonelada,
+          ativo: b.ativo,
+          vendedorId:
+            b.vendedorId === undefined
+              ? undefined
+              : b.vendedorId === null
+                ? null
+                : b.vendedorId,
+          comissaoFixaPercentual:
+            b.comissaoFixaPercentual === undefined
+              ? undefined
+              : b.comissaoFixaPercentual === null
+                ? null
+                : parseFloat(String(b.comissaoFixaPercentual)),
+        },
+        include: { vendedor: true },
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "CLIENTE_ATUALIZADO",
+        entidade: "Cliente",
+        entidadeId: c.id,
+        clienteId: c.id,
+        payload: { razaoSocial: c.razaoSocial },
+      });
+      return c;
     });
     res.json(cliente);
   } catch (error) {
@@ -498,9 +532,18 @@ router.delete("/:id", async (req, res) => {
     });
     if (!atual) return res.status(404).json({ error: "Cliente não encontrado" });
 
-    await prisma.cliente.update({
-      where: { id },
-      data: { ativo: false },
+    await prisma.$transaction(async (tx) => {
+      await tx.cliente.update({
+        where: { id },
+        data: { ativo: false },
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "CLIENTE_INATIVADO",
+        entidade: "Cliente",
+        entidadeId: id,
+        clienteId: id,
+      });
     });
     res.json({ success: true });
   } catch (error) {

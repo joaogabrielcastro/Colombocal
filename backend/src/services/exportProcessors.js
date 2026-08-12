@@ -3,6 +3,29 @@ const { findManyBatched, EXPORT_MAX_ROWS } = require("./exportBatch");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { listarClientesDevedores } = require("./financeiroDevedores");
 
+/**
+ * Paridade com frontend formatFreteReciboLinha (utils.ts).
+ * @param {{ frete?: unknown, freteRecibo?: boolean, fretes?: Array<{ reciboEmitido?: boolean, reciboData?: Date|string|null }> }} v
+ */
+function formatFretePagoCsv(v) {
+  const freteVal = parseFloat(String(v.frete ?? 0));
+  const f = Array.isArray(v.fretes) ? v.fretes[0] : null;
+  if ((!Number.isFinite(freteVal) || freteVal <= 0) && !f) return "—";
+  const dataStr = f?.reciboData
+    ? new Date(f.reciboData).toLocaleDateString("pt-BR")
+    : "";
+  const pago = !!(f?.reciboEmitido || v.freteRecibo);
+  if (!pago && freteVal > 0) return "Pagamento pendente";
+  if (pago && dataStr) return `Pago em ${dataStr}`;
+  if (pago) return "Pago";
+  return "—";
+}
+
+const FINANCEIRO_CSV_HEADER =
+  "Cliente,Original (titulos),Pago (titulos),Em aberto (titulos)";
+const TITULOS_CSV_HEADER =
+  "Título,Cliente,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Status";
+
 async function processVendasCsv(payload) {
   const tenantId = parseInt(payload.tenantId, 10);
   const where = buildVendasWhere(payload, tenantId);
@@ -13,12 +36,18 @@ async function processVendasCsv(payload) {
       include: {
         cliente: { select: { nomeFantasia: true, razaoSocial: true } },
         vendedor: { select: { nome: true } },
+        fretes: {
+          take: 1,
+          orderBy: { id: "asc" },
+          select: { reciboEmitido: true, reciboData: true },
+        },
       },
       orderBy: [{ dataVenda: "desc" }, { id: "desc" }],
     },
   );
 
-  const header = "Ordem,Data,Cliente,Vendedor,Valor Total,Frete\n";
+  // Mesmas colunas do CSV/Excel no frontend (relatorios-vendas/services/exports.ts).
+  const header = "Ordem,Data,Cliente,Vendedor,Valor Total,Frete,Frete pago\n";
   const lines = [];
   for (const v of vendas) {
     const ordem = v.numeroVenda != null && v.numeroVenda > 0 ? v.numeroVenda : v.id;
@@ -30,6 +59,7 @@ async function processVendasCsv(payload) {
         String(v.vendedor.nome || "").replaceAll('"', '""'),
         parseFloat(String(v.valorTotal || 0)).toFixed(2),
         parseFloat(String(v.frete || 0)).toFixed(2),
+        formatFretePagoCsv(v).replaceAll('"', '""'),
       ]
         .map((x) => `"${x}"`)
         .join(","),
@@ -50,8 +80,9 @@ async function processVendasCsv(payload) {
 
 async function processFinanceiroCsv(_payload, tenantId) {
   const { clientesDevedores: capped, truncated } = await listarClientesDevedores(tenantId);
+  // Colunas = carteira de títulos (SSOT de cobrança), não conta corrente vendas−pagamentos.
   const csv =
-    "Cliente,Debitos,Pagamentos,Em aberto\n" +
+    `${FINANCEIRO_CSV_HEADER}\n` +
     capped
       .map(
         (c) =>
@@ -84,8 +115,7 @@ async function processTitulosCsv(payload) {
     },
   );
 
-  const header =
-    "Título,Cliente,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Status";
+  const header = TITULOS_CSV_HEADER;
   const bodyLines = [];
   for (const t of titulos) {
     const original = parseFloat(String(t.valorOriginal || 0));
@@ -131,4 +161,8 @@ async function runExportProcessor(type, tenantId, payload = {}) {
 module.exports = {
   runExportProcessor,
   PROCESSORS,
+  formatFretePagoCsv,
+  processVendasCsv,
+  FINANCEIRO_CSV_HEADER,
+  TITULOS_CSV_HEADER,
 };

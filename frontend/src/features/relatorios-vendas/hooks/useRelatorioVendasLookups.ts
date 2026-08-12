@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Cliente, Produto, Vendedor } from "@/lib/utils";
+import type { Cliente, Produto, Vendedor, Motorista } from "@/lib/utils";
 import api from "@/lib/api";
 
 export function useRelatorioVendasLookups() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -15,11 +16,13 @@ export function useRelatorioVendasLookups() {
       api.get<Vendedor[]>("/vendedores?take=500"),
       api.get<{ clientes: Cliente[] }>("/clientes?ativo=true&take=500"),
       api.get<Produto[]>("/produtos?ativo=true&take=500"),
-    ]).then(([vendedoresResp, clientesResp, produtosResp]) => {
+      api.get<Motorista[]>("/motoristas?ativo=true&take=500"),
+    ]).then(([vendedoresResp, clientesResp, produtosResp, motoristasResp]) => {
       if (cancelled) return;
       setVendedores(vendedoresResp);
       setClientes(clientesResp.clientes);
       setProdutos(produtosResp);
+      setMotoristas(motoristasResp);
     });
 
     return () => {
@@ -27,5 +30,5 @@ export function useRelatorioVendasLookups() {
     };
   }, []);
 
-  return { vendedores, clientes, produtos };
+  return { vendedores, clientes, produtos, motoristas };
 }

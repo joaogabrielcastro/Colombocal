@@ -1,8 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
-const { getConfig } = require("../services/configSistema");
 const { handleRouteError } = require("../utils/api");
+const { calcularSaldoAbertoVenda } = require("../domain/financeiro/saldoVenda");
+const {
+  listarDivergenciasContaTitulos,
+} = require("../services/financeiroDivergencias");
 
 // GET /api/dashboard
 router.get("/", async (req, res) => {
@@ -44,7 +47,7 @@ router.get("/", async (req, res) => {
       totalVendas,
       totalRecebimentos,
       ultimasVendas,
-      comissaoModo,
+      divergenciasFinanceiras,
     ] = await Promise.all([
       prisma.venda.aggregate({
         where: { ...tw, dataVenda: { gte: inicioDia, lte: fimDia } },
@@ -86,7 +89,7 @@ router.get("/", async (req, res) => {
           titulos: { select: { valorOriginal: true } },
         },
       }),
-      getConfig(prisma, tenantId, "COMISSAO_MODO"),
+      listarDivergenciasContaTitulos(prisma, tenantId, { take: 5 }),
     ]);
 
     const faturamentoHoje = parseFloat(String(aggHoje._sum.valorTotal || 0));
@@ -171,20 +174,14 @@ router.get("/", async (req, res) => {
         (acc, p) => acc + parseFloat(String(p.valor || 0)),
         0,
       );
-      const totalTitulo =
-        (v.titulos || []).length > 0
-          ? (v.titulos || []).reduce(
-              (acc, t) => acc + parseFloat(String(t.valorOriginal || 0)),
-              0,
-            )
-          : parseFloat(String(v.valorTotal || 0));
-      const saldoOrdem = totalRecebido - totalTitulo;
+      // saldoOrdem = em aberto (títulos − pagos); positivo = ainda deve. Mesma regra de saldoVenda.
+      const saldoOrdem = calcularSaldoAbertoVenda(v);
       const { pagamentos, titulos, ...rest } = v;
       return {
         ...rest,
         totalRecebido,
         saldoOrdem,
-        quitada: saldoOrdem >= -0.009,
+        quitada: saldoOrdem <= 0.009,
       };
     });
 
@@ -208,8 +205,11 @@ router.get("/", async (req, res) => {
         recebimentos: totalRecebimentos,
       },
       regras: {
-        comissaoModo: comissaoModo === "caixa" ? "caixa" : "emissao",
+        // Produto: comissão apenas por emissão (modo caixa descontinuado).
+        comissaoModo: "emissao",
       },
+      /** Conta corrente auxiliar vs títulos (SSOT). */
+      divergenciasFinanceiras,
     });
   } catch (error) {
     handleRouteError(res, error);

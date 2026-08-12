@@ -11,6 +11,7 @@ function toSearchParams(params: RelatorioVendasParams) {
   if (params.dataFim) q.set("dataFim", params.dataFim);
   if (params.busca.trim()) q.set("busca", params.busca.trim());
   if (params.vendedorId) q.set("vendedorId", params.vendedorId);
+  if (params.motoristaId) q.set("motoristaId", params.motoristaId);
   if (params.clienteId) q.set("clienteId", params.clienteId);
   if (params.produtoId) q.set("produtoId", params.produtoId);
   q.set("take", "500");

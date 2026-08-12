@@ -7,7 +7,7 @@ import {
   ChevronUpIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
-import type { Cliente, Produto, Vendedor } from "@/lib/utils";
+import type { Cliente, Produto, Vendedor, Motorista } from "@/lib/utils";
 import type { RelVendas } from "../types";
 import {
   RELATORIO_VENDAS_PDF_SECOES,
@@ -19,9 +19,11 @@ type Props = {
   dataFim: string;
   busca: string;
   vendedorId: string;
+  motoristaId: string;
   clienteId: string;
   produtoId: string;
   vendedores: Vendedor[];
+  motoristas: Motorista[];
   clientes: Cliente[];
   produtos: Produto[];
   data: RelVendas | null;
@@ -29,6 +31,7 @@ type Props = {
   setDataFim: (v: string) => void;
   setBusca: (v: string) => void;
   setVendedorId: (v: string) => void;
+  setMotoristaId: (v: string) => void;
   setClienteId: (v: string) => void;
   setProdutoId: (v: string) => void;
   onBuscar: () => void;
@@ -46,9 +49,11 @@ export function RelatorioVendasFiltros(props: Props) {
     dataFim,
     busca,
     vendedorId,
+    motoristaId,
     clienteId,
     produtoId,
     vendedores,
+    motoristas,
     clientes,
     produtos,
     data,
@@ -56,6 +61,7 @@ export function RelatorioVendasFiltros(props: Props) {
     setDataFim,
     setBusca,
     setVendedorId,
+    setMotoristaId,
     setClienteId,
     setProdutoId,
     onBuscar,
@@ -68,7 +74,7 @@ export function RelatorioVendasFiltros(props: Props) {
   } = props;
 
   const [maisFiltrosAbertos, setMaisFiltrosAbertos] = useState(
-    () => Boolean(clienteId || produtoId),
+    () => Boolean(clienteId || produtoId || motoristaId),
   );
 
   return (
@@ -148,6 +154,22 @@ export function RelatorioVendasFiltros(props: Props) {
                 {produtos.map((p) => (
                   <option key={p.id} value={String(p.id)}>
                     {p.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Motorista</label>
+              <select
+                value={motoristaId}
+                onChange={(e) => setMotoristaId(e.target.value)}
+                className="input-field w-full"
+              >
+                <option value="">Todos</option>
+                {motoristas.map((m) => (
+                  <option key={m.id} value={String(m.id)}>
+                    {m.nome}
+                    {m.placa ? ` (${m.placa})` : ""}
                   </option>
                 ))}
               </select>

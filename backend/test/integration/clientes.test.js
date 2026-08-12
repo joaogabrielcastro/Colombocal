@@ -73,6 +73,12 @@ test("POST /api/clientes cria cliente PJ", async () => {
   assert.equal(res.body.cnpj, "11222333000181");
   assert.equal(res.body.tipoPessoa, "PJ");
   assert.equal(Number(res.body.fretePadraoSaco), 2.5);
+
+  const audit = await prisma.financeiroEvento.findFirst({
+    where: { tipo: "CLIENTE_CRIADO", entidadeId: res.body.id },
+  });
+  assert.ok(audit);
+  assert.equal(audit.entidade, "Cliente");
 });
 
 test("POST /api/clientes rejeita CNPJ inválido", async () => {

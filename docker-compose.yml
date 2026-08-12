@@ -98,7 +98,9 @@ services:
     image: node:20-alpine
     container_name: colombocal-frontend-dev
     working_dir: /app
-    command: sh -c "npm install && npm run dev"
+    # dev:clean apaga .next antes — no Windows+bind-mount o Turbopack às vezes
+    # corrompe o cache e rotas aninhadas (/relatorios/*, /vendas/[id], …) passam a 404.
+    command: sh -c "npm install && npm run dev:clean"
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_ORIGIN: http://backend:3011

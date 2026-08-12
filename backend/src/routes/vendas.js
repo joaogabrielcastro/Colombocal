@@ -235,6 +235,15 @@ router.get("/:id", async (req, res) => {
         },
         titulos: { orderBy: { vencimento: "asc" } },
         fretes: { orderBy: { data: "desc" } },
+        ordensCarregamento: {
+          orderBy: { dataEmissao: "desc" },
+          select: {
+            id: true,
+            numeroOc: true,
+            dataEmissao: true,
+            pedido: true,
+          },
+        },
         cheques: {
           select: {
             id: true,
@@ -569,21 +578,38 @@ router.put("/:id", async (req, res) => {
         });
       }
 
-      for (const titulo of existente.titulos) {
-        const vp = parseFloat(String(titulo.valorPago ?? 0));
-        if (vp > 0) {
-          throw new Error(
-            "Título com pagamento parcial impede edição da venda",
-          );
-        }
-        await tx.tituloReceber.update({
-          where: { id: titulo.id },
+      // SSOT: título = cobrança da venda (valorTotal/produtos). Upsert se legado sem título.
+      const titulosExistentes = existente.titulos || [];
+      if (titulosExistentes.length === 0) {
+        await tx.tituloReceber.create({
           data: {
+            tenantId,
             clienteId: clienteIdNum,
-            valorOriginal: valorTotal,
+            vendaId: id,
+            numero: `VENDA-${numeroVenda}`,
             vencimento: addDays(dataEfetivaVenda, 30),
+            valorOriginal: valorTotal,
+            status: "aberto",
+            observacoes: `Titulo gerado na edicao da venda #${numeroVenda}`,
           },
         });
+      } else {
+        for (const titulo of titulosExistentes) {
+          const vp = parseFloat(String(titulo.valorPago ?? 0));
+          if (vp > 0) {
+            throw new Error(
+              "Título com pagamento parcial impede edição da venda",
+            );
+          }
+          await tx.tituloReceber.update({
+            where: { id: titulo.id },
+            data: {
+              clienteId: clienteIdNum,
+              valorOriginal: valorTotal,
+              vencimento: addDays(dataEfetivaVenda, 30),
+            },
+          });
+        }
       }
 
       const rd =

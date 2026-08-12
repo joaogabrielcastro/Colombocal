@@ -25,6 +25,12 @@ test("POST /api/produtos cria produto e GET retorna", async () => {
   const list = await agent.get("/api/produtos");
   assert.equal(list.status, 200);
   assert.equal(list.body.length, 1);
+
+  const audit = await prisma.financeiroEvento.findFirst({
+    where: { tipo: "PRODUTO_CRIADO", entidadeId: created.body.id },
+  });
+  assert.ok(audit);
+  assert.equal(audit.entidade, "Produto");
 });
 
 test("POST /api/produtos gera código automático quando ausente", async () => {
@@ -110,4 +116,21 @@ test("DELETE /api/produtos/:id inativa e 404 quando inexistente", async () => {
 
   const naoExiste = await agent.delete("/api/produtos/9999");
   assert.equal(naoExiste.status, 404);
+});
+
+test("PUT /api/produtos/:id reativa produto inativo", async () => {
+  const created = await agent
+    .post("/api/produtos")
+    .send({ nome: "Inativo Temp", codigo: "INA-1", precoPadrao: 8 });
+  await agent.delete(`/api/produtos/${created.body.id}`);
+
+  const reativado = await agent
+    .put(`/api/produtos/${created.body.id}`)
+    .send({ nome: "Inativo Temp", codigo: "INA-1", precoPadrao: 8, unidade: "ton", ativo: true });
+  assert.equal(reativado.status, 200);
+  assert.equal(reativado.body.ativo, true);
+
+  const naLista = await agent.get("/api/produtos").query({ ativo: "true" });
+  assert.equal(naLista.status, 200);
+  assert.ok(naLista.body.some((p) => p.id === created.body.id));
 });

@@ -150,6 +150,12 @@ export interface Venda {
   pagamentos?: Pagamento[];
   titulos?: TituloReceber[];
   fretes?: FreteMovimento[];
+  ordensCarregamento?: {
+    id: number;
+    numeroOc: number;
+    dataEmissao: string;
+    pedido?: string | null;
+  }[];
   /** Soma do saldo em aberto nos títulos desta venda (API GET /vendas). */
   saldoEmAbertoTitulos?: number;
   podeEditar?: boolean;

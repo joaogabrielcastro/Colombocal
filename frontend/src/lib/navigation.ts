@@ -222,4 +222,48 @@ export function hasVisibleReports(
   return filterReportsForSidebar(REPORT_NAV, hideAdvanced, options).length > 0;
 }
 
+/** Mapeia URL → chave de menu (ou adminOnly). Rotas públicas não entram aqui. */
+export type PathNavAccess = {
+  navKey: NavPermissionKey | null;
+  adminOnly?: boolean;
+};
+
+export function resolvePathNavAccess(pathname: string): PathNavAccess {
+  const p = (pathname.split("?")[0] || "/").replace(/\/+$/, "") || "/";
+  if (p === "/") return { navKey: "dashboard" };
+  if (p.startsWith("/usuarios") || p.startsWith("/configuracoes")) {
+    return { navKey: null, adminOnly: true };
+  }
+  if (p.startsWith("/clientes")) return { navKey: "clientes" };
+  if (p.startsWith("/produtos")) return { navKey: "produtos" };
+  if (p.startsWith("/vendas")) return { navKey: "vendas" };
+  if (p.startsWith("/financeiro")) return { navKey: "financeiro" };
+  if (p.startsWith("/contas-a-receber")) return { navKey: "rel_financeiro" };
+  if (p.startsWith("/fretes")) return { navKey: "fretes" };
+  if (p.startsWith("/carregamento")) return { navKey: "carregamento" };
+  if (p.startsWith("/motoristas")) return { navKey: "motoristas" };
+  if (p.startsWith("/vendedores")) return { navKey: "vendedores" };
+  if (p.startsWith("/auditoria")) return { navKey: "auditoria" };
+  if (p.startsWith("/relatorios/vendas")) return { navKey: "rel_vendas" };
+  if (p.startsWith("/relatorios/financeiro") || p.startsWith("/relatorios/titulos")) {
+    return { navKey: "rel_financeiro" };
+  }
+  if (p.startsWith("/relatorios/comissoes")) return { navKey: "rel_comissoes" };
+  if (p.startsWith("/relatorios/fretes")) return { navKey: "rel_fretes" };
+  if (p.startsWith("/relatorios/carregamento")) return { navKey: "rel_carregamento" };
+  if (p.startsWith("/relatorios/motoristas")) return { navKey: "rel_motoristas" };
+  return { navKey: null };
+}
+
+/** Guard de rota: adminOnly exige admin; navKey exige canAccessNavKey. */
+export function canAccessPath(
+  pathname: string,
+  options: { isAdmin?: boolean; navPermissions?: string[] | null },
+): boolean {
+  const access = resolvePathNavAccess(pathname);
+  if (access.adminOnly) return options.isAdmin === true;
+  if (!access.navKey) return true;
+  return canAccessNavKey(access.navKey, options);
+}
+
 export { Cog6ToothIcon, DocumentChartBarIcon };

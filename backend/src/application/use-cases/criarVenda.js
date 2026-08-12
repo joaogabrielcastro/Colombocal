@@ -187,6 +187,8 @@ async function criarVenda(prisma, payload) {
       include: { itens: true },
     });
 
+    // SSOT de cobrança: título = conta a receber da venda (produtos / valorTotal).
+    // Frete da venda NÃO entra no título — fica só em Venda.frete / FreteMovimento.
     await tx.tituloReceber.create({
       data: {
         tenantId,

@@ -85,7 +85,7 @@ export function ContasPorClientePanel() {
     if (!dados) return;
     downloadCsvPtBr(
       "financeiro-devedores.csv",
-      ["Cliente", "Débitos", "Pagamentos", "Em aberto"],
+      ["Cliente", "Original (títulos)", "Pago (títulos)", "Em aberto (títulos)"],
       dados.clientesDevedores.map((c) => [
         c.cliente.nomeFantasia || c.cliente.razaoSocial,
         c.debito,

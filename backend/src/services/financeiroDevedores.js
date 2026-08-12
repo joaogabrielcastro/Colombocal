@@ -2,7 +2,9 @@ const { prisma } = require("../lib/prisma");
 const { EXPORT_MAX_ROWS } = require("./exportBatch");
 
 /**
- * Monta saldos em aberto via groupBy de títulos (sem carregar todos os clientes).
+ * Monta saldos em aberto via groupBy de títulos (SSOT de cobrança).
+ * debito/credito/saldo = valorOriginal / valorPago / em aberto dos títulos
+ * (não confundir com conta corrente vendas−pagamentos).
  * Com take/skip, só busca dados dos clientes da página.
  * Sem take, limita a EXPORT_MAX_ROWS (exports).
  * @param {string} [busca] filtra por nome/documento do cliente

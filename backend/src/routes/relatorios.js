@@ -13,6 +13,7 @@ const { comissaoPorEmissao } = require("../services/comissao");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { getDateRange } = require("../utils/dateRangeQuery");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
+const { registrarAuditoria } = require("../services/financeiroEventos");
 
 /** Limite de linhas de venda no relatório de comissões (UI + memória). */
 const COMISSOES_DEFAULT_TAKE = 500;
@@ -445,6 +446,16 @@ router.post("/comissoes/ajustes-lote", async (req, res) => {
           },
         });
       }
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "COMISSAO_AJUSTE_LOTE",
+        entidade: "ComissaoAjusteVenda",
+        payload: {
+          total: resolved.length,
+          ignorados: ignorados.length,
+          vendaIds: resolved.map((r) => r.vendaId),
+        },
+      });
     });
 
     res.json({

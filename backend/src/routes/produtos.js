@@ -6,6 +6,7 @@ const {
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
+const { registrarAuditoria } = require("../services/financeiroEventos");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -79,15 +80,25 @@ router.post("/", async (req, res) => {
       pesoKg === null || pesoKg === undefined || String(pesoKg).trim() === ""
         ? null
         : Number(String(pesoKg).replace(",", "."));
-    const produto = await prisma.produto.create({
-      data: {
-        ...tw(req),
-        nome,
-        codigo: codigoFinal,
-        precoPadrao,
-        unidade: unidade || "ton",
-        pesoKg: Number.isFinite(peso) && peso > 0 ? peso : null,
-      },
+    const produto = await prisma.$transaction(async (tx) => {
+      const p = await tx.produto.create({
+        data: {
+          ...tw(req),
+          nome,
+          codigo: codigoFinal,
+          precoPadrao,
+          unidade: unidade || "ton",
+          pesoKg: Number.isFinite(peso) && peso > 0 ? peso : null,
+        },
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "PRODUTO_CRIADO",
+        entidade: "Produto",
+        entidadeId: p.id,
+        payload: { nome: p.nome, codigo: p.codigo },
+      });
+      return p;
     });
     res.status(201).json(produto);
   } catch (error) {
@@ -114,9 +125,19 @@ router.put("/:id", async (req, res) => {
         data.pesoKg = Number.isFinite(peso) && peso > 0 ? peso : null;
       }
     }
-    const produto = await prisma.produto.update({
-      where: { id },
-      data,
+    const produto = await prisma.$transaction(async (tx) => {
+      const p = await tx.produto.update({
+        where: { id },
+        data,
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "PRODUTO_ATUALIZADO",
+        entidade: "Produto",
+        entidadeId: p.id,
+        payload: { nome: p.nome, codigo: p.codigo, ativo: p.ativo },
+      });
+      return p;
     });
     res.json(produto);
   } catch (error) {
@@ -131,9 +152,17 @@ router.delete("/:id", async (req, res) => {
     const exists = await prisma.produto.count({ where: { id, ...tw(req) } });
     if (!exists) return res.status(404).json({ error: "Produto não encontrado" });
 
-    await prisma.produto.update({
-      where: { id },
-      data: { ativo: false },
+    await prisma.$transaction(async (tx) => {
+      await tx.produto.update({
+        where: { id },
+        data: { ativo: false },
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "PRODUTO_INATIVADO",
+        entidade: "Produto",
+        entidadeId: id,
+      });
     });
     res.json({ success: true });
   } catch (error) {

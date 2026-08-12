@@ -542,6 +542,49 @@ export default function VendaDetailPage() {
         onConfirm={() => void handleCancelar()}
       />
 
+      {(venda.ordensCarregamento?.length ?? 0) > 0 ? (
+        <div className="card p-5 mb-4">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-sm font-semibold text-gray-900">
+              Ordens de carregamento
+            </h2>
+            <Link
+              href="/carregamento"
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Ver todas
+            </Link>
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {venda.ordensCarregamento!.map((oc) => (
+              <li
+                key={oc.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+              >
+                <div>
+                  <Link
+                    href={`/carregamento/${oc.id}/editar`}
+                    className="font-mono font-semibold text-blue-600 hover:underline"
+                  >
+                    OC {String(oc.numeroOc).padStart(6, "0")}
+                  </Link>
+                  <span className="text-gray-400 text-xs ml-2">
+                    {formatDate(oc.dataEmissao)}
+                    {oc.pedido ? ` · Pedido ${oc.pedido}` : ""}
+                  </span>
+                </div>
+                <Link
+                  href={`/carregamento/${oc.id}/editar`}
+                  className="text-xs text-gray-600 hover:underline"
+                >
+                  Abrir
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="card p-5 mb-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>

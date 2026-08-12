@@ -833,7 +833,10 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-// POST /api/fretes/vale-avulso — cria frete sem venda + título de cobrança
+// POST /api/fretes/vale-avulso — frete avulso cobrável (sem venda).
+// Cria FreteMovimento + TituloReceber dedicado. NÃO confundir com frete da venda:
+// frete em Venda.frete nunca gera título automático (decisão de produto).
+// Política: API mantida; sem UI dedicada no frontend por enquanto.
 router.post("/vale-avulso", async (req, res) => {
   try {
     const clienteId = parseIntField(req.body?.clienteId, "clienteId", { min: 1 });
@@ -944,7 +947,9 @@ router.post("/vale-avulso", async (req, res) => {
   }
 });
 
-// POST /api/fretes/:id/vale — cria título de cobrança (vale de frete)
+// POST /api/fretes/:id/vale — gera título de cobrança a partir de um FreteMovimento existente.
+// Cobrança explícita de frete (avulso/operacional), distinta do frete embutido na venda
+// (que NÃO gera título automático). API-only — sem tela no frontend.
 router.post("/:id/vale", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });

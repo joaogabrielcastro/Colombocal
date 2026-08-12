@@ -50,6 +50,18 @@ interface DashboardData {
     vendas: number;
     recebimentos: number;
   };
+  divergenciasFinanceiras?: {
+    clientesComDivergencia: number;
+    tolerancia: number;
+    amostra: {
+      clienteId: number;
+      nome: string;
+      contaCorrente: number;
+      titulosEmAberto: number;
+      diferenca: number;
+    }[];
+    somaAbsDiferenca: number;
+  };
 }
 
 interface OnboardingData {
@@ -156,10 +168,11 @@ function StatusVenda({ quitada, saldoOrdem }: { quitada?: boolean; saldoOrdem?: 
       </span>
     );
   }
-  const falta = saldoOrdem != null ? Math.abs(saldoOrdem) : null;
+  // saldoOrdem = valor em aberto (positivo). Sem Math.abs — convenção alinhada ao backend.
+  const falta = saldoOrdem != null && saldoOrdem > 0.009 ? saldoOrdem : null;
   return (
     <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-      A receber{falta != null && falta > 0.009 ? ` · ${formatMoney(falta)}` : ""}
+      A receber{falta != null ? ` · ${formatMoney(falta)}` : ""}
     </span>
   );
 }
@@ -337,6 +350,52 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {d.divergenciasFinanceiras &&
+      d.divergenciasFinanceiras.clientesComDivergencia > 0 ? (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-950">
+                {d.divergenciasFinanceiras.clientesComDivergencia} cliente
+                {d.divergenciasFinanceiras.clientesComDivergencia === 1
+                  ? ""
+                  : "s"}{" "}
+                com diferença entre conta corrente e títulos
+              </p>
+              <p className="text-xs text-amber-900/80 mt-1 leading-snug">
+                Cobrança oficial = títulos. Use &quot;Recalcular títulos&quot; na
+                conta do cliente para realinhar baixas.
+              </p>
+              {d.divergenciasFinanceiras.amostra.length > 0 ? (
+                <ul className="mt-2 space-y-1">
+                  {d.divergenciasFinanceiras.amostra.slice(0, 3).map((c) => (
+                    <li key={c.clienteId} className="text-xs text-amber-950">
+                      <Link
+                        href={`/clientes/${c.clienteId}?aba=conta`}
+                        className="font-medium text-amber-900 underline-offset-2 hover:underline"
+                      >
+                        {c.nome}
+                      </Link>
+                      <span className="text-amber-800/80">
+                        {" "}
+                        · títulos {formatMoney(c.titulosEmAberto)} · conta{" "}
+                        {formatMoney(c.contaCorrente)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <Link
+              href="/relatorios/financeiro"
+              className="btn-secondary text-sm shrink-0 self-start"
+            >
+              Contas a receber
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard
           title="Vendas hoje"
@@ -355,7 +414,7 @@ export default function DashboardPage() {
           href="/relatorios/vendas"
         />
         <StatCard
-          title="A receber (clientes)"
+          title="A receber (títulos)"
           value={formatMoney(d.totalEmAberto)}
           sub={
             d.clientesDevendo > 0

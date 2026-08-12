@@ -17,6 +17,7 @@ function ProdutosPageContent() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [buscaInput, setBuscaInput] = useState("");
+  const [filtroAtivo, setFiltroAtivo] = useState<"true" | "false" | "all">("true");
   const [editando, setEditando] = useState<null | Produto>(null);
   const [form, setForm] = useState<Partial<Produto>>({});
   const [salvando, setSalvando] = useState(false);
@@ -27,7 +28,10 @@ function ProdutosPageContent() {
 
   const carregar = () => {
     setLoading(true);
-    const params = new URLSearchParams({ ativo: "true" });
+    const params = new URLSearchParams();
+    if (filtroAtivo === "true" || filtroAtivo === "false") {
+      params.set("ativo", filtroAtivo);
+    }
     if (busca.trim()) params.set("busca", busca.trim());
     api
       .get<Produto[]>(`/produtos?${params.toString()}`)
@@ -43,8 +47,8 @@ function ProdutosPageContent() {
   };
   useEffect(() => {
     carregar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega quando a busca aplicada muda
-  }, [busca]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega quando busca/filtro mudam
+  }, [busca, filtroAtivo]);
 
   useEffect(() => {
     if (searchParams.get("novo") === "1") {
@@ -109,6 +113,18 @@ function ProdutosPageContent() {
     }
   };
 
+  const reativarProduto = async (p: Produto) => {
+    setDeletingId(p.id);
+    try {
+      await api.put(`/produtos/${p.id}`, { ...p, ativo: true });
+      carregar();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível reativar o produto" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const set =
     (field: keyof Produto) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -118,7 +134,9 @@ function ProdutosPageContent() {
     <>
       <ListScaffold
         title="Produtos"
-        subtitle={`${produtos.length} produto${produtos.length === 1 ? "" : "s"}${busca ? " encontrados" : ""} • sem controle de estoque no cadastro`}
+        subtitle={`${produtos.length} produto${produtos.length === 1 ? "" : "s"}${busca ? " encontrados" : ""}${
+          filtroAtivo === "false" ? " inativos" : filtroAtivo === "all" ? " (todos)" : " ativos"
+        } • sem controle de estoque no cadastro`}
         actions={(
           <button
           onClick={() => {
@@ -135,7 +153,7 @@ function ProdutosPageContent() {
         )}
         filters={(
           <FilterBar>
-            <div className="p-4 flex gap-2">
+            <div className="p-4 flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -147,6 +165,18 @@ function ProdutosPageContent() {
                   className="input-field pl-9"
                 />
               </div>
+              <select
+                className="input-field sm:w-40"
+                value={filtroAtivo}
+                onChange={(e) =>
+                  setFiltroAtivo(e.target.value as "true" | "false" | "all")
+                }
+                aria-label="Filtrar por situação"
+              >
+                <option value="true">Ativos</option>
+                <option value="false">Inativos</option>
+                <option value="all">Todos</option>
+              </select>
               <button type="button" onClick={handleBuscar} className="btn-primary">
                 Buscar
               </button>
@@ -174,14 +204,20 @@ function ProdutosPageContent() {
             ) : produtos.length === 0 ? (
               <div className="p-6">
                 <EmptyState
-                  title={busca ? "Nenhum produto encontrado" : "Nenhum produto ativo"}
+                  title={
+                    busca
+                      ? "Nenhum produto encontrado"
+                      : filtroAtivo === "false"
+                        ? "Nenhum produto inativo"
+                        : "Nenhum produto ativo"
+                  }
                   description={
                     busca
                       ? "Tente outro nome ou código, ou limpe a busca."
                       : "Cadastre produtos para usar nas vendas."
                   }
                   action={
-                    !busca ? (
+                    !busca && filtroAtivo === "true" ? (
                       <button
                         type="button"
                         className="btn-primary"
@@ -204,6 +240,7 @@ function ProdutosPageContent() {
                     <th className="table-header">Produto</th>
                     <th className="table-header">Unidade</th>
                     <th className="table-header">Preço Padrão</th>
+                    <th className="table-header">Situação</th>
                     <th className="table-header"></th>
                   </tr>
                 </thead>
@@ -214,6 +251,17 @@ function ProdutosPageContent() {
                       <td className="table-cell">{p.unidade}</td>
                       <td className="table-cell">{formatMoney(p.precoPadrao)}</td>
                       <td className="table-cell">
+                        {p.ativo === false ? (
+                          <span className="text-xs font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded">
+                            Inativo
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-green-800 bg-green-50 px-2 py-0.5 rounded">
+                            Ativo
+                          </span>
+                        )}
+                      </td>
+                      <td className="table-cell">
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => handleEditar(p)}
@@ -221,13 +269,23 @@ function ProdutosPageContent() {
                           >
                             Editar
                           </button>
-                          <button
-                            onClick={() => setProdutoToDelete(p)}
-                            disabled={deletingId === p.id}
-                            className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {deletingId === p.id ? "Inativando..." : "Inativar"}
-                          </button>
+                          {p.ativo === false ? (
+                            <button
+                              onClick={() => void reativarProduto(p)}
+                              disabled={deletingId === p.id}
+                              className="text-green-700 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingId === p.id ? "Reativando..." : "Reativar"}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setProdutoToDelete(p)}
+                              disabled={deletingId === p.id}
+                              className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingId === p.id ? "Inativando..." : "Inativar"}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

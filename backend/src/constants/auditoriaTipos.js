@@ -13,8 +13,16 @@ const TIPO_LABEL = {
   FRETE_ALTERADO: "Frete alterado",
   FRETE_EXCLUIDO: "Frete excluído",
   FRETE_AVULSO_CRIADO: "Frete avulso criado",
+  FRETE_AVULSO_ATUALIZADO: "Frete avulso atualizado",
   FRETE_VALE_AVULSO_CRIADO: "Vale de frete avulso criado",
   FRETE_VALE_CRIADO: "Vale de frete criado",
+  CLIENTE_CRIADO: "Cliente criado",
+  CLIENTE_ATUALIZADO: "Cliente editado",
+  CLIENTE_INATIVADO: "Cliente inativado",
+  PRODUTO_CRIADO: "Produto criado",
+  PRODUTO_ATUALIZADO: "Produto editado",
+  PRODUTO_INATIVADO: "Produto inativado",
+  COMISSAO_AJUSTE_LOTE: "Ajuste de comissão (lote)",
   USER_NAV_PERMISSOES: "Permissões de menu",
 };
 

@@ -59,7 +59,7 @@ test("comissaoPorCaixa limita ratio a 100% quando pago excede total", () => {
   assert.equal(comissaoPorCaixa(v, [{ valor: 5000 }]), 80);
 });
 
-test("agregarComissoesPorVendedor agrupa por vendedor nos dois modos", () => {
+test("agregarComissoesPorVendedor sempre usa emissão (caixa descontinuado)", () => {
   const vendas = [
     { id: 1, vendedorId: 10, valorTotal: 1000, comissaoValor: 50 },
     { id: 2, vendedorId: 10, valorTotal: 500, comissaoValor: 25 },
@@ -76,7 +76,8 @@ test("agregarComissoesPorVendedor agrupa por vendedor nos dois modos", () => {
   assert.equal(emissao.get(10).totalVendas, 1500);
   assert.equal(emissao.get(20).comissao, 10);
 
-  const caixa = agregarComissoesPorVendedor(vendas, pags, "caixa");
-  assert.equal(caixa.get(10).comissao, 25);
-  assert.equal(caixa.get(20).comissao, 0);
+  // Pedido "caixa" é ignorado — mesma regra de emissão.
+  const caixaIgnorado = agregarComissoesPorVendedor(vendas, pags, "caixa");
+  assert.equal(caixaIgnorado.get(10).comissao, 75);
+  assert.equal(caixaIgnorado.get(20).comissao, 10);
 });

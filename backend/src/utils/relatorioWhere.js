@@ -25,10 +25,19 @@ function buildTitulosWhere(query, tenantId) {
 }
 
 function buildVendasWhere(query, tenantId) {
-  const { dataInicio, dataFim, clienteId, vendedorId, produtoId, busca } = query;
+  const {
+    dataInicio,
+    dataFim,
+    clienteId,
+    vendedorId,
+    motoristaId,
+    produtoId,
+    busca,
+  } = query;
   const where = { tenantId };
   if (clienteId) where.clienteId = parseInt(clienteId, 10);
   if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
+  if (motoristaId) where.motoristaId = parseInt(motoristaId, 10);
   if (dataInicio || dataFim) where.dataVenda = getDateRange(dataInicio, dataFim);
   if (produtoId) {
     where.itens = { some: { produtoId: parseInt(produtoId, 10) } };

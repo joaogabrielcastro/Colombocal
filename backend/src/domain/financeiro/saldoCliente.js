@@ -33,6 +33,11 @@ function saldoContaCorrente(totalDebitos, totalCreditos) {
  *   titulos: Array<{ valorOriginal: unknown, valorPago: unknown }>,
  * }} p
  */
+/**
+ * Resumo para API/telas.
+ * SSOT de cobrança = carteira de títulos (titulosReceber).
+ * Conta corrente (vendas − pagamentos) é visão auxiliar de reconciliação.
+ */
 function resumoFinanceiroCliente({ totalDebitos, totalCreditos, titulos }) {
   const saldo = saldoContaCorrente(totalDebitos, totalCreditos);
   const emAbertoTitulos = totalTitulosEmAberto(titulos);
@@ -41,15 +46,15 @@ function resumoFinanceiroCliente({ totalDebitos, totalCreditos, titulos }) {
       totalDebitos,
       totalCreditos,
       saldo,
-      rotulo: "Conta corrente",
+      rotulo: "Conta corrente (auxiliar)",
       ajuda:
-        "Compara todas as vendas com todos os pagamentos registrados. O resultado mostra apenas o que ainda está em aberto.",
+        "Compara Σ vendas.valorTotal com Σ pagamentos. Visão auxiliar para reconciliar; a cobrança oficial é a carteira de títulos.",
     },
     titulosReceber: {
       emAberto: emAbertoTitulos,
-      rotulo: "Títulos em aberto",
+      rotulo: "Em aberto (títulos)",
       ajuda:
-        "Soma do que falta quitar nos títulos a receber. Deve alinhar com os pagamentos após reconciliar; diferenças costumam ser histórico antes do recálculo.",
+        "Fonte da verdade da cobrança: soma do que falta quitar nos títulos a receber (aberto/parcial).",
     },
   };
 }

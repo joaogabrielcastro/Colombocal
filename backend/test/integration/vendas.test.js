@@ -217,8 +217,33 @@ test("GET /api/vendas/:id inclui podeEditar", async () => {
   const res = await agent.get(`/api/vendas/${v.body.id}`);
   assert.equal(res.status, 200);
   assert.equal(res.body.podeEditar, true);
+  assert.ok(Array.isArray(res.body.ordensCarregamento));
+  assert.equal(res.body.ordensCarregamento.length, 0);
   const missing = await agent.get("/api/vendas/9999");
   assert.equal(missing.status, 404);
+});
+
+test("GET /api/vendas/:id lista ordensCarregamento vinculadas", async () => {
+  const v = await criarVenda();
+  const oc = await agent.post("/api/ordens-carregamento").send({ vendaId: v.body.id });
+  assert.equal(oc.status, 201);
+  assert.equal(oc.body.vendaId, v.body.id);
+
+  const res = await agent.get(`/api/vendas/${v.body.id}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ordensCarregamento.length, 1);
+  assert.equal(res.body.ordensCarregamento[0].id, oc.body.id);
+  assert.equal(res.body.ordensCarregamento[0].numeroOc, oc.body.numeroOc);
+  assert.ok(res.body.ordensCarregamento[0].pedido);
+});
+
+test("POST /api/vendas título cobre só produtos (frete fora do título)", async () => {
+  const v = await criarVenda({ fretePorTonelada: 50 });
+  assert.ok(Number(v.body.frete) > 0);
+  const titulos = await prisma.tituloReceber.findMany({ where: { vendaId: v.body.id } });
+  assert.equal(titulos.length, 1);
+  assert.equal(Number(titulos[0].valorOriginal), Number(v.body.valorTotal));
+  assert.notEqual(Number(titulos[0].valorOriginal), Number(v.body.valorTotal) + Number(v.body.frete));
 });
 
 test("PATCH /api/vendas/:id atualiza frete e recibo", async () => {
@@ -260,6 +285,27 @@ test("PUT /api/vendas/:id edita venda sem baixas", async () => {
   assert.equal(res.body.observacoes, "editada");
   const titulos = await prisma.tituloReceber.findMany({ where: { vendaId: v.body.id } });
   assert.equal(Number(titulos[0].valorOriginal), 300);
+});
+
+test("PUT /api/vendas/:id recria título ausente (legado)", async () => {
+  const v = await criarVenda();
+  await prisma.tituloReceber.deleteMany({ where: { vendaId: v.body.id } });
+  const antes = await prisma.tituloReceber.count({ where: { vendaId: v.body.id } });
+  assert.equal(antes, 0);
+
+  const res = await agent.put(`/api/vendas/${v.body.id}`).send({
+    clienteId: ctx.cliente.id,
+    vendedorId: ctx.vendedor.id,
+    itens: [{ produtoId: ctx.produtoTon.id, quantidade: 2, precoUnitario: 100 }],
+  });
+  assert.equal(res.status, 200);
+  assert.equal(Number(res.body.valorTotal), 200);
+
+  const titulos = await prisma.tituloReceber.findMany({ where: { vendaId: v.body.id } });
+  assert.equal(titulos.length, 1);
+  assert.equal(Number(titulos[0].valorOriginal), 200);
+  assert.equal(titulos[0].status, "aberto");
+  assert.match(String(titulos[0].numero), /^VENDA-/);
 });
 
 test("PUT /api/vendas/:id bloqueia com pagamento", async () => {

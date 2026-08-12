@@ -5,12 +5,19 @@ import { useEffect, useState } from 'react';
 import TopNav from '@/components/TopNav';
 import BrandLogo from '@/components/BrandLogo';
 import { AUTH_SESSION_EVENT, getAuthTenantId, getAuthToken } from '@/lib/auth-token';
+import { canAccessPath } from '@/lib/navigation';
+import api from '@/lib/api';
 
 /**
  * Por omissão exige JWT: rotas internas redirecionam para /login sem token.
  * Para desligar (ex.: dev com backend em AUTH_DISABLED): NEXT_PUBLIC_REQUIRE_LOGIN=false
  */
 const requireLogin = process.env.NEXT_PUBLIC_REQUIRE_LOGIN !== 'false';
+
+type MeUser = {
+  role?: string;
+  navPermissions?: string[] | null;
+};
 
 function initialAllowBody(pathname: string): boolean {
   const isPublic =
@@ -36,6 +43,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
   const [sessionKey, setSessionKey] = useState('boot');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [navChecked, setNavChecked] = useState(!requireLogin || isPublicShell);
 
   useEffect(() => {
     const refreshSessionKey = () => {
@@ -56,22 +64,55 @@ export default function ClientShell({ children }: { children: React.ReactNode })
       else if (isSetup && getAuthToken()) router.replace('/');
       else if (isCadastro && getAuthToken()) router.replace('/');
       setAllowBody(true);
+      setNavChecked(true);
       return;
     }
 
     if (!requireLogin) {
       setAllowBody(true);
+      setNavChecked(true);
       return;
     }
 
     if (!getAuthToken()) {
+      setNavChecked(false);
       router.replace('/login');
       return;
     }
     setAllowBody(true);
   }, [isLogin, isSetup, isCadastro, isPublicShell, pathname, router]);
 
-  if (!allowBody) {
+  useEffect(() => {
+    if (isPublicShell || !requireLogin || !getAuthToken()) return;
+
+    let cancelled = false;
+    setNavChecked(false);
+    api
+      .get<{ user: MeUser }>('/auth/me')
+      .then((r) => {
+        if (cancelled) return;
+        const user = r.user;
+        const isAdmin = user?.role === 'admin';
+        const ok = canAccessPath(pathname, {
+          isAdmin,
+          navPermissions: user?.navPermissions ?? null,
+        });
+        if (!ok) {
+          router.replace('/');
+          return;
+        }
+        setNavChecked(true);
+      })
+      .catch(() => {
+        if (!cancelled) setNavChecked(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, isPublicShell, router, sessionKey]);
+
+  if (!allowBody || (!isPublicShell && !navChecked)) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-sm gap-4">
         <BrandLogo variant="full" className="opacity-90 scale-90" />

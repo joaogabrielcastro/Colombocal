@@ -27,6 +27,7 @@ type OcItem = {
 
 type OcRow = OrdemCarregamentoPrintData & {
   id: number;
+  vendaId?: number | null;
   itens: OcItem[];
 };
 
@@ -197,6 +198,7 @@ function CarregamentoContent() {
                   <th className="table-header">Cliente</th>
                   <th className="table-header">Motorista</th>
                   <th className="table-header">Pedido</th>
+                  <th className="table-header">Venda</th>
                   <th className="table-header text-right min-w-[9rem]">Ações</th>
                 </tr>
               </thead>
@@ -219,6 +221,18 @@ function CarregamentoContent() {
                       ) : null}
                     </td>
                     <td className="table-cell">{row.pedido || "—"}</td>
+                    <td className="table-cell">
+                      {row.vendaId ? (
+                        <Link
+                          href={`/vendas/${row.vendaId}`}
+                          className="text-blue-600 hover:underline text-sm font-medium"
+                        >
+                          Abrir venda
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="table-cell text-right">
                       <div className="inline-flex flex-wrap justify-end gap-1.5">
                         <button
