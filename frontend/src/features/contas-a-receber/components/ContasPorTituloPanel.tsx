@@ -265,7 +265,7 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               className="input-field"
             />
           </div>
-          <div className="xl:col-span-2">
+          <div className="xl:col-span-3">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Venc. fim
             </label>
@@ -275,21 +275,6 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               onChange={(e) => setDataVencFim(e.target.value)}
               className="input-field"
             />
-          </div>
-          <div className="xl:col-span-1 flex items-end">
-            <button
-              type="button"
-              onClick={() => {
-                if (page === 1) {
-                  void carregar(1);
-                } else {
-                  setPage(1);
-                }
-              }}
-              className="btn-primary w-full"
-            >
-              Filtrar
-            </button>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -309,7 +294,20 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             />
             Ordenar por maior atraso
           </label>
-          <div className="flex flex-wrap gap-2 ml-auto">
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={() => {
+                if (page === 1) {
+                  void carregar(1);
+                } else {
+                  setPage(1);
+                }
+              }}
+              className="btn-primary"
+            >
+              Filtrar
+            </button>
             <button
               type="button"
               onClick={() => void exportarCsvAsync()}
