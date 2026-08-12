@@ -14,7 +14,10 @@ function buildTitulosWhere(query, tenantId) {
   if (clienteId) where.clienteId = parseInt(clienteId, 10);
   if (vendaId != null && String(vendaId).trim() !== "") {
     const vid = parseInt(String(vendaId).replace(/^#/, "").trim(), 10);
-    if (!Number.isNaN(vid) && vid > 0) where.vendaId = vid;
+    if (!Number.isNaN(vid) && vid > 0) {
+      // Aceita id interno OU número público da ordem (ex.: digitar 11 = Venda #11).
+      where.OR = [{ vendaId: vid }, { venda: { numeroVenda: vid } }];
+    }
   }
   if (status) where.status = status;
   if (somenteEmAberto === "true") where.status = { in: ["aberto", "parcial"] };
