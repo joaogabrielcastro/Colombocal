@@ -43,6 +43,24 @@ function calendarDateAtUtcNoon(year, monthIndex, day) {
   return new Date(Date.UTC(year, monthIndex, day, 12, 0, 0, 0));
 }
 
+/** Soma dias em calendário UTC (compatível com datas à meia-noite/meio-dia UTC). */
+function addDaysCalendar(date, days) {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + days);
+  // Normaliza para meio-dia UTC se veio de data de calendário.
+  if (
+    (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) ||
+    (d.getUTCHours() === 12 && d.getUTCMinutes() === 0)
+  ) {
+    return calendarDateAtUtcNoon(
+      d.getUTCFullYear(),
+      d.getUTCMonth(),
+      d.getUTCDate(),
+    );
+  }
+  return d;
+}
+
 function isUtcMidnight(date) {
   return (
     date instanceof Date &&
@@ -133,6 +151,8 @@ module.exports = {
   parseIntField,
   parseNumberField,
   parseDateField,
+  calendarDateAtUtcNoon,
+  addDaysCalendar,
   ensureArray,
   ensureEnum,
 };

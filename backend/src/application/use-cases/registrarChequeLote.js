@@ -9,6 +9,7 @@ const {
   assertClienteDoTenant,
   assertVendaDoTenant,
 } = require("../../utils/tenantOwnership");
+const { parseDateField } = require("../../utils/validation");
 
 async function registrarChequeLote(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -41,12 +42,9 @@ async function registrarChequeLote(prisma, payload) {
     const criados = [];
     let nextNumeroOrdem = await getNextNumeroOrdem(tx, tenantId);
     for (const item of payload.itens) {
-      const dataRecebimentoDate =
-        item.dataRecebimento instanceof Date
-          ? item.dataRecebimento
-          : item.dataRecebimento
-            ? new Date(item.dataRecebimento)
-            : new Date();
+      const dataRecebimentoDate = item.dataRecebimento
+        ? parseDateField(item.dataRecebimento, "dataRecebimento")
+        : new Date();
       const dataPagamento = dataRecebimentoDate;
 
       const novoCheque = await createCheque(

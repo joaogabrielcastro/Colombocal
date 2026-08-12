@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   limparTrocosOrfaosDoRecebimento,
+  limparTrocosInjustificadosDoCliente,
 } = require("../src/domain/financeiro/limparTrocosOrfaos");
 
 function makeTx(pagamentos) {
@@ -90,4 +91,46 @@ test("mantém troco se ainda existe cheque/dinheiro no mesmo dia", async () => {
   });
   assert.equal(r.deleted, 0);
   assert.equal(pags.length, 2);
+});
+
+test("caso R E O: remove troco órfão da venda #5 (sem pagamento a maior)", async () => {
+  // Venda 4856,64 paga certinho (cheque+dinheiro) + troco -1962,70 sem justificativa
+  const pags = [
+    { id: 1, clienteId: 9, vendaId: 5, tipo: "cheque", valor: 4271.34 },
+    { id: 2, clienteId: 9, vendaId: 5, tipo: "dinheiro", valor: 585.3 },
+    { id: 3, clienteId: 9, vendaId: 5, tipo: "troco_dinheiro", valor: -1962.7 },
+    // Venda #15: cheque a maior + troco justificado — deve permanecer
+    { id: 4, clienteId: 9, vendaId: 15, tipo: "cheque", valor: 11008.83 },
+    { id: 5, clienteId: 9, vendaId: 15, tipo: "troco_dinheiro", valor: -6565.47 },
+  ];
+  const titulosPorVenda = {
+    5: [{ valorOriginal: 4856.64 }],
+    15: [{ valorOriginal: 4443.36 }],
+  };
+  const tx = {
+    pagamento: {
+      async findMany({ where }) {
+        return pags.filter((p) => p.clienteId === where.clienteId);
+      },
+      async delete({ where }) {
+        const i = pags.findIndex((p) => p.id === where.id);
+        if (i >= 0) pags.splice(i, 1);
+      },
+    },
+    tituloReceber: {
+      async findMany({ where }) {
+        return titulosPorVenda[where.vendaId] || [];
+      },
+    },
+    venda: {
+      async findFirst() {
+        return null;
+      },
+    },
+  };
+
+  const r = await limparTrocosInjustificadosDoCliente(tx, 9);
+  assert.equal(r.deleted, 1);
+  assert.equal(pags.some((p) => p.id === 3), false);
+  assert.equal(pags.some((p) => p.id === 5), true);
 });

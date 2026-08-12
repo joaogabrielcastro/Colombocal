@@ -11,15 +11,13 @@ const {
   calcularComissaoParaVenda,
   loadComissaoMapPorCliente,
 } = require("../../services/comissaoCadastro");
-const { parseDateField } = require("../../utils/validation");
+const { parseDateField, addDaysCalendar } = require("../../utils/validation");
 const {
   calcularFreteAutomatico,
 } = require("../../domain/frete/calcularFrete");
 
 function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+  return addDaysCalendar(date, days);
 }
 
 /**

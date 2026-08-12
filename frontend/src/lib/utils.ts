@@ -8,7 +8,22 @@ export function formatMoney(value: number | string | null | undefined): string {
 
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return "-";
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(date));
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "-";
+  // Datas só de calendário (meia-noite ou meio-dia UTC): formatar em UTC
+  // para não virar o dia anterior em America/Sao_Paulo.
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const s = d.getUTCSeconds();
+  const ms = d.getUTCMilliseconds();
+  const isCalendarUtc =
+    (h === 0 || h === 12) && m === 0 && s === 0 && ms === 0;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    ...(isCalendarUtc ? { timeZone: "UTC" } : {}),
+  }).format(d);
 }
 
 /** Valor para input type="date" no calendário local (não usar toISOString(), que é UTC). */
@@ -63,6 +78,18 @@ export function toInputDate(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return "";
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const s = d.getUTCSeconds();
+  const ms = d.getUTCMilliseconds();
+  const isCalendarUtc =
+    (h === 0 || h === 12) && m === 0 && s === 0 && ms === 0;
+  if (isCalendarUtc) {
+    const y = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${mo}-${day}`;
+  }
   return localDateInputValue(d);
 }
 

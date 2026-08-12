@@ -8,6 +8,7 @@ const {
   assertClienteDoTenant,
   assertVendaDoTenant,
 } = require("../../utils/tenantOwnership");
+const { parseDateField } = require("../../utils/validation");
 
 async function registrarPagamento(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -22,12 +23,9 @@ async function registrarPagamento(prisma, payload) {
     });
   }
 
-  const dataPagamento =
-    payload.data instanceof Date
-      ? payload.data
-      : payload.data
-        ? new Date(payload.data)
-        : new Date();
+  const dataPagamento = payload.data
+    ? parseDateField(payload.data, "data")
+    : new Date();
 
   return prisma.$transaction(async (tx) => {
     await assertClienteDoTenant(tx, payload.clienteId, tenantId);

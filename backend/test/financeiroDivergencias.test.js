@@ -48,7 +48,7 @@ test("medirDivergenciaCliente: frete avulso pendente alinha com título sem vend
     clienteId: 4,
     totalDebitos: 11293.83,
     totalCreditos: 0,
-    totalFretesAvulsosPendentes: 5430,
+    totalFretesAvulsos: 5430,
     titulos: [
       { valorOriginal: 11293.83, valorPago: 0 },
       { valorOriginal: 5430, valorPago: 0 },
@@ -57,7 +57,23 @@ test("medirDivergenciaCliente: frete avulso pendente alinha com título sem vend
   assert.equal(m.divergente, false);
   assert.equal(m.contaCorrente, 16723.83);
   assert.equal(m.titulosEmAberto, 16723.83);
-  assert.equal(m.fretesAvulsosPendentes, 5430);
+  assert.equal(m.fretesAvulsos, 5430);
+});
+
+test("medirDivergenciaCliente: frete pago + título quitado alinha (caso LONDRES)", () => {
+  const m = medirDivergenciaCliente({
+    clienteId: 6,
+    totalDebitos: 13871.79,
+    totalCreditos: 5400,
+    totalFretesAvulsos: 5400,
+    titulos: [
+      { valorOriginal: 13871.79, valorPago: 0 },
+      { valorOriginal: 5400, valorPago: 5400 },
+    ],
+  });
+  assert.equal(m.divergente, false);
+  assert.equal(m.contaCorrente, 13871.79);
+  assert.equal(m.titulosEmAberto, 13871.79);
 });
 
 test("medirDivergenciaCliente: sem frete na conta ainda diverge (legado)", () => {

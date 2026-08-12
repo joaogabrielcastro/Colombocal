@@ -12,6 +12,7 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+const { recalcularTodosTitulosCliente } = require("../services/recebiveis");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
 const {
   freteLinha,
@@ -150,7 +151,7 @@ router.post("/avulso", async (req, res) => {
         ? parseDateField(req.body.vencimento, "vencimento", { required: true })
         : (() => {
             const d = new Date();
-            d.setDate(d.getDate() + 30);
+            d.setUTCDate(d.getUTCDate() + 30);
             return d;
           })();
     const pagoNoAto = !!req.body?.pagoNoAto;
@@ -712,7 +713,7 @@ router.patch("/:id", async (req, res) => {
                 numero: `FRETE-AVULSO-${id}`,
                 vencimento: (() => {
                   const d = new Date(dataMovimento);
-                  d.setDate(d.getDate() + 30);
+                  d.setUTCDate(d.getUTCDate() + 30);
                   return d;
                 })(),
                 valorOriginal: valorFinal,
@@ -783,16 +784,52 @@ router.patch("/:id", async (req, res) => {
         },
       });
 
-      if (dataPatch.valor !== undefined && !f.vendaId) {
+      if (!f.vendaId) {
         const numeros = [`FRETE-AVULSO-${id}`, `VALE-FRETE-${id}`];
-        await tx.tituloReceber.updateMany({
-          where: {
-            tenantId,
-            numero: { in: numeros },
-            status: "aberto",
-          },
-          data: { valorOriginal: f.valor },
-        });
+        if (dataPatch.reciboEmitido === true) {
+          // Frete marcado pago: remove título órfão (pagamento já existe ou virá na reconciliação).
+          await tx.tituloReceber.deleteMany({
+            where: { tenantId, numero: { in: numeros } },
+          });
+        } else if (dataPatch.reciboEmitido === false) {
+          const existe = await tx.tituloReceber.findFirst({
+            where: { tenantId, numero: { in: numeros } },
+          });
+          if (!existe) {
+            const venc = new Date(f.data || Date.now());
+            venc.setUTCDate(venc.getUTCDate() + 30);
+            await tx.tituloReceber.create({
+              data: {
+                tenantId,
+                clienteId: f.clienteId,
+                vendaId: null,
+                numero: `FRETE-AVULSO-${id}`,
+                vencimento: venc,
+                valorOriginal: f.valor,
+                status: "aberto",
+                observacoes: f.observacao || null,
+              },
+            });
+          } else {
+            await tx.tituloReceber.update({
+              where: { id: existe.id },
+              data: {
+                valorPago: 0,
+                status: "aberto",
+                valorOriginal: f.valor,
+              },
+            });
+          }
+        } else if (dataPatch.valor !== undefined) {
+          await tx.tituloReceber.updateMany({
+            where: {
+              tenantId,
+              numero: { in: numeros },
+              status: "aberto",
+            },
+            data: { valorOriginal: f.valor },
+          });
+        }
       }
 
       if (f.vendaId && f.venda) {
@@ -823,6 +860,10 @@ router.patch("/:id", async (req, res) => {
         valor: parseFloat(String(f.valor)),
         payload: dataPatch,
       });
+
+      if (dataPatch.reciboEmitido !== undefined && f.clienteId) {
+        await recalcularTodosTitulosCliente(tx, f.clienteId);
+      }
 
       return f;
     });
@@ -861,7 +902,7 @@ router.post("/vale-avulso", async (req, res) => {
         ? parseDateField(req.body.vencimento, "vencimento", { required: true })
         : (() => {
             const d = new Date();
-            d.setDate(d.getDate() + 30);
+            d.setUTCDate(d.getUTCDate() + 30);
             return d;
           })();
 
@@ -973,7 +1014,7 @@ router.post("/:id/vale", async (req, res) => {
         ? parseDateField(req.body.vencimento, "vencimento", { required: true })
         : (() => {
             const d = new Date();
-            d.setDate(d.getDate() + 30);
+            d.setUTCDate(d.getUTCDate() + 30);
             return d;
           })();
     const observacaoExtra =

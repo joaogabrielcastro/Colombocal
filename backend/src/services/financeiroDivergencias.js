@@ -4,19 +4,24 @@ const TOLERANCIA_PADRAO = 0.01;
 
 /**
  * Compara conta corrente esperada com títulos em aberto.
- * Conta = (vendas + fretes avulsos pendentes) − pagamentos.
- * Frete avulso gera título sem venda; sem somá-lo, a dashboard marcava falso positivo.
+ * Conta = (vendas + fretes avulsos) − pagamentos.
+ * Inclui frete avulso pago e pendente: o pagamento do frete entra nos créditos
+ * e cancela o débito do frete — evita falso positivo (ex.: frete pago + título órfão).
  * @param {{
  *   clienteId: number,
  *   totalDebitos: number,
  *   totalCreditos: number,
+ *   totalFretesAvulsos?: number,
  *   totalFretesAvulsosPendentes?: number,
  *   titulos: Array<{ valorOriginal: unknown, valorPago: unknown }>,
  * }} row
  * @param {number} [tolerancia]
  */
 function medirDivergenciaCliente(row, tolerancia = TOLERANCIA_PADRAO) {
-  const fretes = Number(row.totalFretesAvulsosPendentes) || 0;
+  const fretes =
+    row.totalFretesAvulsos != null
+      ? Number(row.totalFretesAvulsos) || 0
+      : Number(row.totalFretesAvulsosPendentes) || 0;
   const debitosEsperados = (Number(row.totalDebitos) || 0) + fretes;
   const contaCorrente = saldoContaCorrente(debitosEsperados, row.totalCreditos);
   const titulosEmAberto = totalTitulosEmAberto(row.titulos || []);
@@ -26,6 +31,7 @@ function medirDivergenciaCliente(row, tolerancia = TOLERANCIA_PADRAO) {
     clienteId: row.clienteId,
     contaCorrente,
     titulosEmAberto,
+    fretesAvulsos: fretes,
     fretesAvulsosPendentes: fretes,
     diferenca,
     divergente: abs > tolerancia,
@@ -59,10 +65,10 @@ async function listarDivergenciasContaTitulos(
       where: { tenantId },
       _sum: { valorOriginal: true, valorPago: true },
     }),
-    // Frete avulso pendente gera título sem venda — entra no lado "conta".
+    // Todo frete avulso (pago ou não): o pagamento correspondente cancela no crédito.
     prisma.freteMovimento.groupBy({
       by: ["clienteId"],
-      where: { tenantId, vendaId: null, reciboEmitido: false },
+      where: { tenantId, vendaId: null },
       _sum: { valor: true },
     }),
   ]);
@@ -76,7 +82,7 @@ async function listarDivergenciasContaTitulos(
   const creditos = new Map(
     pagsAgg.map((a) => [a.clienteId, parseFloat(String(a._sum.valor || 0))]),
   );
-  const fretesPendentes = new Map(
+  const fretesAvulsos = new Map(
     fretesAgg.map((a) => [
       a.clienteId,
       parseFloat(String(a._sum.valor || 0)),
@@ -95,7 +101,7 @@ async function listarDivergenciasContaTitulos(
   const ids = new Set([
     ...debitos.keys(),
     ...creditos.keys(),
-    ...fretesPendentes.keys(),
+    ...fretesAvulsos.keys(),
     ...titulosPorCliente.keys(),
   ]);
 
@@ -110,7 +116,7 @@ async function listarDivergenciasContaTitulos(
         clienteId,
         totalDebitos: debitos.get(clienteId) || 0,
         totalCreditos: creditos.get(clienteId) || 0,
-        totalFretesAvulsosPendentes: fretesPendentes.get(clienteId) || 0,
+        totalFretesAvulsos: fretesAvulsos.get(clienteId) || 0,
         // totalTitulosEmAberto espera lista; um título sintético agrega o mesmo.
         titulos: [t],
       },

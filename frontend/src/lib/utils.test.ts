@@ -29,6 +29,13 @@ describe("formatDate", () => {
   it("formata data ISO", () => {
     expect(formatDate("2026-04-01T12:00:00Z")).toMatch(/\d{2}\/\d{2}\/\d{4}/);
   });
+  it("não atrasa um dia em meia-noite UTC (fuso Brasil)", () => {
+    // Sem timeZone UTC, America/Sao_Paulo mostraria 02/08.
+    expect(formatDate("2026-08-03T00:00:00.000Z")).toBe("03/08/2026");
+  });
+  it("meio-dia UTC continua no mesmo dia civil", () => {
+    expect(formatDate("2026-08-03T12:00:00.000Z")).toBe("03/08/2026");
+  });
 });
 
 describe("localDateInputValue", () => {

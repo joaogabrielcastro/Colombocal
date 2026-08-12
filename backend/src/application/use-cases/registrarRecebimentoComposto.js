@@ -9,6 +9,7 @@ const {
   assertClienteDoTenant,
   assertVendaDoTenant,
 } = require("../../utils/tenantOwnership");
+const { parseDateField } = require("../../utils/validation");
 
 function toNumber(value) {
   const n = parseFloat(String(value ?? 0));
@@ -16,9 +17,8 @@ function toNumber(value) {
 }
 
 function parseDataInput(value) {
-  if (value instanceof Date) return value;
-  if (value) return new Date(value);
-  return new Date();
+  if (value == null || value === "") return new Date();
+  return parseDateField(value, "data");
 }
 
 async function registrarRecebimentoComposto(prisma, payload) {

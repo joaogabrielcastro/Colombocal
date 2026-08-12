@@ -5,6 +5,7 @@ const {
   parseIntField,
   parseNumberField,
   parseDateField,
+  addDaysCalendar,
   ensureArray,
 } = require("../utils/validation");
 const { parseBody } = require("../utils/zodParse");
@@ -67,9 +68,7 @@ function wherePorOrdem(ordemRaw, tenantId) {
 }
 
 function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+  return addDaysCalendar(date, days);
 }
 
 // GET /api/vendas
