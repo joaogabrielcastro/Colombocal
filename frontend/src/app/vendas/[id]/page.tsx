@@ -30,7 +30,7 @@ import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 export default function VendaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { freteEnabled } = useTenantFeatures();
+  const { freteEnabled, fretePagoDefault } = useTenantFeatures();
   const [venda, setVenda] = useState<Venda | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelando, setCancelando] = useState(false);
@@ -81,10 +81,14 @@ export default function VendaDetailPage() {
     const f0 = venda.fretes?.[0];
     setFreteForm({
       valor: String(parseFloat(String(venda.frete))),
-      recibo: f0?.reciboEmitido ?? venda.freteRecibo,
-      data: toInputDate(f0?.reciboData),
+      recibo: fretePagoDefault
+        ? true
+        : (f0?.reciboEmitido ?? venda.freteRecibo),
+      data:
+        toInputDate(f0?.reciboData) ||
+        (fretePagoDefault ? toInputDate(venda.dataVenda) : ""),
     });
-  }, [venda]);
+  }, [venda, fretePagoDefault]);
 
   const salvarFreteRecibo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +102,7 @@ export default function VendaDetailPage() {
     try {
       const updated = await api.patch<Venda>(`/vendas/${id}`, {
         frete: valor,
-        freteRecibo: freteForm.recibo,
+        freteRecibo: fretePagoDefault ? true : freteForm.recibo,
         freteReciboNum: null,
         freteReciboData: freteForm.data.trim() || null,
       });
@@ -242,31 +246,42 @@ export default function VendaDetailPage() {
     body { font-family: Arial, sans-serif; color:#111827; margin: 0; padding: 4px 6px; font-size: 11px; }
     .sheet { max-height: 13.8cm; overflow: hidden; }
     h1 { margin:0; font-size: 14px; font-weight: 700; line-height: 1.15; }
-    .meta { margin-top: 1px; color:#4b5563; font-size: 10px; }
     .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 5px; }
     .box { border:1px solid #d1d5db; border-radius: 3px; padding: 3px 5px; }
     .box-full { grid-column: 1 / -1; }
     .label { color:#6b7280; font-size: 8px; text-transform: uppercase; font-weight: 700; line-height: 1.15; }
     .value { margin-top: 1px; font-size: 11px; line-height: 1.2; font-weight: 600; }
+    .venda-meta { margin-top: 3px; font-size: 10px; font-weight: 700; color:#111827; line-height: 1.2; }
     table { width:100%; border-collapse: collapse; margin-top: 5px; }
     th, td { border:1px solid #d1d5db; padding: 2px 4px; font-size: 10px; }
     th { background:#f3f4f6; text-align:left; font-size: 9px; text-transform: uppercase; }
     .totais { margin-top: 5px; padding: 3px 5px; border:1px solid #d1d5db; border-radius: 3px; font-size: 10px; line-height: 1.25; }
     .totais strong { font-weight: 700; }
-    .fretes-linha {
+    .total-produtos-linha {
       margin-top: 6px;
       padding: 5px 6px;
       border: 2px solid #111827;
       border-radius: 3px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .total-produtos-linha strong { font-size: 13px; }
+    .fretes-linha {
+      margin-top: 5px;
+      padding: 3px 5px;
+      border:1px solid #d1d5db;
+      border-radius: 3px;
       display: flex;
       flex-wrap: wrap;
-      gap: 16px 28px;
+      gap: 8px 16px;
       align-items: baseline;
-      font-size: 12px;
-      letter-spacing: 0.02em;
+      font-size: 10px;
+      line-height: 1.25;
     }
-    .frete-tag { font-weight: 700; text-transform: uppercase; }
-    .frete-tag strong { font-size: 13px; }
+    .frete-tag { font-weight: 600; text-transform: uppercase; }
+    .frete-tag strong { font-size: 11px; }
     .frete-pintura { color: #14532d; }
     .frete-hint { color:#6b7280; font-size: 8px; margin-top: 2px; }
     .obs { margin-top: 5px; border:1px dashed #d1d5db; border-radius: 3px; padding: 3px 5px; min-height: 18px; font-size: 10px; }
@@ -281,7 +296,6 @@ export default function VendaDetailPage() {
 <body>
   <div class="sheet">
     <h1>Ordem de Serviço - Entrega</h1>
-    <div class="meta">Venda ${numPub} • Data ${formatDate(venda.dataVenda)}</div>
 
     <div class="grid">
       <div class="box">
@@ -301,6 +315,7 @@ export default function VendaDetailPage() {
         <div class="value">${escapeHtml(
           [venda.motorista?.veiculo, venda.motorista?.placa].filter(Boolean).join(" - ") || "-",
         )}</div>
+        <div class="venda-meta">Venda ${escapeHtml(numPub)} · Data ${escapeHtml(formatDate(venda.dataVenda))}</div>
       </div>
       <div class="box box-full">
         <div class="label">Endereço / Local</div>
@@ -322,8 +337,8 @@ export default function VendaDetailPage() {
       </tbody>
     </table>
 
-    <div class="totais">
-      <div>Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong></div>
+    <div class="total-produtos-linha">
+      Total produtos: <strong>${escapeHtml(formatMoney(venda.valorTotal))}</strong>
     </div>
     ${
       freteEnabled && freteDestaqueParts.length
@@ -710,16 +725,26 @@ export default function VendaDetailPage() {
                 />
               </div>
               <div className="flex items-end gap-2 pb-0.5">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <label
+                  className={`flex items-center gap-2 text-sm ${
+                    fretePagoDefault ? "cursor-default" : "cursor-pointer"
+                  }`}
+                >
                   <input
                     type="checkbox"
-                    checked={freteForm.recibo}
+                    checked={fretePagoDefault ? true : freteForm.recibo}
+                    disabled={fretePagoDefault}
                     onChange={(e) =>
                       setFreteForm((s) => ({ ...s, recibo: e.target.checked }))
                     }
                     className="rounded border-gray-300"
                   />
                   Frete pago
+                  {fretePagoDefault ? (
+                    <span className="text-gray-400 text-xs">
+                      (padrão Colombocal)
+                    </span>
+                  ) : null}
                 </label>
               </div>
               <div className="flex items-end">

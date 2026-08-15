@@ -15,6 +15,7 @@ const { parseDateField, addDaysCalendar } = require("../../utils/validation");
 const {
   calcularFreteAutomatico,
 } = require("../../domain/frete/calcularFrete");
+const { tenantFretePagoDefault } = require("../../constants/tenantFeatures");
 
 function addDays(date, days) {
   return addDaysCalendar(date, days);
@@ -145,7 +146,18 @@ async function criarVenda(prisma, payload) {
           fretePorTonAplicado,
         )
       : 0;
-    const freteReciboAplicado = freteEnabled && !!freteRecibo;
+    const tenantRow = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: { slug: true },
+    });
+    const fretePagoDefault = tenantFretePagoDefault(tenantRow?.slug);
+    const freteReciboAplicado =
+      freteEnabled && (fretePagoDefault || !!freteRecibo);
+    const freteReciboDataAplicado = freteReciboAplicado
+      ? freteReciboData
+        ? parseDateField(freteReciboData, "freteReciboData")
+        : dataEfetivaVenda
+      : null;
 
     const ultimaNum = await tx.venda.findFirst({
       where: { tenantId },
@@ -208,7 +220,7 @@ async function criarVenda(prisma, payload) {
         freteValor: freteFinal,
         freteRecibo: freteReciboAplicado,
         freteReciboNum: freteReciboAplicado ? freteReciboNum || null : null,
-        freteReciboData: freteReciboData,
+        freteReciboData: freteReciboDataAplicado,
         dataVenda: dataEfetivaVenda,
         numeroVenda,
       });

@@ -22,7 +22,7 @@ describe("fetchTenantFeatures", () => {
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
     const f = await fetchTenantFeatures(true);
-    expect(f).toEqual({ clienteCpf: true, frete: false });
+    expect(f).toEqual({ clienteCpf: true, frete: false, fretePagoDefault: false });
   });
 
   it("frete false quando ausente (não assume Colombocal)", async () => {
@@ -30,7 +30,7 @@ describe("fetchTenantFeatures", () => {
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
     const f = await fetchTenantFeatures(true);
-    expect(f).toEqual({ clienteCpf: false, frete: false });
+    expect(f).toEqual({ clienteCpf: false, frete: false, fretePagoDefault: false });
   });
 
   it("usa defaults quando a API falha", async () => {
@@ -38,14 +38,14 @@ describe("fetchTenantFeatures", () => {
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
     const f = await fetchTenantFeatures(true);
-    expect(f).toEqual({ clienteCpf: false, frete: false });
+    expect(f).toEqual({ clienteCpf: false, frete: false, fretePagoDefault: false });
   });
 
   it("reaproveita cache em chamadas subsequentes", async () => {
     const payload = btoa(JSON.stringify({ tid: 1, sub: 1 }));
     localStorage.setItem("colombocal_auth_token", `hdr.${payload}.sig`);
     apiGet.mockResolvedValue({
-      features: { clienteCpf: true, frete: true },
+      features: { clienteCpf: true, frete: true, fretePagoDefault: true },
       user: { tenantId: 1 },
     });
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
@@ -58,12 +58,15 @@ describe("fetchTenantFeatures", () => {
 
 describe("useTenantFeatures", () => {
   it("expõe features após carregamento", async () => {
-    apiGet.mockResolvedValue({ features: { clienteCpf: false, frete: true } });
+    apiGet.mockResolvedValue({
+      features: { clienteCpf: false, frete: true, fretePagoDefault: true },
+    });
     const { useTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
     const { result } = renderHook(() => useTenantFeatures());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.freteEnabled).toBe(true);
     expect(result.current.clienteCpfEnabled).toBe(false);
+    expect(result.current.fretePagoDefault).toBe(true);
   });
 });

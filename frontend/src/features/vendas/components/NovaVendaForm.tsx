@@ -60,7 +60,7 @@ interface ProdutoPreco extends Produto {
 
 export function NovaVendaForm({ editId }: { editId?: string }) {
   const router = useRouter();
-  const { freteEnabled } = useTenantFeatures();
+  const { freteEnabled, fretePagoDefault } = useTenantFeatures();
   const searchParams = useSearchParams();
   const clienteIdFromQuery = searchParams.get("clienteId");
   const isEdit = !!editId;
@@ -95,6 +95,13 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [mostrarDetalhes, setMostrarDetalhes] = useState(isEdit);
+
+  useEffect(() => {
+    if (!isEdit && fretePagoDefault) {
+      setFreteRecibo(true);
+      setFreteReciboData((d) => d || localDateInputValue());
+    }
+  }, [fretePagoDefault, isEdit]);
 
   useEffect(() => {
     api.get<Vendedor[]>("/vendedores?take=1").then((arr) => {
@@ -425,12 +432,13 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     const itensValidos = itens.filter(
       (i) => i.produtoId && i.quantidade && i.precoUnitario,
     );
+    const fretePago = fretePagoDefault || freteRecibo;
     const payload = {
       clienteId: parseInt(clienteId, 10),
       vendedorId: parseInt(vendedorId, 10),
       motoristaId: motoristaId ? parseInt(motoristaId, 10) : null,
-      freteRecibo,
-      freteReciboData: freteRecibo ? freteReciboData : null,
+      freteRecibo: fretePago,
+      freteReciboData: fretePago ? freteReciboData : null,
       fretePorSaco: Number.isFinite(fretePorSacoVal) ? fretePorSacoVal : 0,
       fretePorTonelada: Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0,
       dataVenda,
@@ -737,16 +745,29 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Pagamento do frete
                       </label>
-                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                      <label
+                        className={`flex items-center gap-2 mt-2 ${
+                          fretePagoDefault ? "cursor-default" : "cursor-pointer"
+                        }`}
+                      >
                         <input
                           type="checkbox"
-                          checked={freteRecibo}
+                          checked={fretePagoDefault ? true : freteRecibo}
+                          disabled={fretePagoDefault}
                           onChange={(e) => setFreteRecibo(e.target.checked)}
                           className="w-4 h-4 rounded"
                         />
-                        <span className="text-sm text-gray-700">Frete pago</span>
+                        <span className="text-sm text-gray-700">
+                          Frete pago
+                          {fretePagoDefault ? (
+                            <span className="text-gray-400 font-normal">
+                              {" "}
+                              (padrão Colombocal)
+                            </span>
+                          ) : null}
+                        </span>
                       </label>
-                      {freteRecibo && (
+                      {(fretePagoDefault || freteRecibo) && (
                         <input
                           type="date"
                           value={freteReciboData}

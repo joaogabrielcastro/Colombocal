@@ -39,9 +39,17 @@ function tenantAllowsFrete(slug) {
   return !getNoFreteTenantSlugs().includes(s);
 }
 
+/** Colombocal: checkbox "Frete pago" vem marcado por padrão (e permanece ativo). */
+function tenantFretePagoDefault(slug) {
+  if (!slug) return false;
+  const s = String(slug).trim().toLowerCase();
+  return s === "default" || s === "colombocal";
+}
+
 module.exports = {
   getClientCpfTenantSlugs,
   getNoFreteTenantSlugs,
   tenantAllowsClienteCpf,
   tenantAllowsFrete,
+  tenantFretePagoDefault,
 };

@@ -23,7 +23,7 @@ export default function LoginPage() {
         token: string;
         user: { email: string; name: string | null; tenantId: number };
         tenant: { id: number; name: string; slug?: string };
-        features?: { clienteCpf?: boolean; frete?: boolean };
+        features?: { clienteCpf?: boolean; frete?: boolean; fretePagoDefault?: boolean };
       }>('/auth/login', {
         email: email.trim().toLowerCase(),
         password,
@@ -34,6 +34,7 @@ export default function LoginPage() {
           {
             clienteCpf: !!res.features.clienteCpf,
             frete: !!res.features.frete,
+            fretePagoDefault: !!res.features.fretePagoDefault,
           },
           res.user.tenantId ?? res.tenant.id,
         );

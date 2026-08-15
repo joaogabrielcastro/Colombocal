@@ -37,6 +37,14 @@ test("tenantAllowsClienteCpf: respeita CLIENT_CPF_TENANT_SLUGS", () => {
   }
 });
 
+test("tenantFretePagoDefault: só Colombocal", () => {
+  const { tenantFretePagoDefault } = require("../src/constants/tenantFeatures");
+  assert.equal(tenantFretePagoDefault("default"), true);
+  assert.equal(tenantFretePagoDefault("colombocal"), true);
+  assert.equal(tenantFretePagoDefault("requinte"), false);
+  assert.equal(tenantFretePagoDefault(null), false);
+});
+
 test("tenantAllowsFrete: default/colombocal sempre com frete", () => {
   const prev = process.env.NO_FRETE_TENANT_SLUGS;
   process.env.NO_FRETE_TENANT_SLUGS = "default,colombocal,requinte";

@@ -20,7 +20,8 @@ const {
   loadComissaoMapPorCliente,
 } = require("../services/comissaoCadastro");
 const { criarVenda } = require("../application/use-cases/criarVenda");
-const { requestAllowsFrete } = require("../utils/tenantRequest");
+const { requestAllowsFrete, getTenantSlug } = require("../utils/tenantRequest");
+const { tenantFretePagoDefault } = require("../constants/tenantFeatures");
 const {
   upsertFreteMovimentoFromVenda,
 } = require("../services/syncFreteMovimentoVenda");
@@ -299,7 +300,13 @@ router.patch("/:id", async (req, res) => {
     if (b.frete !== undefined) {
       dataVenda.frete = b.frete;
     }
-    if (b.freteRecibo !== undefined) dataVenda.freteRecibo = !!b.freteRecibo;
+    const slug = await getTenantSlug(tenantId);
+    const fretePagoDefault = tenantFretePagoDefault(slug);
+    if (fretePagoDefault) {
+      dataVenda.freteRecibo = true;
+    } else if (b.freteRecibo !== undefined) {
+      dataVenda.freteRecibo = !!b.freteRecibo;
+    }
     if (b.freteReciboNum !== undefined)
       dataVenda.freteReciboNum = b.freteReciboNum || null;
 
@@ -311,8 +318,11 @@ router.patch("/:id", async (req, res) => {
 
       const freteValor =
         b.frete !== undefined ? parseFloat(String(b.frete)) : parseFloat(String(v.frete));
-      const freteReciboVal =
-        b.freteRecibo !== undefined ? !!b.freteRecibo : !!v.freteRecibo;
+      const freteReciboVal = fretePagoDefault
+        ? true
+        : b.freteRecibo !== undefined
+          ? !!b.freteRecibo
+          : !!v.freteRecibo;
       const freteReciboNumVal =
         b.freteReciboNum !== undefined ? b.freteReciboNum || null : v.freteReciboNum;
       const freteReciboDataVal =
@@ -519,7 +529,11 @@ router.put("/:id", async (req, res) => {
         : 0;
       const freteReciboBody =
         body.freteRecibo !== undefined ? !!body.freteRecibo : existente.freteRecibo;
-      const freteReciboAplicado = freteEnabled && freteReciboBody;
+      const fretePagoDefault = tenantFretePagoDefault(
+        await getTenantSlug(tenantId),
+      );
+      const freteReciboAplicado =
+        freteEnabled && (fretePagoDefault || freteReciboBody);
       const freteReciboNum = freteEnabled
         ? body.freteReciboNum !== undefined
           ? body.freteReciboNum || null

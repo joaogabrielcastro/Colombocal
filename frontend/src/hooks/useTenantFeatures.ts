@@ -37,6 +37,7 @@ export function fetchTenantFeatures(force = false): Promise<TenantFeatures> {
       const next: TenantFeatures = {
         clienteCpf: !!r.features?.clienteCpf,
         frete: !!r.features?.frete,
+        fretePagoDefault: !!r.features?.fretePagoDefault,
       };
       const meTid = Number(r.user?.tenantId) || tid;
       setTenantFeaturesCache(next, meTid);
@@ -97,5 +98,6 @@ export function useTenantFeatures() {
     loading,
     freteEnabled: features.frete,
     clienteCpfEnabled: features.clienteCpf,
+    fretePagoDefault: features.fretePagoDefault,
   };
 }

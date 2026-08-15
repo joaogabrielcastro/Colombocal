@@ -2,6 +2,7 @@ const { getConfig } = require("./configSistema");
 const {
   tenantAllowsClienteCpf,
   tenantAllowsFrete,
+  tenantFretePagoDefault,
 } = require("../constants/tenantFeatures");
 const { clearTenantSlugCache } = require("../utils/tenantRequest");
 
@@ -31,6 +32,7 @@ async function getTenantFeatures(prisma, tenantId, slug) {
     clienteCpf:
       cpfFromDb != null ? cpfFromDb : tenantAllowsClienteCpf(slug),
     frete: freteFromDb != null ? freteFromDb : tenantAllowsFrete(slug),
+    fretePagoDefault: tenantFretePagoDefault(slug),
   };
 }
 
