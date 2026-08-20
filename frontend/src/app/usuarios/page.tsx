@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Cog6ToothIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+  Cog6ToothIcon,
+  KeyIcon,
+  PlusIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
 import { NAV_PERMISSION_OPTIONS, type NavPermissionKey } from '@/lib/navigation';
 import api from '@/lib/api';
 import { ListScaffold } from '@/components/ui/list-scaffold';
@@ -35,6 +41,9 @@ export default function UsuariosPage() {
   const [permUser, setPermUser] = useState<TenantUser | null>(null);
   const [permKeys, setPermKeys] = useState<NavPermissionKey[]>([]);
   const [salvandoPerm, setSalvandoPerm] = useState(false);
+  const [pwdUser, setPwdUser] = useState<TenantUser | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [salvandoPwd, setSalvandoPwd] = useState(false);
 
   const allNavKeys = NAV_PERMISSION_OPTIONS.map((o) => o.key);
 
@@ -68,6 +77,22 @@ export default function UsuariosPage() {
       reportApiError(err, { title: 'Não foi possível salvar as abas' });
     } finally {
       setSalvandoPerm(false);
+    }
+  };
+
+  const salvarSenha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pwdUser) return;
+    setSalvandoPwd(true);
+    try {
+      await api.patch(`/users/${pwdUser.id}/password`, { password: newPassword });
+      toast.success(`Senha de ${pwdUser.email} atualizada`);
+      setPwdUser(null);
+      setNewPassword('');
+    } catch (err) {
+      reportApiError(err, { title: 'Não foi possível alterar a senha' });
+    } finally {
+      setSalvandoPwd(false);
     }
   };
 
@@ -192,7 +217,7 @@ export default function UsuariosPage() {
                     <th className="table-header">E-mail</th>
                     <th className="table-header">Papel</th>
                     <th className="table-header">Abas</th>
-                    <th className="table-header w-28" />
+                    <th className="table-header w-36" />
                   </tr>
                 </thead>
                 <tbody>
@@ -209,7 +234,18 @@ export default function UsuariosPage() {
                             : 'Todas (padrão)'}
                       </td>
                       <td className="table-cell text-right">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-end gap-1 items-center">
+                          <button
+                            type="button"
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                            title="Alterar senha"
+                            onClick={() => {
+                              setPwdUser(u);
+                              setNewPassword('');
+                            }}
+                          >
+                            <KeyIcon className="w-4 h-4" />
+                          </button>
                           {u.role === 'member' && (
                             <button
                               type="button"
@@ -301,6 +337,48 @@ export default function UsuariosPage() {
                   type="button"
                   className="btn-secondary"
                   onClick={() => setMostrarForm(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {pwdUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Alterar senha</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              {pwdUser.name || pwdUser.email}
+              {pwdUser.id === me.id ? ' (sua conta)' : ''}
+            </p>
+            <form onSubmit={(e) => void salvarSenha(e)} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nova senha</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  className="input-field w-full"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres.</p>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="submit" disabled={salvandoPwd} className="btn-primary flex-1">
+                  {salvandoPwd ? 'Salvando…' : 'Salvar senha'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setPwdUser(null);
+                    setNewPassword('');
+                  }}
                 >
                   Cancelar
                 </button>

@@ -112,6 +112,49 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+// PATCH /api/users/:id/password — redefine senha (admin; pode alterar a própria)
+router.patch("/:id/password", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id < 1) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+    const password = String(req.body?.password || "");
+    if (!password) {
+      return res.status(400).json({ error: "Informe a nova senha" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres" });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { id, tenantId: req.tenantId },
+    });
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: { passwordHash },
+      });
+      await registrarAuditoria(tx, req, {
+        tenantId: req.tenantId,
+        tipo: "USER_SENHA_ALTERADA",
+        entidade: "User",
+        entidadeId: id,
+        payload: { alvoEmail: user.email },
+      });
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
 // PATCH /api/users/:id/nav-permissions — abas visíveis (admin)
 router.patch("/:id/nav-permissions", async (req, res) => {
   try {
