@@ -191,3 +191,67 @@ test("POST /api/fretes/:id/vale 404", async () => {
   const res = await agent.post("/api/fretes/9999/vale").send({ valor: 10 });
   assert.equal(res.status, 404);
 });
+
+test("DELETE /api/fretes/:id remove frete avulso e título", async () => {
+  const created = await agent.post("/api/fretes/avulso").send({
+    clienteId: ctx.cliente.id,
+    motoristaId: ctx.motorista.id,
+    precoTonelada: 50,
+    produtoId: ctx.produto.id,
+    quantidade: 2,
+  });
+  assert.equal(created.status, 201);
+  const freteId = created.body.frete.id;
+
+  const del = await agent.delete(`/api/fretes/${freteId}`);
+  assert.equal(del.status, 200);
+  assert.equal(del.body.ok, true);
+
+  const gone = await prisma.freteMovimento.findUnique({ where: { id: freteId } });
+  assert.equal(gone, null);
+  const titulo = await prisma.tituloReceber.findFirst({
+    where: { numero: `FRETE-AVULSO-${freteId}` },
+  });
+  assert.equal(titulo, null);
+});
+
+test("DELETE /api/fretes/:id permite frete da venda sem alterar a venda", async () => {
+  const vendedor = await seedVendedor(ctx.tenant.id);
+  const venda = await prisma.venda.create({
+    data: {
+      tenantId: ctx.tenant.id,
+      numeroVenda: 99,
+      clienteId: ctx.cliente.id,
+      vendedorId: vendedor.id,
+      valorTotal: 100,
+      frete: 45,
+      freteTarifaSaco: 2,
+      freteTarifaTonelada: 10,
+      freteRecibo: true,
+      freteReciboNum: "RC-1",
+    },
+  });
+  const frete = await prisma.freteMovimento.create({
+    data: {
+      tenantId: ctx.tenant.id,
+      vendaId: venda.id,
+      clienteId: ctx.cliente.id,
+      valor: 45,
+      reciboEmitido: true,
+      reciboNumero: "RC-1",
+    },
+  });
+
+  const del = await agent.delete(`/api/fretes/${frete.id}`);
+  assert.equal(del.status, 200);
+
+  const gone = await prisma.freteMovimento.findUnique({ where: { id: frete.id } });
+  assert.equal(gone, null);
+
+  const vendaAtual = await prisma.venda.findUnique({ where: { id: venda.id } });
+  assert.equal(Number(vendaAtual.frete), 45);
+  assert.equal(Number(vendaAtual.freteTarifaSaco), 2);
+  assert.equal(Number(vendaAtual.freteTarifaTonelada), 10);
+  assert.equal(vendaAtual.freteRecibo, true);
+  assert.equal(vendaAtual.freteReciboNum, "RC-1");
+});

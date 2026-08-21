@@ -309,21 +309,8 @@ function FretesContent() {
                         <button
                           type="button"
                           className={actionBtnDanger}
-                          title={
-                            r.vendaId
-                              ? "Frete de venda: cancele pela venda"
-                              : "Excluir frete"
-                          }
-                          disabled={!!r.vendaId}
-                          onClick={() => {
-                            if (r.vendaId) {
-                              toast.message(
-                                "Frete de venda: edite ou cancele pela tela da venda",
-                              );
-                              return;
-                            }
-                            setToDelete(r);
-                          }}
+                          title="Excluir frete"
+                          onClick={() => setToDelete(r)}
                         >
                           Excluir
                         </button>
@@ -363,13 +350,24 @@ function FretesContent() {
 
       <ConfirmDialog
         open={!!toDelete}
-        title="Excluir frete avulso?"
+        title={
+          toDelete?.vendaId
+            ? "Excluir frete da venda?"
+            : "Excluir frete avulso?"
+        }
         description={
           toDelete
-            ? `Frete de ${
-                toDelete.cliente.nomeFantasia?.trim() ||
-                toDelete.cliente.razaoSocial
-              } (${formatMoney(toDelete.valor)}). Títulos e pagamentos ligados a este frete também serão removidos.`
+            ? toDelete.vendaId
+              ? `Frete da venda #${
+                  toDelete.venda?.numeroVenda ?? toDelete.vendaId
+                } — ${
+                  toDelete.cliente.nomeFantasia?.trim() ||
+                  toDelete.cliente.razaoSocial
+                } (${formatMoney(toDelete.valor)}). Sai só desta lista; a venda não é alterada.`
+              : `Frete de ${
+                  toDelete.cliente.nomeFantasia?.trim() ||
+                  toDelete.cliente.razaoSocial
+                } (${formatMoney(toDelete.valor)}). Títulos e pagamentos ligados a este frete também serão removidos.`
             : ""
         }
         confirmText={deleting ? "Excluindo…" : "Excluir"}

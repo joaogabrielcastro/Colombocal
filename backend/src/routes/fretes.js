@@ -1110,7 +1110,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/fretes/:id — só avulso (sem venda); remove títulos/pagamentos ligados
+// DELETE /api/fretes/:id — avulso ou frete de venda; remove títulos/pagamentos ligados
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
@@ -1119,23 +1119,21 @@ router.delete("/:id", async (req, res) => {
       where: { id, tenantId },
     });
     if (!existing) return res.status(404).json({ error: "Frete não encontrado" });
-    if (existing.vendaId) {
-      return res.status(400).json({
-        error:
-          "Este frete está ligado a uma venda. Edite ou cancele pela tela da venda.",
-      });
-    }
 
     const numerosTitulo = [`FRETE-AVULSO-${id}`, `VALE-FRETE-${id}`];
     const obsPagamento = `Pagamento de frete avulso #${id}`;
+    const vendaId = existing.vendaId || null;
 
     await prisma.$transaction(async (tx) => {
       await tx.tituloReceber.deleteMany({
         where: { tenantId, numero: { in: numerosTitulo } },
       });
-      await tx.pagamento.deleteMany({
-        where: { tenantId, observacoes: obsPagamento },
-      });
+      if (!vendaId) {
+        await tx.pagamento.deleteMany({
+          where: { tenantId, observacoes: obsPagamento },
+        });
+      }
+      // Frete de venda: só remove o espelho da lista; Venda.frete permanece.
       await tx.freteMovimento.delete({ where: { id } });
       await registrarAuditoria(tx, req, {
         tenantId,
@@ -1143,9 +1141,12 @@ router.delete("/:id", async (req, res) => {
         entidade: "FreteMovimento",
         entidadeId: id,
         clienteId: existing.clienteId,
-        vendaId: null,
+        vendaId,
         valor: parseFloat(String(existing.valor)),
-        payload: { observacao: existing.observacao || null },
+        payload: {
+          observacao: existing.observacao || null,
+          avulso: !vendaId,
+        },
       });
     });
 
