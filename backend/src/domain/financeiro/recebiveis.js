@@ -98,16 +98,16 @@ function getWhereByClienteVenda(clienteId, vendaId) {
 }
 
 /**
- * Remove títulos FRETE-AVULSO/VALE-FRETE de fretes já marcados como pagos.
- * Corrige legado em que o pagamento do frete baixou a venda e o título do frete ficou órfão.
+ * Remove títulos FRETE-AVULSO/VALE-FRETE de fretes avulsos.
+ * Avulso não gera financeiro (igual frete da venda); limpa legado em reconciliação.
  */
 async function limparTitulosFreteAvulsoJaPagos(tx, clienteId) {
-  const fretesPagos = await tx.freteMovimento.findMany({
-    where: { clienteId, vendaId: null, reciboEmitido: true },
+  const fretes = await tx.freteMovimento.findMany({
+    where: { clienteId, vendaId: null },
     select: { id: true },
   });
-  if (fretesPagos.length === 0) return { deleted: 0 };
-  const numeros = fretesPagos.flatMap((f) => numerosTituloFreteAvulso(f.id));
+  if (fretes.length === 0) return { deleted: 0 };
+  const numeros = fretes.flatMap((f) => numerosTituloFreteAvulso(f.id));
   const del = await tx.tituloReceber.deleteMany({
     where: { clienteId, numero: { in: numeros } },
   });
@@ -118,10 +118,10 @@ async function limparTitulosFreteAvulsoJaPagos(tx, clienteId) {
  * Zera baixas nos títulos e reaplica todos os pagamentos do cliente (ordem data + id).
  * Cada pagamento com vendaId só baixa títulos dessa venda.
  * Pagamento de frete avulso só baixa o título do frete.
- * Fretes avulsos já pagos: títulos órfãos são removidos (não voltam a aparecer em aberto).
+ * Fretes avulsos: títulos FRETE-AVULSO/VALE-FRETE são removidos (não geram financeiro).
  */
 async function recalcularTodosTitulosCliente(tx, clienteId) {
-  // 1) Tira título de frete já pago — senão o pagamento “avulso” antigo baixa a venda de novo.
+  // 1) Tira título de frete avulso (legado) — não deve voltar a aparecer em aberto.
   await limparTitulosFreteAvulsoJaPagos(tx, clienteId);
 
   const titulos = await tx.tituloReceber.findMany({ where: { clienteId } });

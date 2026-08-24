@@ -4,9 +4,8 @@ const TOLERANCIA_PADRAO = 0.01;
 
 /**
  * Compara conta corrente esperada com títulos em aberto.
- * Conta = (vendas + fretes avulsos) − pagamentos.
- * Inclui frete avulso pago e pendente: o pagamento do frete entra nos créditos
- * e cancela o débito do frete — evita falso positivo (ex.: frete pago + título órfão).
+ * Conta = vendas − pagamentos.
+ * Frete avulso é só operacional (como frete da venda): não entra no financeiro do cliente.
  * @param {{
  *   clienteId: number,
  *   totalDebitos: number,
@@ -18,11 +17,7 @@ const TOLERANCIA_PADRAO = 0.01;
  * @param {number} [tolerancia]
  */
 function medirDivergenciaCliente(row, tolerancia = TOLERANCIA_PADRAO) {
-  const fretes =
-    row.totalFretesAvulsos != null
-      ? Number(row.totalFretesAvulsos) || 0
-      : Number(row.totalFretesAvulsosPendentes) || 0;
-  const debitosEsperados = (Number(row.totalDebitos) || 0) + fretes;
+  const debitosEsperados = Number(row.totalDebitos) || 0;
   const contaCorrente = saldoContaCorrente(debitosEsperados, row.totalCreditos);
   const titulosEmAberto = totalTitulosEmAberto(row.titulos || []);
   const diferenca = Math.round((titulosEmAberto - contaCorrente) * 100) / 100;
@@ -31,8 +26,8 @@ function medirDivergenciaCliente(row, tolerancia = TOLERANCIA_PADRAO) {
     clienteId: row.clienteId,
     contaCorrente,
     titulosEmAberto,
-    fretesAvulsos: fretes,
-    fretesAvulsosPendentes: fretes,
+    fretesAvulsos: 0,
+    fretesAvulsosPendentes: 0,
     diferenca,
     divergente: abs > tolerancia,
   };
@@ -49,7 +44,7 @@ async function listarDivergenciasContaTitulos(
   tenantId,
   { take = 5, tolerancia = TOLERANCIA_PADRAO } = {},
 ) {
-  const [vendasAgg, pagsAgg, titulosAgg, fretesAgg] = await Promise.all([
+  const [vendasAgg, pagsAgg, titulosAgg] = await Promise.all([
     prisma.venda.groupBy({
       by: ["clienteId"],
       where: { tenantId },
@@ -65,12 +60,6 @@ async function listarDivergenciasContaTitulos(
       where: { tenantId },
       _sum: { valorOriginal: true, valorPago: true },
     }),
-    // Todo frete avulso (pago ou não): o pagamento correspondente cancela no crédito.
-    prisma.freteMovimento.groupBy({
-      by: ["clienteId"],
-      where: { tenantId, vendaId: null },
-      _sum: { valor: true },
-    }),
   ]);
 
   const debitos = new Map(
@@ -81,12 +70,6 @@ async function listarDivergenciasContaTitulos(
   );
   const creditos = new Map(
     pagsAgg.map((a) => [a.clienteId, parseFloat(String(a._sum.valor || 0))]),
-  );
-  const fretesAvulsos = new Map(
-    fretesAgg.map((a) => [
-      a.clienteId,
-      parseFloat(String(a._sum.valor || 0)),
-    ]),
   );
   const titulosPorCliente = new Map(
     titulosAgg.map((a) => [
@@ -101,7 +84,6 @@ async function listarDivergenciasContaTitulos(
   const ids = new Set([
     ...debitos.keys(),
     ...creditos.keys(),
-    ...fretesAvulsos.keys(),
     ...titulosPorCliente.keys(),
   ]);
 
@@ -116,8 +98,6 @@ async function listarDivergenciasContaTitulos(
         clienteId,
         totalDebitos: debitos.get(clienteId) || 0,
         totalCreditos: creditos.get(clienteId) || 0,
-        totalFretesAvulsos: fretesAvulsos.get(clienteId) || 0,
-        // totalTitulosEmAberto espera lista; um título sintético agrega o mesmo.
         titulos: [t],
       },
       tolerancia,

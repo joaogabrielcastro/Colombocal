@@ -4,19 +4,17 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import api from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
 import { toast } from "sonner";
-import { localDateInputValue } from "@/lib/utils";
 import type {
   Cheque,
   Cliente,
   ComissoesData,
   ContaData,
-  FreteMovimento,
   ProdutoPreco,
 } from "@/features/clientes/types";
 
 type Options = { onClienteSalvo?: () => void };
 
-export function useClienteDetail(id: string, freteEnabled: boolean, options: Options = {}) {
+export function useClienteDetail(id: string, _freteEnabled: boolean, options: Options = {}) {
   const [conta, setConta] = useState<ContaData | null>(null);
   const [produtos, setProdutos] = useState<ProdutoPreco[]>([]);
   const [cheques, setCheques] = useState<Cheque[]>([]);
@@ -32,10 +30,6 @@ export function useClienteDetail(id: string, freteEnabled: boolean, options: Opt
   const [filtroChqIni, setFiltroChqIni] = useState("");
   const [filtroChqFim, setFiltroChqFim] = useState("");
   const [buscaChq, setBuscaChq] = useState("");
-  const [fretesPendentes, setFretesPendentes] = useState<FreteMovimento[]>([]);
-  const [pagandoFreteId, setPagandoFreteId] = useState<number | null>(null);
-  const [pgFreteTipo, setPgFreteTipo] = useState<"dinheiro" | "transferencia">("dinheiro");
-  const [pgFreteData, setPgFreteData] = useState(localDateInputValue());
   const [reconciliando, setReconciliando] = useState(false);
 
   const carregarPrincipal = useCallback(async () => {
@@ -86,11 +80,6 @@ export function useClienteDetail(id: string, freteEnabled: boolean, options: Opt
       setComissoesEdit(mapa);
     }), [id]);
 
-  const carregarFretesPendentes = useCallback(() => api
-    .get<FreteMovimento[]>(`/fretes?clienteId=${id}&reciboEmitido=false&take=300&skip=0`)
-    .then((rows) => setFretesPendentes((rows || []).filter((f) => !f.vendaId)))
-    .catch(() => setFretesPendentes([])), [id]);
-
   const loadVendedorOptions = useCallback(async (q: string) => {
     const p = new URLSearchParams({ take: "80" });
     if (q.trim()) p.set("busca", q.trim());
@@ -105,23 +94,8 @@ export function useClienteDetail(id: string, freteEnabled: boolean, options: Opt
 
   useEffect(() => {
     void carregarPrincipal();
-    if (freteEnabled) void carregarFretesPendentes();
-  }, [carregarFretesPendentes, carregarPrincipal, freteEnabled]);
+  }, [carregarPrincipal]);
   useEffect(() => { void carregarCheques(); }, [id]);
-
-  const handlePagarFrete = async (frete: FreteMovimento) => {
-    setPagandoFreteId(frete.id);
-    try {
-      await api.post("/pagamentos", { clienteId: Number(id), vendaId: null, tipo: pgFreteTipo, valor: Number(frete.valor), data: pgFreteData, observacoes: `Pagamento de frete avulso #${frete.id}` });
-      await api.patch(`/fretes/${frete.id}`, { reciboEmitido: true, reciboData: pgFreteData });
-      toast.success("Frete avulso pago com sucesso.");
-      await Promise.all([carregarPrincipal(), carregarFretesPendentes()]);
-    } catch (e) {
-      reportApiError(e, { title: "Não foi possível pagar o frete avulso" });
-    } finally {
-      setPagandoFreteId(null);
-    }
-  };
 
   const handleReconciliarRecebiveis = async () => {
     setReconciliando(true);
@@ -186,10 +160,10 @@ export function useClienteDetail(id: string, freteEnabled: boolean, options: Opt
   return {
     conta, produtos, cheques, loading, form, erro, salvandoForm, precosEdit, salvandoPrecos,
     comissoesData, comissoesEdit, salvandoComissoes, filtroChqIni, filtroChqFim, buscaChq,
-    fretesPendentes, pagandoFreteId, pgFreteTipo, pgFreteData, reconciliando,
+    reconciliando,
     setForm, setPrecosEdit, setComissoesEdit, setFiltroChqIni, setFiltroChqFim, setBuscaChq,
-    setPgFreteTipo, setPgFreteData, carregarPrincipal, carregarCheques, carregarComissoes,
-    carregarFretesPendentes, handlePagarFrete, handleReconciliarRecebiveis, handleSalvarPrecos,
+    carregarPrincipal, carregarCheques, carregarComissoes,
+    handleReconciliarRecebiveis, handleSalvarPrecos,
     handleSalvarComissoes, handleSalvarCliente, loadVendedorOptions, loadVendedorLabelById,
   };
 }

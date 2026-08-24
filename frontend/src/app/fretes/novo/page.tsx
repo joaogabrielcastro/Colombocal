@@ -11,6 +11,7 @@ import { reportApiError } from "@/lib/report-api-error";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
 import { openFreteAvulsoPrint } from "@/lib/frete-avulso-print";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; fretePadraoSaco?: number; fretePadraoTonelada?: number };
 type Motorista = { id: number; nome: string };
@@ -19,6 +20,7 @@ type FreteItemForm = { produtoId: string; quantidade: string };
 
 export default function NovoFretePage() {
   const router = useRouter();
+  const { fretePagoDefault } = useTenantFeatures();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -32,15 +34,17 @@ export default function NovoFretePage() {
     precoTonelada: "",
     valorTotal: "",
     dataMovimento: localDateInputValue(),
-    vencimento: localDateInputValue(
-      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    ),
     observacao: "",
     pagoNoAto: false,
-    pagamentoTipo: "dinheiro" as "dinheiro" | "transferencia",
-    pagamentoData: localDateInputValue(),
+    reciboNumero: "",
   });
   const [itens, setItens] = useState<FreteItemForm[]>([{ produtoId: "", quantidade: "" }]);
+
+  useEffect(() => {
+    if (fretePagoDefault) {
+      setForm((s) => (s.pagoNoAto ? s : { ...s, pagoNoAto: true }));
+    }
+  }, [fretePagoDefault]);
 
   useEffect(() => {
     let active = true;
@@ -103,6 +107,8 @@ export default function NovoFretePage() {
       ? valorOverride
       : valorCalculado;
 
+  const fretePago = fretePagoDefault || form.pagoNoAto;
+
   const salvar = async (printAfter: boolean) => {
     const clienteId = Number.parseInt(form.clienteId, 10);
     const motoristaId = Number.parseInt(form.motoristaId, 10);
@@ -125,11 +131,9 @@ export default function NovoFretePage() {
         precoSaco,
         precoTonelada,
         dataMovimento: form.dataMovimento,
-        vencimento: form.vencimento,
         observacao: form.observacao,
-        pagoNoAto: form.pagoNoAto,
-        pagamentoTipo: form.pagamentoTipo,
-        pagamentoData: form.pagamentoData,
+        pagoNoAto: fretePago,
+        reciboNumero: fretePago ? form.reciboNumero.trim() || null : null,
       };
       // Só envia override se o usuário digitou total final; senão o backend calcula
       if (valorOverride != null && Number.isFinite(valorOverride) && valorOverride > 0) {
@@ -210,6 +214,9 @@ export default function NovoFretePage() {
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Novo Frete Avulso</h1>
       </div>
+      <p className="text-sm text-gray-500 -mt-4 mb-4">
+        Registra o valor do frete (sem gerar título ou pagamento na conta do cliente).
+      </p>
 
       <div className="card p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -325,15 +332,6 @@ export default function NovoFretePage() {
               onChange={(e) => setForm((s) => ({ ...s, dataMovimento: e.target.value }))}
             />
           </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Vencimento (se a receber)</label>
-            <input
-              type="date"
-              className="input-field"
-              value={form.vencimento}
-              onChange={(e) => setForm((s) => ({ ...s, vencimento: e.target.value }))}
-            />
-          </div>
           <div className="lg:col-span-4">
             <label className="block text-sm text-gray-600 mb-1">Observação</label>
             <input
@@ -345,25 +343,34 @@ export default function NovoFretePage() {
         </div>
 
         <div className="border-t pt-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.pagoNoAto} onChange={(e) => setForm((s) => ({ ...s, pagoNoAto: e.target.checked }))} />
-            Pago no ato (não gerar a receber)
+          <label
+            className={`flex items-center gap-2 text-sm ${
+              fretePagoDefault ? "cursor-default" : "cursor-pointer"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={fretePago}
+              disabled={fretePagoDefault}
+              onChange={(e) => setForm((s) => ({ ...s, pagoNoAto: e.target.checked }))}
+            />
+            Frete pago
+            {fretePagoDefault ? (
+              <span className="text-xs text-gray-500">(padrão desta organização)</span>
+            ) : null}
           </label>
-          {form.pagoNoAto && (
+          {fretePago ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Forma de pagamento</label>
-                <select className="input-field" value={form.pagamentoTipo} onChange={(e) => setForm((s) => ({ ...s, pagamentoTipo: e.target.value as "dinheiro" | "transferencia" }))}>
-                  <option value="dinheiro">Dinheiro</option>
-                  <option value="transferencia">Transferência / Pix</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Data pagamento</label>
-                <input type="date" className="input-field" value={form.pagamentoData} onChange={(e) => setForm((s) => ({ ...s, pagamentoData: e.target.value }))} />
+                <label className="block text-sm text-gray-600 mb-1">Nº recibo (opcional)</label>
+                <input
+                  className="input-field"
+                  value={form.reciboNumero}
+                  onChange={(e) => setForm((s) => ({ ...s, reciboNumero: e.target.value }))}
+                />
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 

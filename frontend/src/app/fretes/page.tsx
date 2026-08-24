@@ -367,7 +367,7 @@ function FretesContent() {
               : `Frete de ${
                   toDelete.cliente.nomeFantasia?.trim() ||
                   toDelete.cliente.razaoSocial
-                } (${formatMoney(toDelete.valor)}). Títulos e pagamentos ligados a este frete também serão removidos.`
+                } (${formatMoney(toDelete.valor)}). Remove só o registro do frete (sem financeiro de cliente).`
             : ""
         }
         confirmText={deleting ? "Excluindo…" : "Excluir"}

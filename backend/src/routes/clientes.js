@@ -290,7 +290,7 @@ router.post("/:id/reconciliar-recebiveis", async (req, res) => {
     res.json({
       success: true,
       message:
-        "Títulos reconciliados: baixas por ordem, frete avulso pago sem título órfão, excedente = troco.",
+        "Títulos reconciliados: baixas por ordem, títulos de frete avulso removidos, excedente = troco.",
     });
   } catch (error) {
     handleRouteError(res, error);

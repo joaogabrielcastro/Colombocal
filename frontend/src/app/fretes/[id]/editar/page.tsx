@@ -12,6 +12,7 @@ import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
 import { DetailPageSkeleton } from "@/components/ui/skeletons";
 import { toast } from "sonner";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 type Cliente = {
   id: number;
@@ -52,6 +53,7 @@ type FreteDetail = {
 export default function EditarFretePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { fretePagoDefault } = useTenantFeatures();
   const [frete, setFrete] = useState<FreteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -69,8 +71,6 @@ export default function EditarFretePage() {
     dataMovimento: localDateInputValue(),
     observacao: "",
     pagoNoAto: false,
-    pagamentoTipo: "dinheiro" as "dinheiro" | "transferencia",
-    pagamentoData: localDateInputValue(),
     reciboNumero: "",
   });
   const [itens, setItens] = useState<FreteItemForm[]>([{ produtoId: "", quantidade: "" }]);
@@ -134,10 +134,7 @@ export default function EditarFretePage() {
           valorTotal: String(f.valor ?? ""),
           dataMovimento: toInputDate(f.data) || localDateInputValue(),
           observacao: av?.observacaoLivre || "",
-          pagoNoAto: !!f.reciboEmitido,
-          pagamentoTipo: "dinheiro",
-          pagamentoData:
-            toInputDate(f.reciboData) || toInputDate(f.data) || localDateInputValue(),
+          pagoNoAto: fretePagoDefault ? true : !!f.reciboEmitido,
           reciboNumero: f.reciboNumero || "",
         });
       })
@@ -152,7 +149,7 @@ export default function EditarFretePage() {
     return () => {
       alive = false;
     };
-  }, [id, router]);
+  }, [id, router, fretePagoDefault]);
 
   const clienteSelecionado = useMemo(
     () => clientes.find((c) => String(c.id) === form.clienteId) || null,
@@ -216,6 +213,7 @@ export default function EditarFretePage() {
     }
     setSalvando(true);
     try {
+      const fretePago = fretePagoDefault || form.pagoNoAto;
       const payload: Record<string, unknown> = {
         clienteId,
         motoristaId,
@@ -224,10 +222,8 @@ export default function EditarFretePage() {
         precoTonelada,
         dataMovimento: form.dataMovimento,
         observacaoLivre: form.observacao,
-        pagoNoAto: form.pagoNoAto,
-        pagamentoTipo: form.pagamentoTipo,
-        pagamentoData: form.pagamentoData,
-        reciboNumero: form.pagoNoAto ? form.reciboNumero.trim() || null : null,
+        pagoNoAto: fretePago,
+        reciboNumero: fretePago ? form.reciboNumero.trim() || null : null,
       };
       if (valorOverride != null && Number.isFinite(valorOverride) && valorOverride > 0) {
         payload.valorTotal = valorOverride;
@@ -474,47 +470,26 @@ export default function EditarFretePage() {
           </div>
 
           <div className="border-t pt-3">
-            <label className="flex items-center gap-2 text-sm">
+            <label
+              className={`flex items-center gap-2 text-sm ${
+                fretePagoDefault ? "cursor-default" : "cursor-pointer"
+              }`}
+            >
               <input
                 type="checkbox"
-                checked={form.pagoNoAto}
+                checked={fretePagoDefault ? true : form.pagoNoAto}
+                disabled={fretePagoDefault}
                 onChange={(e) =>
                   setForm((s) => ({ ...s, pagoNoAto: e.target.checked }))
                 }
               />
               Frete pago
+              {fretePagoDefault ? (
+                <span className="text-xs text-gray-500">(padrão desta organização)</span>
+              ) : null}
             </label>
-            {form.pagoNoAto ? (
+            {(fretePagoDefault || form.pagoNoAto) ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    Forma de pagamento
-                  </label>
-                  <select
-                    className="input-field"
-                    value={form.pagamentoTipo}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        pagamentoTipo: e.target.value as "dinheiro" | "transferencia",
-                      }))
-                    }
-                  >
-                    <option value="dinheiro">Dinheiro</option>
-                    <option value="transferencia">Transferência / Pix</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">Data pagamento</label>
-                  <input
-                    type="date"
-                    className="input-field"
-                    value={form.pagamentoData}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, pagamentoData: e.target.value }))
-                    }
-                  />
-                </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Nº recibo</label>
                   <input

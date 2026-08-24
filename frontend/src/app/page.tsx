@@ -363,10 +363,9 @@ export default function DashboardPage() {
                 com diferença entre conta corrente e títulos
               </p>
               <p className="text-xs text-amber-900/80 mt-1 leading-snug">
-                Cobrança oficial = títulos. Frete avulso (pago ou não) entra na
-                conta. Use &quot;Recalcular títulos&quot; se o pagamento do frete
-                baixou a venda por engano; se ainda divergir, confira títulos
-                órfãos em Contas a receber.
+                Cobrança oficial = títulos (vendas). Frete avulso não entra na
+                conta do cliente. Use &quot;Recalcular títulos&quot; se pagamentos
+                antigos baixaram a venda por engano.
               </p>
               {d.divergenciasFinanceiras.amostra.length > 0 ? (
                 <ul className="mt-2 space-y-1">

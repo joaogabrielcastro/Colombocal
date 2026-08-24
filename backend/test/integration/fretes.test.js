@@ -21,7 +21,7 @@ test.beforeEach(async () => {
   ctx = { tenant, cliente, motorista, produto };
 });
 
-test("POST /api/fretes/avulso gera título quando não pago no ato", async () => {
+test("POST /api/fretes/avulso não gera título nem pagamento (só operacional)", async () => {
   const res = await agent.post("/api/fretes/avulso").send({
     clienteId: ctx.cliente.id,
     motoristaId: ctx.motorista.id,
@@ -31,12 +31,17 @@ test("POST /api/fretes/avulso gera título quando não pago no ato", async () =>
   });
   assert.equal(res.status, 201);
   assert.equal(Number(res.body.frete.valor), 100);
-  assert.ok(res.body.titulo);
+  assert.equal(res.body.titulo, null);
   assert.equal(res.body.pagamento, null);
+  assert.equal(res.body.frete.reciboEmitido, true); // Colombocal / default
   assert.equal(res.body.resumoImpressao.valorFinal, 100);
+  const titulo = await prisma.tituloReceber.findFirst({
+    where: { numero: `FRETE-AVULSO-${res.body.frete.id}` },
+  });
+  assert.equal(titulo, null);
 });
 
-test("POST /api/fretes/avulso pago no ato cria pagamento", async () => {
+test("POST /api/fretes/avulso pagoNoAto também sem financeiro", async () => {
   const res = await agent.post("/api/fretes/avulso").send({
     clienteId: ctx.cliente.id,
     motoristaId: ctx.motorista.id,
@@ -47,9 +52,13 @@ test("POST /api/fretes/avulso pago no ato cria pagamento", async () => {
     pagamentoTipo: "transferencia",
   });
   assert.equal(res.status, 201);
-  assert.ok(res.body.pagamento);
-  assert.equal(res.body.pagamento.tipo, "transferencia");
+  assert.equal(res.body.pagamento, null);
   assert.equal(res.body.titulo, null);
+  assert.equal(res.body.frete.reciboEmitido, true);
+  const pags = await prisma.pagamento.findMany({
+    where: { clienteId: ctx.cliente.id },
+  });
+  assert.equal(pags.length, 0);
 });
 
 test("POST /api/fretes/avulso aceita itens em lote e valorTotal informado", async () => {
@@ -111,10 +120,10 @@ test("GET /api/fretes lista com filtros", async () => {
   assert.equal(porCliente.body.length, 1);
 
   const naoEmitidos = await agent.get("/api/fretes").query({ reciboEmitido: "false" });
-  assert.equal(naoEmitidos.body.length, 1);
+  assert.equal(naoEmitidos.body.length, 0);
 
   const emitidos = await agent.get("/api/fretes").query({ reciboEmitido: "true" });
-  assert.equal(emitidos.body.length, 0);
+  assert.equal(emitidos.body.length, 1);
 
   const porData = await agent
     .get("/api/fretes")
@@ -192,7 +201,7 @@ test("POST /api/fretes/:id/vale 404", async () => {
   assert.equal(res.status, 404);
 });
 
-test("DELETE /api/fretes/:id remove frete avulso e título", async () => {
+test("DELETE /api/fretes/:id remove frete avulso", async () => {
   const created = await agent.post("/api/fretes/avulso").send({
     clienteId: ctx.cliente.id,
     motoristaId: ctx.motorista.id,

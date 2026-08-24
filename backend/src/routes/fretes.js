@@ -13,11 +13,23 @@ const {
 } = require("../utils/api");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const { recalcularTodosTitulosCliente } = require("../services/recebiveis");
-const { requestAllowsFrete } = require("../utils/tenantRequest");
+const { requestAllowsFrete, getTenantSlug } = require("../utils/tenantRequest");
+const { tenantFretePagoDefault } = require("../constants/tenantFeatures");
 const {
   freteLinha,
   roundMoney,
 } = require("../domain/frete/calcularFrete");
+
+/** Avulso não gera título/pagamento (igual frete da venda). Limpa legado se existir. */
+async function limparFinanceiroFreteAvulso(tx, tenantId, freteId) {
+  const numerosTitulo = [`FRETE-AVULSO-${freteId}`, `VALE-FRETE-${freteId}`];
+  await tx.tituloReceber.deleteMany({
+    where: { tenantId, numero: { in: numerosTitulo } },
+  });
+  await tx.pagamento.deleteMany({
+    where: { tenantId, observacoes: `Pagamento de frete avulso #${freteId}` },
+  });
+}
 
 async function requireFreteTenant(req, res, next) {
   try {
@@ -154,16 +166,24 @@ router.post("/avulso", async (req, res) => {
             d.setUTCDate(d.getUTCDate() + 30);
             return d;
           })();
-    const pagoNoAto = !!req.body?.pagoNoAto;
-    const pagamentoTipo = String(req.body?.pagamentoTipo || "dinheiro");
+    const observacaoLivre = String(req.body?.observacao || "").trim();
+    const itensEntrada = Array.isArray(req.body?.itens) ? req.body.itens : null;
+    const reciboNumero =
+      req.body?.reciboNumero != null && String(req.body.reciboNumero).trim() !== ""
+        ? String(req.body.reciboNumero).trim()
+        : null;
+
+    const tenantId = req.tenantId;
+    const fretePagoDefault = tenantFretePagoDefault(await getTenantSlug(tenantId));
     const pagamentoData =
       req.body?.pagamentoData != null && String(req.body.pagamentoData).trim() !== ""
         ? parseDateField(req.body.pagamentoData, "pagamentoData", { required: true })
-        : dataMovimento;
-    const observacaoLivre = String(req.body?.observacao || "").trim();
-    const itensEntrada = Array.isArray(req.body?.itens) ? req.body.itens : null;
+        : req.body?.reciboData != null && String(req.body.reciboData).trim() !== ""
+          ? parseDateField(req.body.reciboData, "reciboData", { required: true })
+          : dataMovimento;
+    // Operacional só: sem título/pagamento. Colombocal: sempre pago (como frete da venda).
+    const pagoNoAto = fretePagoDefault ? true : !!req.body?.pagoNoAto;
 
-    const tenantId = req.tenantId;
     const result = await prisma.$transaction(async (tx) => {
       const [cliente, motorista] = await Promise.all([
         tx.cliente.findFirst({ where: { id: clienteId, tenantId } }),
@@ -256,40 +276,12 @@ router.post("/avulso", async (req, res) => {
           valor: valorFinal,
           reciboEmitido: pagoNoAto,
           reciboData: pagoNoAto ? pagamentoData : null,
+          reciboNumero: pagoNoAto ? reciboNumero : null,
           data: dataMovimento,
           observacao,
         },
         include: { cliente: true },
       });
-
-      let titulo = null;
-      let pagamento = null;
-      if (pagoNoAto) {
-        pagamento = await tx.pagamento.create({
-          data: {
-            tenantId,
-            clienteId,
-            vendaId: null,
-            tipo: pagamentoTipo === "transferencia" ? "transferencia" : "dinheiro",
-            valor: valorFinal,
-            data: pagamentoData,
-            observacoes: `Pagamento de frete avulso #${frete.id}`,
-          },
-        });
-      } else {
-        titulo = await tx.tituloReceber.create({
-          data: {
-            tenantId,
-            clienteId,
-            vendaId: null,
-            numero: `FRETE-AVULSO-${frete.id}`,
-            vencimento,
-            valorOriginal: valorFinal,
-            status: "aberto",
-            observacoes: observacao,
-          },
-        });
-      }
 
       await registrarAuditoria(tx, req, {
         tenantId,
@@ -309,15 +301,14 @@ router.post("/avulso", async (req, res) => {
           valorFinal,
           pagoNoAto,
           observacaoLivre: observacaoLivre || null,
-          tituloId: titulo?.id || null,
-          pagamentoId: pagamento?.id || null,
+          semFinanceiro: true,
         },
       });
 
       return {
         frete,
-        titulo,
-        pagamento,
+        titulo: null,
+        pagamento: null,
         resumoImpressao: {
           freteId: frete.id,
           cliente: cliente.nomeFantasia || cliente.razaoSocial,
@@ -585,13 +576,14 @@ router.patch("/:id", async (req, res) => {
       const observacaoLivre = String(
         body.observacaoLivre != null ? body.observacaoLivre : body.observacao || "",
       ).trim();
-      const pagoNoAto =
+      const pagoNoAtoRaw =
         body.pagoNoAto !== undefined
           ? !!body.pagoNoAto
           : body.reciboEmitido !== undefined
             ? !!body.reciboEmitido
             : !!existing.reciboEmitido;
-      const pagamentoTipo = String(body.pagamentoTipo || "dinheiro");
+      const fretePagoDefault = tenantFretePagoDefault(await getTenantSlug(tenantId));
+      const pagoNoAto = fretePagoDefault ? true : pagoNoAtoRaw;
       const pagamentoData =
         body.pagamentoData != null && String(body.pagamentoData).trim() !== ""
           ? parseDateField(body.pagamentoData, "pagamentoData", { required: true })
@@ -655,74 +647,8 @@ router.patch("/:id", async (req, res) => {
           },
         });
 
-        const numerosTitulo = [`FRETE-AVULSO-${id}`, `VALE-FRETE-${id}`];
-        const obsPagamento = `Pagamento de frete avulso #${id}`;
-
-        if (pagoNoAto) {
-          await tx.tituloReceber.deleteMany({
-            where: { tenantId, numero: { in: numerosTitulo }, status: "aberto" },
-          });
-          const pagExistente = await tx.pagamento.findFirst({
-            where: { tenantId, observacoes: obsPagamento },
-          });
-          if (pagExistente) {
-            await tx.pagamento.update({
-              where: { id: pagExistente.id },
-              data: {
-                clienteId,
-                valor: valorFinal,
-                data: pagamentoData,
-                tipo: pagamentoTipo === "transferencia" ? "transferencia" : "dinheiro",
-              },
-            });
-          } else {
-            await tx.pagamento.create({
-              data: {
-                tenantId,
-                clienteId,
-                vendaId: null,
-                tipo: pagamentoTipo === "transferencia" ? "transferencia" : "dinheiro",
-                valor: valorFinal,
-                data: pagamentoData,
-                observacoes: obsPagamento,
-              },
-            });
-          }
-        } else {
-          await tx.pagamento.deleteMany({
-            where: { tenantId, observacoes: obsPagamento },
-          });
-          const tituloAberto = await tx.tituloReceber.findFirst({
-            where: { tenantId, numero: { in: numerosTitulo }, status: "aberto" },
-          });
-          if (tituloAberto) {
-            await tx.tituloReceber.update({
-              where: { id: tituloAberto.id },
-              data: {
-                clienteId,
-                valorOriginal: valorFinal,
-                observacoes: observacao,
-              },
-            });
-          } else {
-            await tx.tituloReceber.create({
-              data: {
-                tenantId,
-                clienteId,
-                vendaId: null,
-                numero: `FRETE-AVULSO-${id}`,
-                vencimento: (() => {
-                  const d = new Date(dataMovimento);
-                  d.setUTCDate(d.getUTCDate() + 30);
-                  return d;
-                })(),
-                valorOriginal: valorFinal,
-                status: "aberto",
-                observacoes: observacao,
-              },
-            });
-          }
-        }
+        // Avulso não gera financeiro — remove título/pagamento legado se houver.
+        await limparFinanceiroFreteAvulso(tx, tenantId, id);
 
         await registrarAuditoria(tx, req, {
           tenantId,
@@ -742,6 +668,7 @@ router.patch("/:id", async (req, res) => {
             valorFinal,
             pagoNoAto,
             observacaoLivre: observacaoLivre || null,
+            semFinanceiro: true,
           },
         });
 
@@ -761,8 +688,13 @@ router.patch("/:id", async (req, res) => {
       valor,
     } = body;
 
+    const fretePagoDefault = tenantFretePagoDefault(await getTenantSlug(tenantId));
     const dataPatch = {};
-    if (reciboEmitido !== undefined) dataPatch.reciboEmitido = !!reciboEmitido;
+    if (reciboEmitido !== undefined) {
+      dataPatch.reciboEmitido = fretePagoDefault ? true : !!reciboEmitido;
+    } else if (fretePagoDefault && !existing.vendaId) {
+      dataPatch.reciboEmitido = true;
+    }
     if (reciboNumero !== undefined) dataPatch.reciboNumero = reciboNumero || null;
     if (reciboData !== undefined)
       dataPatch.reciboData = reciboData
@@ -785,51 +717,8 @@ router.patch("/:id", async (req, res) => {
       });
 
       if (!f.vendaId) {
-        const numeros = [`FRETE-AVULSO-${id}`, `VALE-FRETE-${id}`];
-        if (dataPatch.reciboEmitido === true) {
-          // Frete marcado pago: remove título órfão (pagamento já existe ou virá na reconciliação).
-          await tx.tituloReceber.deleteMany({
-            where: { tenantId, numero: { in: numeros } },
-          });
-        } else if (dataPatch.reciboEmitido === false) {
-          const existe = await tx.tituloReceber.findFirst({
-            where: { tenantId, numero: { in: numeros } },
-          });
-          if (!existe) {
-            const venc = new Date(f.data || Date.now());
-            venc.setUTCDate(venc.getUTCDate() + 30);
-            await tx.tituloReceber.create({
-              data: {
-                tenantId,
-                clienteId: f.clienteId,
-                vendaId: null,
-                numero: `FRETE-AVULSO-${id}`,
-                vencimento: venc,
-                valorOriginal: f.valor,
-                status: "aberto",
-                observacoes: f.observacao || null,
-              },
-            });
-          } else {
-            await tx.tituloReceber.update({
-              where: { id: existe.id },
-              data: {
-                valorPago: 0,
-                status: "aberto",
-                valorOriginal: f.valor,
-              },
-            });
-          }
-        } else if (dataPatch.valor !== undefined) {
-          await tx.tituloReceber.updateMany({
-            where: {
-              tenantId,
-              numero: { in: numeros },
-              status: "aberto",
-            },
-            data: { valorOriginal: f.valor },
-          });
-        }
+        // Avulso: nunca gera/atualiza título — só limpa legado.
+        await limparFinanceiroFreteAvulso(tx, tenantId, id);
       }
 
       if (f.vendaId && f.venda) {
@@ -1120,17 +1009,15 @@ router.delete("/:id", async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: "Frete não encontrado" });
 
-    const numerosTitulo = [`FRETE-AVULSO-${id}`, `VALE-FRETE-${id}`];
-    const obsPagamento = `Pagamento de frete avulso #${id}`;
     const vendaId = existing.vendaId || null;
 
     await prisma.$transaction(async (tx) => {
-      await tx.tituloReceber.deleteMany({
-        where: { tenantId, numero: { in: numerosTitulo } },
-      });
       if (!vendaId) {
-        await tx.pagamento.deleteMany({
-          where: { tenantId, observacoes: obsPagamento },
+        await limparFinanceiroFreteAvulso(tx, tenantId, id);
+      } else {
+        // Frete de venda: só remove o espelho; títulos VALE-FRETE raros ligados ao id.
+        await tx.tituloReceber.deleteMany({
+          where: { tenantId, numero: { in: [`VALE-FRETE-${id}`] } },
         });
       }
       // Frete de venda: só remove o espelho da lista; Venda.frete permanece.
