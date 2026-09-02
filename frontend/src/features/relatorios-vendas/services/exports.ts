@@ -7,7 +7,6 @@ import {
   formatMoney,
   vendaNumeroPublico,
 } from "@/lib/utils";
-import { downloadCsvPtBr } from "@/lib/csv";
 import type { RelVendas } from "../types";
 import type {
   ResumoCliente,
@@ -54,8 +53,11 @@ function periodoLabel(dataInicio: string, dataFim: string) {
 const PDF_STYLES = `
   body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
   h1 { font-size: 18px; margin: 0 0 4px 0; }
+  h2 { font-size: 14px; margin: 28px 0 8px 0; page-break-after: avoid; }
+  h2:first-of-type { margin-top: 16px; }
   .meta { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
   .hint { margin-top: 16px; font-size: 10px; color: #666; }
+  .secao { page-break-inside: avoid; }
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   th, td { border: 1px solid #e5e7eb; padding: 8px; font-size: 12px; text-align: left; }
   th { background: #f3f4f6; }
@@ -65,6 +67,10 @@ const PDF_STYLES = `
   .kpi { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
   .kpi label { display: block; font-size: 11px; color: #6b7280; }
   .kpi strong { font-size: 18px; }
+  @media print {
+    h2 { page-break-before: auto; }
+    .secao-detalhes { page-break-before: always; }
+  }
 `;
 
 function abrirImpressaoPdf(titulo: string, corpo: string) {
@@ -99,121 +105,175 @@ export type ExportarPdfSecaoOpts = {
   resumoRepresentantes: ResumoRepresentante[];
   resumoClientes: ResumoCliente[];
   resumoProdutos: ResumoProduto[];
+  freteEnabled?: boolean;
 };
+
+function htmlTotais(data: RelVendas, freteEnabled: boolean) {
+  const totalRegistros = data.totalRegistros ?? data.quantidade;
+  const ticket = totalRegistros > 0 ? data.totalFaturamento / totalRegistros : 0;
+  const freteKpi = freteEnabled
+    ? `<div class="kpi"><label>Frete total</label><strong>${escapeHtml(formatMoney(data.totalFrete ?? 0))}</strong></div>`
+    : "";
+  return `<div class="secao">
+    <h2>Resumo geral</h2>
+    <div class="kpis">
+      <div class="kpi"><label>Vendas no período</label><strong>${totalRegistros}</strong></div>
+      <div class="kpi"><label>Total vendido</label><strong>${escapeHtml(formatMoney(data.totalFaturamento))}</strong></div>
+      ${freteKpi}
+      <div class="kpi"><label>Ticket médio</label><strong>${totalRegistros > 0 ? escapeHtml(formatMoney(ticket)) : "—"}</strong></div>
+    </div>
+  </div>`;
+}
+
+function htmlRepresentantes(reps: ResumoRepresentante[]) {
+  const rows = reps
+    .map(
+      (r) => `<tr>
+        <td>${escapeHtml(r.nome)}</td>
+        <td class="num">${r.quantidade}</td>
+        <td class="num">${r.participacao.toFixed(2)}%</td>
+        <td class="num">${escapeHtml(formatMoney(r.total))}</td>
+      </tr>`,
+    )
+    .join("");
+  return `<div class="secao">
+    <h2>Por representante</h2>
+    <table>
+      <thead><tr>
+        <th>Representante</th><th class="num">Qtd</th><th class="num">Part. %</th><th class="num">Total</th>
+      </tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+function htmlClientes(clientes: ResumoCliente[]) {
+  const rows = clientes
+    .map(
+      (c) => `<tr>
+        <td>${escapeHtml(c.nome)}</td>
+        <td class="num">${c.quantidade}</td>
+        <td class="num">${escapeHtml(formatMoney(c.total))}</td>
+      </tr>`,
+    )
+    .join("");
+  return `<div class="secao">
+    <h2>Por cliente</h2>
+    <table>
+      <thead><tr><th>Cliente</th><th class="num">Qtd</th><th class="num">Total</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+function htmlProdutos(produtos: ResumoProduto[]) {
+  const rows = produtos
+    .map(
+      (p) => `<tr>
+        <td>${escapeHtml(p.nome)}</td>
+        <td class="num">${escapeHtml(p.quantidade.toLocaleString("pt-BR"))} ${escapeHtml(p.unidade)}</td>
+        <td class="num">${escapeHtml(formatMoney(p.total))}</td>
+      </tr>`,
+    )
+    .join("");
+  return `<div class="secao">
+    <h2>Por produto</h2>
+    <table>
+      <thead><tr><th>Produto</th><th class="num">Quantidade</th><th class="num">Total</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+function htmlDetalhes(data: RelVendas, freteEnabled: boolean) {
+  const freteHead = freteEnabled
+    ? `<th class="num">Frete</th><th>Frete pago</th>`
+    : "";
+  const rows = data.vendas
+    .map((v) => {
+      const freteCols = freteEnabled
+        ? `<td class="num">${escapeHtml(formatMoney(v.frete))}</td><td>${escapeHtml(formatFreteReciboLinha(v))}</td>`
+        : "";
+      return `<tr>
+        <td class="ordem">#${vendaNumeroPublico(v)}</td>
+        <td>${escapeHtml(formatDate(v.dataVenda))}</td>
+        <td>${escapeHtml(v.cliente.nomeFantasia || v.cliente.razaoSocial)}</td>
+        <td>${escapeHtml(v.vendedor.nome)}</td>
+        ${freteCols}
+        <td class="num">${escapeHtml(formatMoney(v.valorTotal))}</td>
+      </tr>`;
+    })
+    .join("");
+  const colspan = freteEnabled ? 7 : 5;
+  return `<div class="secao secao-detalhes">
+    <h2>Detalhamento das vendas</h2>
+    <table>
+      <thead><tr>
+        <th class="ordem">Ordem</th><th>Data</th><th>Cliente</th><th>Vendedor</th>
+        ${freteHead}
+        <th class="num">Total</th>
+      </tr></thead>
+      <tbody>${rows || `<tr><td colspan="${colspan}" style="text-align:center;color:#666">Sem vendas no período.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+/** PDF com todas as seções — ideal para enviar ao cliente. */
+export function exportarRelatorioVendasPdfCompleto(opts: ExportarPdfSecaoOpts) {
+  const { data, dataInicio, dataFim } = opts;
+  const freteEnabled = opts.freteEnabled !== false;
+  const corpo = `${cabecalhoSecao("Relatório de Vendas — Completo", dataInicio, dataFim)}
+    ${htmlTotais(data, freteEnabled)}
+    ${htmlRepresentantes(opts.resumoRepresentantes)}
+    ${htmlClientes(opts.resumoClientes)}
+    ${htmlProdutos(opts.resumoProdutos)}
+    ${htmlDetalhes(data, freteEnabled)}`;
+  abrirImpressaoPdf("Relatório de Vendas — Completo", corpo);
+}
 
 export function exportarRelatorioVendasPdfSecao(
   secao: RelatorioVendasPdfSecao,
   opts: ExportarPdfSecaoOpts,
 ) {
   const { data, dataInicio, dataFim } = opts;
-  const totalRegistros = data.totalRegistros ?? data.quantidade;
+  const freteEnabled = opts.freteEnabled !== false;
 
   switch (secao) {
-    case "totais": {
-      const ticket =
-        totalRegistros > 0 ? data.totalFaturamento / totalRegistros : 0;
+    case "totais":
       abrirImpressaoPdf(
-        `Relatório de Vendas — Resumo geral`,
+        "Relatório de Vendas — Resumo geral",
         `${cabecalhoSecao("Relatório de Vendas — Resumo geral", dataInicio, dataFim)}
-        <div class="kpis">
-          <div class="kpi"><label>Vendas no período</label><strong>${totalRegistros}</strong></div>
-          <div class="kpi"><label>Total vendido</label><strong>${escapeHtml(formatMoney(data.totalFaturamento))}</strong></div>
-          <div class="kpi"><label>Frete total</label><strong>${escapeHtml(formatMoney(data.totalFrete ?? 0))}</strong></div>
-          <div class="kpi"><label>Ticket médio</label><strong>${totalRegistros > 0 ? escapeHtml(formatMoney(ticket)) : "—"}</strong></div>
-        </div>`,
+        ${htmlTotais(data, freteEnabled)}`,
       );
       break;
-    }
-    case "representantes": {
-      const rows = opts.resumoRepresentantes
-        .map(
-          (r) => `<tr>
-          <td>${escapeHtml(r.nome)}</td>
-          <td class="num">${r.quantidade}</td>
-          <td class="num">${r.participacao.toFixed(2)}%</td>
-          <td class="num">${escapeHtml(formatMoney(r.total))}</td>
-        </tr>`,
-        )
-        .join("");
+    case "representantes":
       abrirImpressaoPdf(
-        `Relatório de Vendas — Por representante`,
+        "Relatório de Vendas — Por representante",
         `${cabecalhoSecao("Por representante", dataInicio, dataFim)}
-        <table>
-          <thead><tr>
-            <th>Representante</th><th class="num">Qtd</th><th class="num">Part. %</th><th class="num">Total</th>
-          </tr></thead>
-          <tbody>${rows || `<tr><td colspan="4" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
-        </table>`,
+        ${htmlRepresentantes(opts.resumoRepresentantes)}`,
       );
       break;
-    }
-    case "clientes": {
-      const rows = opts.resumoClientes
-        .map(
-          (c) => `<tr>
-          <td>${escapeHtml(c.nome)}</td>
-          <td class="num">${c.quantidade}</td>
-          <td class="num">${escapeHtml(formatMoney(c.total))}</td>
-        </tr>`,
-        )
-        .join("");
+    case "clientes":
       abrirImpressaoPdf(
-        `Relatório de Vendas — Por cliente`,
+        "Relatório de Vendas — Por cliente",
         `${cabecalhoSecao("Por cliente", dataInicio, dataFim)}
-        <table>
-          <thead><tr><th>Cliente</th><th class="num">Qtd</th><th class="num">Total</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
-        </table>`,
+        ${htmlClientes(opts.resumoClientes)}`,
       );
       break;
-    }
-    case "produtos": {
-      const rows = opts.resumoProdutos
-        .map(
-          (p) => `<tr>
-          <td>${escapeHtml(p.nome)}</td>
-          <td class="num">${escapeHtml(p.quantidade.toLocaleString("pt-BR"))} ${escapeHtml(p.unidade)}</td>
-          <td class="num">${escapeHtml(formatMoney(p.total))}</td>
-        </tr>`,
-        )
-        .join("");
+    case "produtos":
       abrirImpressaoPdf(
-        `Relatório de Vendas — Por produto`,
+        "Relatório de Vendas — Por produto",
         `${cabecalhoSecao("Por produto", dataInicio, dataFim)}
-        <table>
-          <thead><tr><th>Produto</th><th class="num">Quantidade</th><th class="num">Total</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
-        </table>`,
+        ${htmlProdutos(opts.resumoProdutos)}`,
       );
       break;
-    }
-    case "detalhes": {
-      const rows = data.vendas
-        .map(
-          (v) => `<tr>
-          <td class="ordem">#${vendaNumeroPublico(v)}</td>
-          <td>${escapeHtml(formatDate(v.dataVenda))}</td>
-          <td>${escapeHtml(v.cliente.nomeFantasia || v.cliente.razaoSocial)}</td>
-          <td>${escapeHtml(v.vendedor.nome)}</td>
-          <td class="num">${escapeHtml(formatMoney(v.valorTotal))}</td>
-          <td class="num">${escapeHtml(formatMoney(v.frete))}</td>
-          <td>${escapeHtml(formatFreteReciboLinha(v))}</td>
-        </tr>`,
-        )
-        .join("");
+    case "detalhes":
       abrirImpressaoPdf(
-        `Relatório de Vendas — Detalhamento`,
+        "Relatório de Vendas — Detalhamento",
         `${cabecalhoSecao("Detalhamento das vendas", dataInicio, dataFim)}
-        <table>
-          <thead><tr>
-            <th class="ordem">Ordem</th><th>Data</th><th>Cliente</th><th>Vendedor</th>
-            <th class="num">Total</th><th class="num">Frete</th><th>Frete pago</th>
-          </tr></thead>
-          <tbody>${rows || `<tr><td colspan="7" style="text-align:center;color:#666">Sem vendas no período.</td></tr>`}</tbody>
-        </table>`,
+        ${htmlDetalhes(data, freteEnabled)}`,
       );
       break;
-    }
   }
 }
 
@@ -231,22 +291,6 @@ export function exportarRelatorioVendasPdf(
     resumoClientes: [],
     resumoProdutos: [],
   });
-}
-
-export function exportarRelatorioVendasCSV(data: RelVendas, dataInicio: string, dataFim: string) {
-  downloadCsvPtBr(
-    `relatorio-vendas-${dataInicio}-${dataFim}.csv`,
-    ["Ordem", "Data", "Cliente", "Vendedor", "Valor Total", "Frete", "Frete pago"],
-    data.vendas.map((v) => [
-      vendaNumeroPublico(v),
-      formatDate(v.dataVenda),
-      v.cliente.nomeFantasia || v.cliente.razaoSocial,
-      v.vendedor.nome,
-      parseFloat(String(v.valorTotal)),
-      parseFloat(String(v.frete)),
-      formatFreteReciboLinha(v),
-    ]),
-  );
 }
 
 export function exportarRelatorioVendasExcel(data: RelVendas, dataInicio: string, dataFim: string) {

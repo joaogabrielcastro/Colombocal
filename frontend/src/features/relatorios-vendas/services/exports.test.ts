@@ -13,8 +13,8 @@ vi.mock("xlsx", () => ({
 import {
   RELATORIO_VENDAS_PDF_SECOES,
   exportarRelatorioVendasPdfSecao,
+  exportarRelatorioVendasPdfCompleto,
   exportarRelatorioVendasPdf,
-  exportarRelatorioVendasCSV,
   exportarRelatorioVendasExcel,
 } from "./exports";
 import type { RelVendas } from "../types";
@@ -106,24 +106,22 @@ describe("exportarRelatorioVendasPdfSecao", () => {
     exportarRelatorioVendasPdf(makeData(), "2026-01-01", "2026-12-31");
     expect(win.document.write).toHaveBeenCalled();
   });
-});
 
-describe("exportarRelatorioVendasCSV", () => {
-  it("gera blob e dispara download", () => {
-    const createObjectURL = vi.fn().mockReturnValue("blob:1");
-    const revokeObjectURL = vi.fn();
-    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
-    const click = vi.fn();
-    const anchor = { href: "", download: "", click } as unknown as HTMLAnchorElement;
-    vi.spyOn(document, "createElement").mockReturnValue(anchor);
-
-    exportarRelatorioVendasCSV(makeData(), "2026-01-01", "2026-12-31");
-
-    expect(createObjectURL).toHaveBeenCalled();
-    expect(click).toHaveBeenCalled();
-    expect(anchor.download).toContain("relatorio-vendas-");
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:1");
-    vi.unstubAllGlobals();
+  it("exportarRelatorioVendasPdfCompleto inclui todas as seções", () => {
+    exportarRelatorioVendasPdfCompleto({
+      data: makeData(),
+      dataInicio: "2026-01-01",
+      dataFim: "2026-12-31",
+      ...resumo,
+    });
+    expect(win.document.write).toHaveBeenCalledOnce();
+    const html = String(win.document.write.mock.calls[0][0]);
+    expect(html).toContain("Resumo geral");
+    expect(html).toContain("Por representante");
+    expect(html).toContain("Por cliente");
+    expect(html).toContain("Por produto");
+    expect(html).toContain("Detalhamento das vendas");
+    expect(win.print).toHaveBeenCalled();
   });
 });
 

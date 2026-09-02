@@ -2,12 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TableListSkeleton } from "@/components/ui/skeletons";
-import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
 import { useRelatorioVendasLookups } from "@/features/relatorios-vendas/hooks/useRelatorioVendasLookups";
 import { useRelatorioVendasQuery } from "@/features/relatorios-vendas/hooks/useRelatorioVendasQuery";
 import {
-  exportarRelatorioVendasCSV,
   exportarRelatorioVendasExcel,
+  exportarRelatorioVendasPdfCompleto,
   exportarRelatorioVendasPdfSecao,
   type RelatorioVendasPdfSecao,
 } from "@/features/relatorios-vendas/services/exports";
@@ -46,21 +45,7 @@ export default function RelatorioVendasPage() {
     refetch,
   } = useRelatorioVendasQuery(filtrosAplicados, !!filtrosAplicados.dataInicio && !!filtrosAplicados.dataFim);
   const data = dataRaw ?? null;
-  const {
-    isExporting: exportandoCsv,
-    error: erroExportacao,
-    exportCsv,
-  } = useExportCsvAsync({
-    startPath: "/relatorios/vendas/export-async",
-    maxAttempts: 90,
-    pollIntervalMs: 1000,
-    fallback: () => {
-      if (data) {
-        exportarRelatorioVendasCSV(data, dataInicio, dataFim);
-      }
-    },
-  });
-  // Default: mês corrente
+
   useEffect(() => {
     const hoje = new Date();
     const ini = localDateInputValue(
@@ -71,10 +56,6 @@ export default function RelatorioVendasPage() {
     setDataFim(fim);
     setFiltrosAplicados((prev) => ({ ...prev, dataInicio: ini, dataFim: fim }));
   }, []);
-
-  const exportarCSV = async () => {
-    await exportCsv(filtrosAplicados);
-  };
 
   const exportarExcel = () => {
     if (!data) return;
@@ -89,16 +70,38 @@ export default function RelatorioVendasPage() {
     resumoRepresentantes,
   );
 
-  const exportarPdfSecao = (secao: RelatorioVendasPdfSecao) => {
-    if (!data) return;
-    exportarRelatorioVendasPdfSecao(secao, {
+  const pdfOpts = useMemo(
+    () =>
+      data
+        ? {
+            data,
+            dataInicio,
+            dataFim,
+            resumoRepresentantes: resumoRepresentantesOrdenado,
+            resumoClientes,
+            resumoProdutos,
+            freteEnabled,
+          }
+        : null,
+    [
       data,
       dataInicio,
       dataFim,
-      resumoRepresentantes: resumoRepresentantesOrdenado,
+      resumoRepresentantesOrdenado,
       resumoClientes,
       resumoProdutos,
-    });
+      freteEnabled,
+    ],
+  );
+
+  const exportarPdfCompleto = () => {
+    if (!pdfOpts) return;
+    exportarRelatorioVendasPdfCompleto(pdfOpts);
+  };
+
+  const exportarPdfSecao = (secao: RelatorioVendasPdfSecao) => {
+    if (!pdfOpts) return;
+    exportarRelatorioVendasPdfSecao(secao, pdfOpts);
   };
 
   const buscar = (override?: Partial<typeof filtrosAplicados>) => {
@@ -169,18 +172,9 @@ export default function RelatorioVendasPage() {
             produtoId: "",
           });
         }}
-        onExportCSV={exportarCSV}
         onExportExcel={exportarExcel}
-        onExportPdfSecao={exportarPdfSecao}
-        exportCsvLabel={exportandoCsv ? "Gerando CSV..." : "CSV"}
-        exportCsvDisabled={exportandoCsv}
+        onExportPdfCompleto={exportarPdfCompleto}
       />
-
-      {erroExportacao ? (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {erroExportacao}
-        </div>
-      ) : null}
 
       {loading && (
         <div className="card p-4">

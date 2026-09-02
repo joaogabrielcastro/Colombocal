@@ -9,10 +9,6 @@ import {
 } from "@heroicons/react/24/outline";
 import type { Cliente, Produto, Vendedor, Motorista } from "@/lib/utils";
 import type { RelVendas } from "../types";
-import {
-  RELATORIO_VENDAS_PDF_SECOES,
-  type RelatorioVendasPdfSecao,
-} from "../services/exports";
 
 type Props = {
   dataInicio: string;
@@ -36,11 +32,8 @@ type Props = {
   setProdutoId: (v: string) => void;
   onBuscar: () => void;
   onLimpar: () => void;
-  onExportCSV: () => void;
   onExportExcel: () => void;
-  onExportPdfSecao: (secao: RelatorioVendasPdfSecao) => void;
-  exportCsvLabel?: string;
-  exportCsvDisabled?: boolean;
+  onExportPdfCompleto: () => void;
 };
 
 export function RelatorioVendasFiltros(props: Props) {
@@ -66,11 +59,8 @@ export function RelatorioVendasFiltros(props: Props) {
     setProdutoId,
     onBuscar,
     onLimpar,
-    onExportCSV,
     onExportExcel,
-    onExportPdfSecao,
-    exportCsvLabel,
-    exportCsvDisabled,
+    onExportPdfCompleto,
   } = props;
 
   const [maisFiltrosAbertos, setMaisFiltrosAbertos] = useState(
@@ -203,38 +193,21 @@ export function RelatorioVendasFiltros(props: Props) {
           <div className="flex items-center justify-center gap-2 flex-nowrap flex-1">
             <button
               type="button"
-              onClick={onExportCSV}
-              disabled={exportCsvDisabled}
-              className="btn-secondary h-10 shrink-0"
-            >
-              <ArrowDownTrayIcon className="w-4 h-4" />
-              {exportCsvLabel || "CSV"}
-            </button>
-            <button
-              type="button"
               onClick={onExportExcel}
               className="btn-secondary h-10 shrink-0"
             >
               <ArrowDownTrayIcon className="w-4 h-4" />
               Excel
             </button>
-            <select
-              className="h-10 w-44 shrink-0 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700"
-              defaultValue=""
-              onChange={(e) => {
-                const v = e.target.value as RelatorioVendasPdfSecao | "";
-                if (v) onExportPdfSecao(v);
-                e.target.value = "";
-              }}
-              aria-label="Exportar PDF por seção"
+            <button
+              type="button"
+              onClick={onExportPdfCompleto}
+              className="btn-secondary h-10 shrink-0"
+              title="Relatório completo para enviar ao cliente (Salvar como PDF na impressão)"
             >
-              <option value="">PDF por seção…</option>
-              {RELATORIO_VENDAS_PDF_SECOES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              PDF completo
+            </button>
           </div>
         ) : null}
       </div>
