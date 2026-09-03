@@ -4,7 +4,6 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatMoney, formatDate } from "@/lib/utils";
-import { VendaOrdem } from "@/components/VendaOrdem";
 import api, { apiFetchWithMeta } from "@/lib/api";
 import type { FreteMovimento } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,19 +25,11 @@ type FreteListRow = FreteMovimento & {
     razaoSocial: string;
     nomeFantasia?: string | null;
   };
-  venda?: {
-    id: number;
-    numeroVenda?: number | null;
-    dataVenda: string;
-    valorTotal: unknown;
-    freteRecibo?: boolean;
-  } | null;
 };
 
 function FretesContent() {
   const searchParams = useSearchParams();
   const reciboQ = searchParams.get("reciboEmitido");
-  const vendaQ = searchParams.get("vendaId") || "";
   const clienteQ = searchParams.get("cliente") || "";
 
   const [rows, setRows] = useState<FreteListRow[]>([]);
@@ -51,8 +42,6 @@ function FretesContent() {
   const [reciboEmitido, setReciboEmitido] = useState<string>(
     reciboQ === "true" ? "true" : reciboQ === "false" ? "false" : "",
   );
-  const [vendaInput, setVendaInput] = useState(vendaQ);
-  const [vendaFiltro, setVendaFiltro] = useState(vendaQ.replace(/^#/, "").trim());
   const [clienteInput, setClienteInput] = useState(clienteQ);
   const [clienteFiltro, setClienteFiltro] = useState(clienteQ.trim());
   const pageSize = 50;
@@ -61,10 +50,10 @@ function FretesContent() {
     const params = new URLSearchParams();
     params.set("take", String(pageSize));
     params.set("skip", String((page - 1) * pageSize));
+    params.set("avulso", "true");
     if (reciboEmitido === "true" || reciboEmitido === "false") {
       params.set("reciboEmitido", reciboEmitido);
     }
-    if (vendaFiltro) params.set("vendaId", vendaFiltro);
     if (clienteFiltro) params.set("cliente", clienteFiltro);
     setLoading(true);
     try {
@@ -75,7 +64,7 @@ function FretesContent() {
       setTotal(meta.totalCount ?? data.length);
     } catch (e) {
       reportApiError(e, {
-        title: "Não foi possível carregar os fretes",
+        title: "Não foi possível carregar os fretes avulsos",
         onRetry: () => void carregar(),
       });
       setRows([]);
@@ -87,7 +76,7 @@ function FretesContent() {
 
   useEffect(() => {
     carregar();
-  }, [page, reciboEmitido, vendaFiltro, clienteFiltro]);
+  }, [page, reciboEmitido, clienteFiltro]);
 
   const reimprimirOrcamento = async (id: number) => {
     setImprimindoId(id);
@@ -107,7 +96,7 @@ function FretesContent() {
     setDeleting(true);
     try {
       await api.delete(`/fretes/${toDelete.id}`);
-      toast.success("Frete excluído");
+      toast.success("Frete avulso excluído");
       setToDelete(null);
       void carregar();
     } catch (e) {
@@ -128,10 +117,10 @@ function FretesContent() {
     <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Histórico de fretes</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Fretes avulsos</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Orçamento e pagamento de frete. A ordem de carregamento (pátio) fica
-            em Carregamento.
+            Orçamento e cadastro de frete sem venda. O frete da venda fica na
+            própria ordem, com opção de PDF por lá.
           </p>
         </div>
       </div>
@@ -147,30 +136,11 @@ function FretesContent() {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 setClienteFiltro(clienteInput.trim());
-                setVendaFiltro(vendaInput.replace(/^#/, "").trim());
                 setPage(1);
               }
             }}
             className="input-field w-full"
             placeholder="Nome, fantasia ou documento"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Nº venda</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={vendaInput}
-            onChange={(e) => setVendaInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setClienteFiltro(clienteInput.trim());
-                setVendaFiltro(vendaInput.replace(/^#/, "").trim());
-                setPage(1);
-              }
-            }}
-            className="input-field font-mono min-w-32"
-            placeholder="ex: 1840"
           />
         </div>
         <div>
@@ -193,7 +163,6 @@ function FretesContent() {
           className="btn-primary"
           onClick={() => {
             setClienteFiltro(clienteInput.trim());
-            setVendaFiltro(vendaInput.replace(/^#/, "").trim());
             setPage(1);
           }}
         >
@@ -207,16 +176,21 @@ function FretesContent() {
 
       {loading ? (
         <div className="card p-4">
-          <TableListSkeleton rows={10} cols={6} />
+          <TableListSkeleton rows={10} cols={5} />
         </div>
       ) : rows.length === 0 ? (
         <EmptyState
-          title="Nenhum frete encontrado"
-          description="Ajuste os filtros ou registre frete na venda correspondente."
+          title="Nenhum frete avulso encontrado"
+          description="Cadastre um orçamento avulso ou imprima o frete direto na ordem de venda."
           action={
-            <Link href="/vendas" className="btn-secondary text-sm">
-              Ir para vendas
-            </Link>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <Link href="/fretes/novo" className="btn-primary text-sm">
+                Novo frete avulso
+              </Link>
+              <Link href="/vendas" className="btn-secondary text-sm">
+                Ir para vendas
+              </Link>
+            </div>
           }
         />
       ) : (
@@ -225,9 +199,8 @@ function FretesContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="table-header">Data mov.</th>
+                  <th className="table-header">Data</th>
                   <th className="table-header">Cliente</th>
-                  <th className="table-header w-24 bg-slate-50">Ordem</th>
                   <th className="table-header text-right">Valor</th>
                   <th className="table-header">Frete pago</th>
                   <th className="table-header text-right min-w-[9rem]">Ações</th>
@@ -247,13 +220,6 @@ function FretesContent() {
                         {r.cliente.nomeFantasia?.trim() ||
                           r.cliente.razaoSocial}
                       </Link>
-                    </td>
-                    <td className="table-cell">
-                      {r.venda ? (
-                        <VendaOrdem venda={r.venda} size="sm" />
-                      ) : (
-                        <span className="text-amber-700 text-xs font-medium">Avulso</span>
-                      )}
                     </td>
                     <td className="table-cell text-right font-medium">
                       {formatMoney(r.valor)}
@@ -275,32 +241,18 @@ function FretesContent() {
                     </td>
                     <td className="table-cell text-right">
                       <div className="inline-flex flex-wrap justify-end gap-1.5">
-                        {!r.vendaId ? (
-                          <button
-                            type="button"
-                            className={actionBtn}
-                            title="Reimprimir orçamento de frete"
-                            disabled={imprimindoId === r.id}
-                            onClick={() => void reimprimirOrcamento(r.id)}
-                          >
-                            <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
-                            {imprimindoId === r.id ? "…" : "Orçamento"}
-                          </button>
-                        ) : (
-                          <Link
-                            href={`/vendas/${r.vendaId}`}
-                            className={actionBtn}
-                            title="Abrir venda"
-                          >
-                            Abrir venda
-                          </Link>
-                        )}
+                        <button
+                          type="button"
+                          className={actionBtn}
+                          title="Reimprimir orçamento de frete"
+                          disabled={imprimindoId === r.id}
+                          onClick={() => void reimprimirOrcamento(r.id)}
+                        >
+                          <PrinterIcon className="w-3.5 h-3.5 shrink-0" />
+                          {imprimindoId === r.id ? "…" : "PDF"}
+                        </button>
                         <Link
-                          href={
-                            r.vendaId
-                              ? `/vendas/${r.vendaId}`
-                              : `/fretes/${r.id}/editar`
-                          }
+                          href={`/fretes/${r.id}/editar`}
                           className={actionBtn}
                           title="Editar"
                         >
@@ -350,24 +302,13 @@ function FretesContent() {
 
       <ConfirmDialog
         open={!!toDelete}
-        title={
-          toDelete?.vendaId
-            ? "Excluir frete da venda?"
-            : "Excluir frete avulso?"
-        }
+        title="Excluir frete avulso?"
         description={
           toDelete
-            ? toDelete.vendaId
-              ? `Frete da venda #${
-                  toDelete.venda?.numeroVenda ?? toDelete.vendaId
-                } — ${
-                  toDelete.cliente.nomeFantasia?.trim() ||
-                  toDelete.cliente.razaoSocial
-                } (${formatMoney(toDelete.valor)}). Sai só desta lista; a venda não é alterada.`
-              : `Frete de ${
-                  toDelete.cliente.nomeFantasia?.trim() ||
-                  toDelete.cliente.razaoSocial
-                } (${formatMoney(toDelete.valor)}). Remove só o registro do frete (sem financeiro de cliente).`
+            ? `Frete de ${
+                toDelete.cliente.nomeFantasia?.trim() ||
+                toDelete.cliente.razaoSocial
+              } (${formatMoney(toDelete.valor)}). Remove só o registro do frete (sem financeiro de cliente).`
             : ""
         }
         confirmText={deleting ? "Excluindo…" : "Excluir"}

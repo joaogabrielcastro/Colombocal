@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import TopNav from '@/components/TopNav';
+import Sidebar from '@/components/Sidebar';
 import BrandLogo from '@/components/BrandLogo';
 import { AUTH_SESSION_EVENT, getAuthTenantId, getAuthToken } from '@/lib/auth-token';
 import { canAccessPath } from '@/lib/navigation';
@@ -158,13 +158,15 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div key={sessionKey} className="flex flex-col h-screen bg-gray-50">
-      <TopNav
+    <div key={sessionKey} className="flex flex-row h-screen bg-gray-50">
+      <Sidebar
         mobileOpen={mobileNavOpen}
         onOpenMobile={() => setMobileNavOpen(true)}
         onCloseMobile={() => setMobileNavOpen(false)}
       />
-      <main className="flex-1 overflow-y-auto min-h-0">{children}</main>
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <main className="flex-1 overflow-y-auto min-h-0">{children}</main>
+      </div>
     </div>
   );
 }

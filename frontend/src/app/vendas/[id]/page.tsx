@@ -19,6 +19,10 @@ import {
 } from "@/lib/utils";
 import { freteLinha } from "@/lib/frete";
 import { openOrdemCarregamentoPrint } from "@/lib/ordem-carregamento-print";
+import {
+  openFreteAvulsoPrint,
+  type FreteAvulsoImpressao,
+} from "@/lib/frete-avulso-print";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -48,6 +52,7 @@ export default function VendaDetailPage() {
     label: string;
   } | null>(null);
   const [gerandoOc, setGerandoOc] = useState(false);
+  const [imprimindoFrete, setImprimindoFrete] = useState(false);
 
   const carregar = () => api.get<Venda>(`/vendas/${id}`).then(setVenda);
 
@@ -165,6 +170,22 @@ export default function VendaDetailPage() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+
+  const imprimirFreteVenda = async () => {
+    if (!venda) return;
+    setImprimindoFrete(true);
+    try {
+      const resumo = await api.get<FreteAvulsoImpressao>(
+        `/vendas/${id}/frete-impressao`,
+      );
+      openFreteAvulsoPrint(resumo);
+      toast.success("Abrindo impressão do frete");
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível imprimir o frete da venda" });
+    } finally {
+      setImprimindoFrete(false);
+    }
+  };
 
   const imprimirOrdemServico = () => {
     if (!venda) return;
@@ -492,6 +513,18 @@ export default function VendaDetailPage() {
           </button>
           {freteEnabled ? (
             <button
+              type="button"
+              onClick={() => void imprimirFreteVenda()}
+              className="btn-secondary"
+              disabled={imprimindoFrete}
+              title="PDF do frete desta venda (não usa frete avulso)"
+            >
+              <PrinterIcon className="w-4 h-4" />
+              {imprimindoFrete ? "Abrindo PDF…" : "PDF do frete"}
+            </button>
+          ) : null}
+          {freteEnabled ? (
+            <button
               onClick={() => void gerarOrdemCarregamento()}
               className="btn-secondary"
               disabled={gerandoOc}
@@ -690,8 +723,8 @@ export default function VendaDetailPage() {
           <div className="card p-5 lg:col-span-2">
             <h3 className="font-semibold text-gray-900 mb-2">Frete e pagamento</h3>
             <p className="text-xs text-gray-500 mb-3">
-              O primeiro movimento de frete da venda é mantido alinhado com os campos
-              abaixo (valor, frete pago e data do pagamento).
+              O frete desta venda fica aqui. Para PDF, use o botão abaixo — não é
+              preciso cadastrar frete avulso.
             </p>
             <form
               onSubmit={salvarFreteRecibo}
@@ -754,6 +787,17 @@ export default function VendaDetailPage() {
                   className="btn-primary text-sm w-full sm:w-auto"
                 >
                   {salvandoFrete ? "Salvando…" : "Salvar frete"}
+                </button>
+              </div>
+              <div className="sm:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => void imprimirFreteVenda()}
+                  disabled={imprimindoFrete}
+                  className="btn-secondary text-sm inline-flex items-center gap-1.5"
+                >
+                  <PrinterIcon className="w-4 h-4" />
+                  {imprimindoFrete ? "Abrindo PDF…" : "Imprimir PDF do frete"}
                 </button>
               </div>
             </form>

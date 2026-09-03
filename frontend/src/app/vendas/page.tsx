@@ -202,10 +202,11 @@ function VendasPageContent() {
           </p>
           {freteEnabled ? (
           <p className="text-gray-400 text-xs mt-1">
+            Frete da venda fica nesta tela.{" "}
             <Link href="/fretes" className="text-blue-600 hover:underline">
-              Histórico de fretes
-            </Link>{' '}
-            (leitura; alteração pelo cadastro da venda)
+              Fretes avulsos
+            </Link>{" "}
+            são orçamentos sem venda.
           </p>
           ) : null}
         </div>

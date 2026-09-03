@@ -310,6 +310,8 @@ router.post("/avulso", async (req, res) => {
         titulo: null,
         pagamento: null,
         resumoImpressao: {
+          origem: "avulso",
+          titulo: "Orçamento de frete",
           freteId: frete.id,
           cliente: cliente.nomeFantasia || cliente.razaoSocial,
           clienteCidade: cliente.cidade,
@@ -353,7 +355,8 @@ router.get("/", async (req, res) => {
     const where = { ...tw(req) };
     if (clienteId) where.clienteId = parseInt(clienteId, 10);
     if (vendaId) where.vendaId = parseInt(vendaId, 10);
-    if (req.query.avulso === "true") where.vendaId = null;
+    else if (req.query.avulso === "true") where.vendaId = null;
+    else if (req.query.avulso === "false") where.vendaId = { not: null };
     if (reciboEmitido === "true") where.reciboEmitido = true;
     if (reciboEmitido === "false") where.reciboEmitido = false;
     if (cliente && String(cliente).trim()) {
@@ -432,7 +435,7 @@ router.get("/:id/impressao", async (req, res) => {
     }
     if (frete.vendaId != null) {
       return res.status(400).json({
-        error: "Reimpressão por esta rota é só para frete avulso. Use a ordem da venda.",
+        error: "Reimpressão por esta rota é só para frete avulso. Use o PDF do frete na ordem da venda.",
       });
     }
 
@@ -511,6 +514,8 @@ router.get("/:id/impressao", async (req, res) => {
       .join(" - ");
 
     res.json({
+      origem: "avulso",
+      titulo: "Orçamento de frete",
       freteId: frete.id,
       cliente: frete.cliente.nomeFantasia || frete.cliente.razaoSocial,
       clienteCidade: frete.cliente.cidade,

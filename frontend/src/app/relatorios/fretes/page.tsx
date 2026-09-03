@@ -106,7 +106,7 @@ export default function RelatorioFretesPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Relatório de Fretes</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Movimentos de frete no período — avulsos e vinculados a venda.
+          Consulta unificada. No dia a dia, frete da venda fica na ordem e avulso em Fretes.
         </p>
       </div>
 

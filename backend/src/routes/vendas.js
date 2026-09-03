@@ -33,7 +33,15 @@ const {
 const { getDateRange } = require("../utils/dateRangeQuery");
 const {
   calcularFreteAutomatico,
+  freteLinha,
 } = require("../domain/frete/calcularFrete");
+
+function formatMoneyBr(v) {
+  const n = parseFloat(String(v || 0));
+  return Number.isFinite(n)
+    ? n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : "R$ 0,00";
+}
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -209,6 +217,89 @@ router.get("/por-ordem/:numero", async (req, res) => {
     res.json({
       ...venda,
       saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(venda),
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+// GET /api/vendas/:id/frete-impressao — orçamento do frete da venda (não usa rota de avulso)
+router.get("/:id/frete-impressao", async (req, res) => {
+  try {
+    if (!(await requestAllowsFrete(req))) {
+      return res.status(403).json({ error: "Frete não disponível para esta organização" });
+    }
+    const id = parseIntField(req.params.id, "id", { min: 1 });
+    const venda = await prisma.venda.findFirst({
+      where: { id, ...tw(req) },
+      include: {
+        cliente: {
+          select: {
+            razaoSocial: true,
+            nomeFantasia: true,
+            cidade: true,
+            estado: true,
+            telefone: true,
+            endereco: true,
+          },
+        },
+        motorista: { select: { nome: true, veiculo: true, placa: true } },
+        itens: { include: { produto: true } },
+        fretes: { orderBy: { data: "asc" }, take: 1 },
+      },
+    });
+    if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
+
+    const tarifaSaco = parseFloat(String(venda.freteTarifaSaco ?? 0)) || 0;
+    const tarifaTon = parseFloat(String(venda.freteTarifaTonelada ?? 0)) || 0;
+    const itens = (venda.itens || []).map((item) => {
+      const subtotal = freteLinha({
+        produto: item.produto,
+        quantidade: item.quantidade,
+        fretePorSaco: tarifaSaco,
+        fretePorTonelada: tarifaTon,
+      });
+      return {
+        produtoId: item.produtoId,
+        produtoNome: item.produto?.nome || "-",
+        unidade: item.produto?.unidade || "",
+        pesoKg:
+          item.produto?.pesoKg != null ? parseFloat(String(item.produto.pesoKg)) : null,
+        quantidade: parseFloat(String(item.quantidade)),
+        subtotal,
+      };
+    });
+
+    const valorFinal = parseFloat(String(venda.frete ?? 0)) || 0;
+    const enderecoCliente = [
+      venda.cliente.endereco,
+      venda.cliente.cidade,
+      venda.cliente.estado,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
+    res.json({
+      origem: "venda",
+      titulo: "Frete da venda",
+      numeroExibicao: venda.numeroVenda != null ? String(venda.numeroVenda) : String(venda.id),
+      freteId: venda.fretes?.[0]?.id ?? venda.id,
+      vendaId: venda.id,
+      numeroVenda: venda.numeroVenda ?? null,
+      cliente: venda.cliente.nomeFantasia || venda.cliente.razaoSocial,
+      clienteCidade: venda.cliente.cidade,
+      clienteEstado: venda.cliente.estado,
+      clienteTelefone: venda.cliente.telefone,
+      clienteEndereco: enderecoCliente || null,
+      motorista: venda.motorista?.nome || null,
+      motoristaVeiculo: venda.motorista?.veiculo || null,
+      motoristaPlaca: venda.motorista?.placa || null,
+      observacao: venda.observacoes || null,
+      itens,
+      valorFinal,
+      valorLabel: formatMoneyBr(valorFinal),
+      pagoNoAto: !!venda.freteRecibo,
+      data: venda.dataVenda,
     });
   } catch (error) {
     handleRouteError(res, error);

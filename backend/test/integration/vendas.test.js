@@ -74,6 +74,30 @@ test("POST /api/vendas calcula frete automático por tonelada", async () => {
   assert.equal(fretes.length, 1);
 });
 
+test("GET /api/vendas/:id/frete-impressao gera PDF do frete da venda", async () => {
+  const motorista = await seedMotorista(ctx.tenant.id);
+  const res = await criarVenda({
+    fretePorTonelada: 10,
+    motoristaId: motorista.id,
+  });
+  assert.equal(res.status, 201);
+
+  const print = await agent.get(`/api/vendas/${res.body.id}/frete-impressao`);
+  assert.equal(print.status, 200);
+  assert.equal(print.body.origem, "venda");
+  assert.equal(print.body.titulo, "Frete da venda");
+  assert.equal(print.body.vendaId, res.body.id);
+  assert.equal(Number(print.body.valorFinal), 20);
+  assert.ok(Array.isArray(print.body.itens));
+  assert.equal(print.body.itens.length, 1);
+  assert.equal(print.body.motorista, motorista.nome);
+});
+
+test("GET /api/vendas/:id/frete-impressao 404", async () => {
+  const res = await agent.get("/api/vendas/9999/frete-impressao");
+  assert.equal(res.status, 404);
+});
+
 test("POST /api/vendas frete por saco", async () => {
   const res = await agent.post("/api/vendas").send({
     clienteId: ctx.cliente.id,

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const CLEARED_FLAG = "colombocal_sw_cache_cleared_v3";
+const CLEARED_FLAG = "colombocal_sw_cache_cleared_v4";
 
 async function clearBrowserAppCaches() {
   if ("caches" in window) {

@@ -21,6 +21,55 @@ test.beforeEach(async () => {
   ctx = { tenant, cliente, motorista, produto };
 });
 
+test("GET /api/fretes?avulso=true omite frete da venda", async () => {
+  const avulso = await agent.post("/api/fretes/avulso").send({
+    clienteId: ctx.cliente.id,
+    motoristaId: ctx.motorista.id,
+    precoTonelada: 50,
+    produtoId: ctx.produto.id,
+    quantidade: 1,
+  });
+  assert.equal(avulso.status, 201);
+
+  const vendedor = await seedVendedor(ctx.tenant.id);
+  const venda = await agent.post("/api/vendas").send({
+    clienteId: ctx.cliente.id,
+    vendedorId: vendedor.id,
+    itens: [{ produtoId: ctx.produto.id, quantidade: 2, precoUnitario: 100 }],
+    fretePorTonelada: 10,
+  });
+  assert.equal(venda.status, 201);
+
+  const all = await agent.get("/api/fretes");
+  assert.equal(all.status, 200);
+  assert.ok(all.body.some((r) => r.id === avulso.body.frete.id));
+  assert.ok(all.body.some((r) => r.vendaId === venda.body.id));
+
+  const onlyAvulso = await agent.get("/api/fretes?avulso=true");
+  assert.equal(onlyAvulso.status, 200);
+  assert.ok(onlyAvulso.body.every((r) => r.vendaId == null));
+  assert.ok(onlyAvulso.body.some((r) => r.id === avulso.body.frete.id));
+  assert.ok(!onlyAvulso.body.some((r) => r.vendaId === venda.body.id));
+});
+
+test("GET /api/fretes/:id/impressao rejeita frete da venda", async () => {
+  const vendedor = await seedVendedor(ctx.tenant.id);
+  const venda = await agent.post("/api/vendas").send({
+    clienteId: ctx.cliente.id,
+    vendedorId: vendedor.id,
+    itens: [{ produtoId: ctx.produto.id, quantidade: 2, precoUnitario: 100 }],
+    fretePorTonelada: 10,
+  });
+  const frete = await prisma.freteMovimento.findFirst({
+    where: { vendaId: venda.body.id },
+  });
+  assert.ok(frete);
+
+  const res = await agent.get(`/api/fretes/${frete.id}/impressao`);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /avulso/i);
+});
+
 test("POST /api/fretes/avulso não gera título nem pagamento (só operacional)", async () => {
   const res = await agent.post("/api/fretes/avulso").send({
     clienteId: ctx.cliente.id,

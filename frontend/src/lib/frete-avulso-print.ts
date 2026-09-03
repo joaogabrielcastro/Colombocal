@@ -11,6 +11,11 @@ export type FreteAvulsoImpressaoItem = {
 
 export type FreteAvulsoImpressao = {
   freteId: number;
+  origem?: "avulso" | "venda";
+  titulo?: string;
+  numeroExibicao?: string | number | null;
+  vendaId?: number | null;
+  numeroVenda?: number | null;
   cliente: string;
   clienteCidade?: string | null;
   clienteEstado?: string | null;
@@ -88,12 +93,22 @@ export function buildFreteAvulsoPrintHtml(resumo: FreteAvulsoImpressao): string 
   const valorLabel = resumo.valorLabel || money(resumo.valorFinal);
   const status = resumo.pagoNoAto ? "Pago no ato" : "A receber";
   const obs = String(resumo.observacao || "").trim();
+  const isVenda = resumo.origem === "venda";
+  const titulo = resumo.titulo || (isVenda ? "Frete da venda" : "Orçamento de frete");
+  const numeroRaw =
+    resumo.numeroExibicao ??
+    (isVenda && resumo.numeroVenda != null ? resumo.numeroVenda : resumo.freteId);
+  const numero = numOrdem(Number(numeroRaw) || resumo.freteId);
+  const subtitulo = isVenda
+    ? "Frete vinculado à ordem de venda · Sem valor fiscal"
+    : "Sem valor fiscal · Documento interno";
+  const totalLabel = isVenda ? "Total do frete" : "Total do orçamento";
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Frete avulso #${esc(numOrdem(resumo.freteId))}</title>
+  <title>${esc(titulo)} #${esc(numero)}</title>
   <style>
     * { box-sizing: border-box; }
     @page { size: A4; margin: 8mm; }
@@ -201,11 +216,11 @@ export function buildFreteAvulsoPrintHtml(resumo: FreteAvulsoImpressao): string 
   <div class="sheet">
     <div class="head">
       <div>
-        <h1>Orçamento de frete</h1>
-        <div class="sub">Sem valor fiscal · Documento interno</div>
+        <h1>${esc(titulo)}</h1>
+        <div class="sub">${esc(subtitulo)}</div>
       </div>
       <div class="badge">
-        <div class="num">#${esc(numOrdem(resumo.freteId))}</div>
+        <div class="num">#${esc(numero)}</div>
         <div class="status">${esc(status)}</div>
       </div>
     </div>
@@ -242,7 +257,7 @@ export function buildFreteAvulsoPrintHtml(resumo: FreteAvulsoImpressao): string 
     <div class="foot">
       <div class="date">${esc(dataLonga(resumo.data))}</div>
       <div class="total-box">
-        <div class="total-label">Total do orçamento</div>
+        <div class="total-label">${esc(totalLabel)}</div>
         <div class="total-value">${esc(valorLabel)}</div>
       </div>
     </div>
