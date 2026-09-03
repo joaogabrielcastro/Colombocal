@@ -96,6 +96,12 @@ async function seedOneTenant(db, cfg) {
 async function main() {
   console.log("Iniciando seed do banco de dados...");
 
+  if (process.env.NODE_ENV === "production" && !process.env.SEED_ADMIN_PASSWORD) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD é obrigatório em produção. Recuse senhas padrão.",
+    );
+  }
+
   const defaultPassword = process.env.SEED_ADMIN_PASSWORD || "admin123";
   const demoPassword =
     process.env.SEED_DEMO_PASSWORD || process.env.SEED_ADMIN_PASSWORD || "admin123";

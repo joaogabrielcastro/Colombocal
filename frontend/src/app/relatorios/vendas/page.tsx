@@ -19,6 +19,7 @@ import { RelatorioVendasResumo } from "@/features/relatorios-vendas/components/R
 import { RelatorioVendasDetalhes } from "@/features/relatorios-vendas/components/RelatorioVendasDetalhes";
 import { localDateInputValue } from "@/lib/utils";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function RelatorioVendasPage() {
   const { freteEnabled } = useTenantFeatures();
@@ -42,6 +43,7 @@ export default function RelatorioVendasPage() {
   const {
     data: dataRaw,
     isLoading: loading,
+    isError,
     refetch,
   } = useRelatorioVendasQuery(filtrosAplicados, !!filtrosAplicados.dataInicio && !!filtrosAplicados.dataFim);
   const data = dataRaw ?? null;
@@ -182,7 +184,32 @@ export default function RelatorioVendasPage() {
         </div>
       )}
 
-      {data && !loading && (
+      {isError && !loading && (
+        <div className="card p-4">
+          <EmptyState
+            title="Não foi possível carregar o relatório"
+            description="Verifique a conexão e tente novamente."
+            action={
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void refetch()}
+              >
+                Tentar novamente
+              </button>
+            }
+          />
+        </div>
+      )}
+
+      {data && !loading && !isError && data.vendas.length === 0 && (
+        <EmptyState
+          title="Nenhuma venda no período"
+          description="Ajuste as datas ou os filtros e busque novamente."
+        />
+      )}
+
+      {data && !loading && !isError && data.vendas.length > 0 && (
         <>
           <RelatorioVendasResumo
             freteEnabled={freteEnabled}

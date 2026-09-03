@@ -11,7 +11,6 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import SearchableSelect from "@/components/SearchableSelect";
-import * as XLSX from "xlsx";
 
 interface TituloItem {
   id: number;
@@ -183,8 +182,9 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
     });
   };
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     if (!dados) return;
+    const XLSX = await import("xlsx");
     const rows = getExportRows();
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -316,7 +316,7 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             >
               {exportandoCsv ? "Gerando CSV..." : "Exportar CSV"}
             </button>
-            <button type="button" onClick={exportarExcel} className="btn-secondary">
+            <button type="button" onClick={() => void exportarExcel()} className="btn-secondary">
               Exportar Excel
             </button>
           </div>

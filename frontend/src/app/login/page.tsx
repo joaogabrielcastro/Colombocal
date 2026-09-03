@@ -3,17 +3,36 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import api from '@/lib/api';
+import api, { ApiError } from '@/lib/api';
 import { setAuthToken } from '@/lib/auth-token';
 import { setTenantFeaturesCache } from '@/lib/tenant-features-cache';
 import { reportApiError } from '@/lib/report-api-error';
+import { nextPathFromSearch } from '@/lib/safe-next-path';
 import BrandLogo from '@/components/BrandLogo';
+
+type TenantOption = { slug: string; name: string };
+
+function tenantsFromError(err: ApiError): TenantOption[] {
+  const body = err.body;
+  if (!body || typeof body !== 'object') return [];
+  const tenants = (body as { tenants?: unknown }).tenants;
+  if (!Array.isArray(tenants)) return [];
+  return tenants.filter(
+    (t): t is TenantOption =>
+      !!t &&
+      typeof t === 'object' &&
+      typeof (t as TenantOption).slug === 'string' &&
+      typeof (t as TenantOption).name === 'string',
+  );
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [tenantSlug, setTenantSlug] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +46,7 @@ export default function LoginPage() {
       }>('/auth/login', {
         email: email.trim().toLowerCase(),
         password,
+        ...(tenantSlug ? { tenantSlug } : {}),
       });
       setAuthToken(res.token);
       if (res.features) {
@@ -39,9 +59,17 @@ export default function LoginPage() {
           res.user.tenantId ?? res.tenant.id,
         );
       }
-      // Navegação completa: zera estado React/Next do tenant anterior
-      window.location.assign('/');
+      const next = nextPathFromSearch(window.location.search);
+      window.location.assign(next);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const list = tenantsFromError(err);
+        if (list.length) {
+          setTenants(list);
+          setTenantSlug((prev) => prev || list[0].slug);
+          return;
+        }
+      }
       reportApiError(err, { title: 'Falha no login' });
     } finally {
       setLoading(false);
@@ -107,6 +135,33 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {tenants.length > 0 && (
+              <div>
+                <label
+                  htmlFor="login-tenant"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Organização
+                </label>
+                <select
+                  id="login-tenant"
+                  className="input-field"
+                  value={tenantSlug}
+                  onChange={(e) => setTenantSlug(e.target.value)}
+                  required
+                >
+                  {tenants.map((t) => (
+                    <option key={t.slug} value={t.slug}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Este e-mail existe em mais de uma organização. Escolha onde deseja entrar.
+                </p>
+              </div>
+            )}
 
             <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
               {loading ? 'Entrando…' : 'Entrar'}

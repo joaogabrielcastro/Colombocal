@@ -145,7 +145,9 @@ async function recalcularTodosTitulosCliente(tx, clienteId) {
   }
 
   // Trocos sem pagamento a maior correspondente (legado / estorno incompleto).
-  await limparTrocosInjustificadosDoCliente(tx, clienteId);
+  const tenantId =
+    titulos[0]?.tenantId ?? pagamentos[0]?.tenantId ?? null;
+  await limparTrocosInjustificadosDoCliente(tx, clienteId, tenantId);
 }
 
 /** @deprecated Preferir recalcularTodosTitulosCliente; mantido por compatibilidade de assinatura */

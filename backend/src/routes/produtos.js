@@ -7,6 +7,11 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+const {
+  parseRequiredString,
+  parseOptionalString,
+  parseNumberField,
+} = require("../utils/validation");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -68,18 +73,26 @@ router.get("/:id", async (req, res) => {
 // POST /api/produtos
 router.post("/", async (req, res) => {
   try {
-    const { nome, codigo, precoPadrao, unidade, pesoKg } = req.body;
-    const codigoTrim =
-      codigo != null && String(codigo).trim() !== ""
-        ? String(codigo).trim()
-        : null;
+    const nome = parseRequiredString(req.body?.nome, "nome", { maxLength: 160 });
+    const codigo = parseOptionalString(req.body?.codigo, "codigo", { maxLength: 80 });
+    const precoPadrao = parseNumberField(req.body?.precoPadrao, "precoPadrao", {
+      min: 0,
+    });
+    const unidade =
+      parseOptionalString(req.body?.unidade, "unidade", { maxLength: 20 }) || "ton";
     const codigoFinal =
-      codigoTrim ||
+      codigo ||
       `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    const peso =
-      pesoKg === null || pesoKg === undefined || String(pesoKg).trim() === ""
-        ? null
-        : Number(String(pesoKg).replace(",", "."));
+    const pesoKg = parseNumberField(
+      req.body?.pesoKg == null || req.body?.pesoKg === ""
+        ? req.body?.pesoKg
+        : String(req.body.pesoKg).replace(",", "."),
+      "pesoKg",
+      {
+        required: false,
+        min: 0,
+      },
+    );
     const produto = await prisma.$transaction(async (tx) => {
       const p = await tx.produto.create({
         data: {
@@ -87,8 +100,8 @@ router.post("/", async (req, res) => {
           nome,
           codigo: codigoFinal,
           precoPadrao,
-          unidade: unidade || "ton",
-          pesoKg: Number.isFinite(peso) && peso > 0 ? peso : null,
+          unidade,
+          pesoKg: pesoKg != null && pesoKg > 0 ? pesoKg : null,
         },
       });
       await registrarAuditoria(tx, req, {
@@ -115,21 +128,56 @@ router.put("/:id", async (req, res) => {
     const exists = await prisma.produto.count({ where: { id, ...tw(req) } });
     if (!exists) return res.status(404).json({ error: "Produto não encontrado" });
 
-    const { nome, codigo, precoPadrao, unidade, ativo, pesoKg } = req.body;
-    const data = { nome, codigo, precoPadrao, unidade, ativo };
-    if (pesoKg !== undefined) {
-      if (pesoKg === null || String(pesoKg).trim() === "") {
+    const data = {};
+    if (req.body?.nome !== undefined) {
+      data.nome = parseRequiredString(req.body.nome, "nome", { maxLength: 160 });
+    }
+    if (req.body?.codigo !== undefined) {
+      data.codigo = parseOptionalString(req.body.codigo, "codigo", { maxLength: 80 });
+    }
+    if (req.body?.precoPadrao !== undefined) {
+      data.precoPadrao = parseNumberField(req.body.precoPadrao, "precoPadrao", {
+        min: 0,
+      });
+    }
+    if (req.body?.unidade !== undefined) {
+      data.unidade =
+        parseOptionalString(req.body.unidade, "unidade", { maxLength: 20 }) || "ton";
+    }
+    if (req.body?.ativo !== undefined) {
+      if (typeof req.body.ativo !== "boolean") {
+        return res.status(400).json({ error: "ativo inválido" });
+      }
+      data.ativo = req.body.ativo;
+    }
+    if (req.body?.pesoKg !== undefined) {
+      if (req.body.pesoKg === null || String(req.body.pesoKg).trim() === "") {
         data.pesoKg = null;
       } else {
-        const peso = Number(String(pesoKg).replace(",", "."));
-        data.pesoKg = Number.isFinite(peso) && peso > 0 ? peso : null;
+        const peso = parseNumberField(
+          String(req.body.pesoKg).replace(",", "."),
+          "pesoKg",
+          { min: 0 },
+        );
+        data.pesoKg = peso > 0 ? peso : null;
       }
     }
     const produto = await prisma.$transaction(async (tx) => {
-      const p = await tx.produto.update({
-        where: { id },
+      const updated = await tx.produto.updateMany({
+        where: { id, ...tw(req) },
         data,
       });
+      if (!updated.count) {
+        const err = new Error("Produto não encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
+      const p = await tx.produto.findFirst({ where: { id, ...tw(req) } });
+      if (!p) {
+        const err = new Error("Produto não encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
       await registrarAuditoria(tx, req, {
         tenantId: req.tenantId,
         tipo: "PRODUTO_ATUALIZADO",
@@ -153,10 +201,15 @@ router.delete("/:id", async (req, res) => {
     if (!exists) return res.status(404).json({ error: "Produto não encontrado" });
 
     await prisma.$transaction(async (tx) => {
-      await tx.produto.update({
-        where: { id },
+      const updated = await tx.produto.updateMany({
+        where: { id, ...tw(req) },
         data: { ativo: false },
       });
+      if (!updated.count) {
+        const err = new Error("Produto não encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
       await registrarAuditoria(tx, req, {
         tenantId: req.tenantId,
         tipo: "PRODUTO_INATIVADO",

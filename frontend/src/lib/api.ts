@@ -1,4 +1,5 @@
 import { getAuthToken, clearAuthToken } from './auth-token';
+import { safeInternalPath } from './safe-next-path';
 
 export const API_BASE = '/api';
 
@@ -71,9 +72,11 @@ function messageFromErrorBody(body: unknown, status: number): string {
 function handleUnauthorized() {
   if (typeof window === 'undefined') return;
   const path = window.location.pathname;
-  if (path === '/login' || path === '/cadastro') return;
+  if (path === '/login' || path === '/cadastro' || path.startsWith('/setup')) return;
   clearAuthToken();
-  const next = encodeURIComponent(path + window.location.search);
+  const next = encodeURIComponent(
+    safeInternalPath(path + window.location.search),
+  );
   window.location.assign(`/login?next=${next}`);
 }
 
@@ -144,8 +147,9 @@ export async function apiFetchWithMeta<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(`${API_BASE}${path}`, {
-        headers: mergeAuthHeaders(options?.headers),
         ...options,
+        cache: options?.cache ?? 'no-store',
+        headers: mergeAuthHeaders(options?.headers),
       });
       const text = await res.text();
       const parsed = await parseJsonSafe(text);

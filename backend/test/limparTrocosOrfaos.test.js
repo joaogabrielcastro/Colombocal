@@ -134,3 +134,35 @@ test("caso R E O: remove troco órfão da venda #5 (sem pagamento a maior)", asy
   assert.equal(pags.some((p) => p.id === 3), false);
   assert.equal(pags.some((p) => p.id === 5), true);
 });
+
+test("mantém troco de pagamento registrado pelo valor integral (acima do título)", async () => {
+  const pags = [
+    { id: 1, clienteId: 3, vendaId: 20, tipo: "dinheiro", valor: 150 },
+    { id: 2, clienteId: 3, vendaId: 20, tipo: "troco_transferencia", valor: -50 },
+  ];
+  const tx = {
+    pagamento: {
+      async findMany({ where }) {
+        return pags.filter((p) => p.clienteId === where.clienteId);
+      },
+      async delete({ where }) {
+        const i = pags.findIndex((p) => p.id === where.id);
+        if (i >= 0) pags.splice(i, 1);
+      },
+    },
+    tituloReceber: {
+      async findMany() {
+        return [{ valorOriginal: 100 }];
+      },
+    },
+    venda: {
+      async findFirst() {
+        return null;
+      },
+    },
+  };
+
+  const r = await limparTrocosInjustificadosDoCliente(tx, 3);
+  assert.equal(r.deleted, 0);
+  assert.equal(pags.length, 2);
+});

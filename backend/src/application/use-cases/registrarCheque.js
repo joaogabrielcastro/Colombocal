@@ -28,7 +28,6 @@ async function registrarCheque(prisma, payload) {
       clienteId: payload.clienteId,
     });
 
-    let valorPrincipal = payload.valor;
     let trocoValor = 0;
 
     if (payload.vendaId) {
@@ -44,7 +43,6 @@ async function registrarCheque(prisma, payload) {
           }
           const split = splitValorComTroco(payload.valor, saldoAberto);
           trocoValor = split.trocoValor;
-          valorPrincipal = split.valorPrincipal;
         }
       }
     }
@@ -74,7 +72,8 @@ async function registrarCheque(prisma, payload) {
       clienteId: payload.clienteId,
       vendaId: novoCheque.vendaId,
       tipo: "cheque",
-      valor: valorPrincipal,
+      // Valor do cheque (integral). O excesso vira troco negativo, como no lote.
+      valor: payload.valor,
       data: dataPagamento,
       chequeId: novoCheque.id,
       observacoes: `Cheque #${payload.numero || novoCheque.id} - ${payload.banco || ""}`,

@@ -118,6 +118,15 @@ test("DELETE /api/produtos/:id inativa e 404 quando inexistente", async () => {
   assert.equal(naoExiste.status, 404);
 });
 
+test("POST /api/produtos rejeita nome vazio e preço inválido", async () => {
+  const semNome = await agent.post("/api/produtos").send({ precoPadrao: 10 });
+  assert.equal(semNome.status, 400);
+  const precoRuim = await agent
+    .post("/api/produtos")
+    .send({ nome: "X", precoPadrao: "abc" });
+  assert.equal(precoRuim.status, 400);
+});
+
 test("PUT /api/produtos/:id reativa produto inativo", async () => {
   const created = await agent
     .post("/api/produtos")

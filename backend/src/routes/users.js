@@ -2,7 +2,11 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const router = express.Router();
 const { prisma } = require("../lib/prisma");
-const { handleRouteError } = require("../utils/api");
+const {
+  parsePagination,
+  setPaginationHeaders,
+  handleRouteError,
+} = require("../utils/api");
 const {
   NAV_PERMISSION_KEYS,
   normalizeNavPermissions,
@@ -14,18 +18,29 @@ const ROLES = new Set(["admin", "member"]);
 // GET /api/users — lista usuários do tenant (admin)
 router.get("/", async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      where: { tenantId: req.tenantId },
-      orderBy: { id: "asc" },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        navPermissions: true,
-        createdAt: true,
-      },
+    const { take, skip } = parsePagination(req.query, {
+      defaultTake: 200,
+      maxTake: 500,
     });
+    const where = { tenantId: req.tenantId };
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy: { id: "asc" },
+        take,
+        skip,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          navPermissions: true,
+          createdAt: true,
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+    setPaginationHeaders(res, { total, take, skip });
     res.json(
       users.map((u) => ({
         ...u,
@@ -105,7 +120,12 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ error: "Usuário não encontrado" });
     }
 
-    await prisma.user.delete({ where: { id } });
+    const del = await prisma.user.deleteMany({
+      where: { id, tenantId: req.tenantId },
+    });
+    if (!del.count) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
     res.json({ ok: true });
   } catch (e) {
     handleRouteError(res, e);
@@ -136,8 +156,8 @@ router.patch("/:id/password", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id },
+      await tx.user.updateMany({
+        where: { id, tenantId: req.tenantId },
         data: { passwordHash },
       });
       await registrarAuditoria(tx, req, {
@@ -192,9 +212,17 @@ router.patch("/:id/nav-permissions", async (req, res) => {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.update({
-        where: { id },
+      const u = await tx.user.updateMany({
+        where: { id, tenantId: req.tenantId },
         data: { navPermissions },
+      });
+      if (!u.count) {
+        const err = new Error("Usuário não encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
+      const row = await tx.user.findFirst({
+        where: { id, tenantId: req.tenantId },
         select: {
           id: true,
           email: true,
@@ -204,6 +232,11 @@ router.patch("/:id/nav-permissions", async (req, res) => {
           createdAt: true,
         },
       });
+      if (!row) {
+        const err = new Error("Usuário não encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
       await registrarAuditoria(tx, req, {
         tenantId: req.tenantId,
         tipo: "USER_NAV_PERMISSOES",
@@ -214,7 +247,7 @@ router.patch("/:id/nav-permissions", async (req, res) => {
           navPermissions,
         },
       });
-      return u;
+      return row;
     });
 
     res.json({

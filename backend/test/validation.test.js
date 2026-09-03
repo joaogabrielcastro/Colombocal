@@ -4,6 +4,8 @@ const {
   parseIntField,
   parseNumberField,
   parseDateField,
+  parseRequiredString,
+  parseOptionalString,
   ensureArray,
   ensureEnum,
   validationError,
@@ -163,6 +165,27 @@ test("ensureArray: lança 400 para não-array", () => {
 test("ensureArray: lança 400 quando abaixo do mínimo", () => {
   assert.throws(
     () => ensureArray([], "itens", { minLength: 1 }),
+    (err) => err.statusCode === 400,
+  );
+});
+
+test("parseRequiredString: recusa vazio e não-string", () => {
+  assert.equal(parseRequiredString("  João  ", "nome"), "João");
+  assert.throws(
+    () => parseRequiredString("", "nome"),
+    (err) => err.statusCode === 400,
+  );
+  assert.throws(
+    () => parseRequiredString({ x: 1 }, "nome"),
+    (err) => err.statusCode === 400,
+  );
+});
+
+test("parseOptionalString: aceita vazio e recusa tipo inválido", () => {
+  assert.equal(parseOptionalString(null, "tel"), null);
+  assert.equal(parseOptionalString("  41  ", "tel"), "41");
+  assert.throws(
+    () => parseOptionalString(12, "tel"),
     (err) => err.statusCode === 400,
   );
 });

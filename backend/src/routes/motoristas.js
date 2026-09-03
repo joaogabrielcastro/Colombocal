@@ -6,9 +6,38 @@ const {
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
+const {
+  parseRequiredString,
+  parseOptionalString,
+} = require("../utils/validation");
 
 function tw(req) {
   return { tenantId: req.tenantId };
+}
+
+function parseMotoristaBody(body, { partial = false } = {}) {
+  const data = {};
+  if (!partial || body?.nome !== undefined) {
+    data.nome = parseRequiredString(body?.nome, "nome", { maxLength: 120 });
+  }
+  if (!partial || body?.telefone !== undefined) {
+    data.telefone = parseOptionalString(body?.telefone, "telefone");
+  }
+  if (!partial || body?.veiculo !== undefined) {
+    data.veiculo = parseOptionalString(body?.veiculo, "veiculo");
+  }
+  if (!partial || body?.placa !== undefined) {
+    data.placa = parseOptionalString(body?.placa, "placa", { maxLength: 20 });
+  }
+  if (body?.ativo !== undefined) {
+    if (typeof body.ativo !== "boolean") {
+      const err = new Error("ativo inválido");
+      err.statusCode = 400;
+      throw err;
+    }
+    data.ativo = body.ativo;
+  }
+  return data;
 }
 
 router.get("/", async (req, res) => {
@@ -53,9 +82,9 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { nome, telefone, veiculo, placa } = req.body;
+    const data = parseMotoristaBody(req.body);
     const motorista = await prisma.motorista.create({
-      data: { ...tw(req), nome, telefone, veiculo, placa },
+      data: { ...tw(req), ...data },
     });
     res.status(201).json(motorista);
   } catch (error) {
@@ -66,13 +95,15 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const exists = await prisma.motorista.count({ where: { id, ...tw(req) } });
-    if (!exists) return res.status(404).json({ error: "Motorista não encontrado" });
+    const data = parseMotoristaBody(req.body, { partial: true });
+    const updated = await prisma.motorista.updateMany({
+      where: { id, ...tw(req) },
+      data,
+    });
+    if (!updated.count) return res.status(404).json({ error: "Motorista não encontrado" });
 
-    const { nome, telefone, veiculo, placa, ativo } = req.body;
-    const motorista = await prisma.motorista.update({
-      where: { id },
-      data: { nome, telefone, veiculo, placa, ativo },
+    const motorista = await prisma.motorista.findFirst({
+      where: { id, ...tw(req) },
     });
     res.json(motorista);
   } catch (error) {
@@ -83,13 +114,11 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const exists = await prisma.motorista.count({ where: { id, ...tw(req) } });
-    if (!exists) return res.status(404).json({ error: "Motorista não encontrado" });
-
-    await prisma.motorista.update({
-      where: { id },
+    const updated = await prisma.motorista.updateMany({
+      where: { id, ...tw(req) },
       data: { ativo: false },
     });
+    if (!updated.count) return res.status(404).json({ error: "Motorista não encontrado" });
     res.json({ success: true });
   } catch (error) {
     handleRouteError(res, error);

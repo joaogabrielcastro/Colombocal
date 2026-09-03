@@ -110,7 +110,7 @@ export default function NovoClientePage() {
         return;
       }
     } else if (!isValidCnpjDigits(form.cnpj ?? '')) {
-      setErro('CNPJ deve ter 14 dígitos.');
+      setErro('CNPJ inválido. Verifique os dígitos.');
       setSalvando(false);
       return;
     }

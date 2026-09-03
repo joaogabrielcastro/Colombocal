@@ -11,6 +11,7 @@ import { formatDate, localDateInputValue } from "@/lib/utils";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { downloadCsvPtBr } from "@/lib/csv";
+import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 
 type OcLinha = {
   id: number;
@@ -95,6 +96,7 @@ export default function RelatorioCarregamentoPage() {
   };
 
   return (
+    <FreteFeatureGuard>
     <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Relatório de Carregamento</h1>
@@ -292,5 +294,6 @@ export default function RelatorioCarregamentoPage() {
         </>
       ) : null}
     </div>
+    </FreteFeatureGuard>
   );
 }

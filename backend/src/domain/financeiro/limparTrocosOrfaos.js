@@ -66,9 +66,9 @@ async function limparTrocosOrfaosDoRecebimento(
  * (ex.: cheque estornado/refeito e o troco antigo ficou).
  * Mantém os trocos mais antigos até cobrir (positivos − valor da venda); apaga o restante.
  */
-async function limparTrocosInjustificadosDoCliente(tx, clienteId) {
+async function limparTrocosInjustificadosDoCliente(tx, clienteId, tenantId) {
   const pags = await tx.pagamento.findMany({
-    where: { clienteId },
+    where: tenantId != null ? { clienteId, tenantId } : { clienteId },
     orderBy: [{ id: "asc" }],
   });
 
@@ -94,7 +94,10 @@ async function limparTrocosInjustificadosDoCliente(tx, clienteId) {
     if (bucket.trocos.length === 0) continue;
 
     const titulos = await tx.tituloReceber.findMany({
-      where: { clienteId, vendaId },
+      where:
+        tenantId != null
+          ? { clienteId, vendaId, tenantId }
+          : { clienteId, vendaId },
       select: { valorOriginal: true },
     });
     let debito = titulos.reduce(
@@ -103,7 +106,10 @@ async function limparTrocosInjustificadosDoCliente(tx, clienteId) {
     );
     if (debito <= EPS) {
       const venda = await tx.venda.findFirst({
-        where: { id: vendaId, clienteId },
+        where:
+          tenantId != null
+            ? { id: vendaId, clienteId, tenantId }
+            : { id: vendaId, clienteId },
         select: { valorTotal: true },
       });
       debito = venda ? parseFloat(String(venda.valorTotal)) : 0;

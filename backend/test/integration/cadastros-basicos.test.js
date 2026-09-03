@@ -50,10 +50,14 @@ for (const recurso of ["motoristas", "vendedores"]) {
   });
 
   test(`POST /api/${recurso} com payload inválido retorna erro tratado`, async () => {
-    // nome como objeto viola o tipo esperado pelo Prisma → cai no catch (handleRouteError)
     const res = await agent.post(`/api/${recurso}`).send({ nome: { x: 1 } });
-    assert.equal(res.status, 500);
+    assert.equal(res.status, 400);
     assert.ok(res.body.error);
+  });
+
+  test(`POST /api/${recurso} exige nome`, async () => {
+    const res = await agent.post(`/api/${recurso}`).send({ telefone: "4190000" });
+    assert.equal(res.status, 400);
   });
 }
 

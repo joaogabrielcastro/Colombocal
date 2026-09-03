@@ -11,7 +11,6 @@ import {
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDate, formatChequeDetalhe, type Pagamento } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
-import * as XLSX from "xlsx";
 import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import { ExportActions } from "@/components/ui/export-actions";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -21,6 +20,7 @@ import { usePagamentosQuery } from "@/features/financeiro/hooks/usePagamentosQue
 import api from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
 import { toast } from "sonner";
+import { escapeHtml } from "@/lib/html";
 
 function labelTipoPagamento(tipo: string) {
   const t = tipo.toLowerCase();
@@ -162,7 +162,8 @@ function FinanceiroPageContent() {
     router,
   ]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await import("xlsx");
     const rows = pagamentos.map((p) => ({
       tipo: labelTipoPagamento(p.tipo),
       cliente: p.cliente?.nomeFantasia || p.cliente?.razaoSocial || "",
@@ -188,11 +189,11 @@ function FinanceiroPageContent() {
       .map(
         (p) => `
       <tr>
-        <td>${labelTipoPagamento(p.tipo)}</td>
-        <td>${p.cliente?.nomeFantasia || p.cliente?.razaoSocial || "-"}</td>
-        <td>${p.venda ? `Venda ${vendaOrdemTexto(p.venda)}` : "-"}</td>
-        <td>${formatMoney(p.valor)}</td>
-        <td>${formatDate(p.data)}</td>
+        <td>${escapeHtml(labelTipoPagamento(p.tipo))}</td>
+        <td>${escapeHtml(p.cliente?.nomeFantasia || p.cliente?.razaoSocial || "-")}</td>
+        <td>${escapeHtml(p.venda ? `Venda ${vendaOrdemTexto(p.venda)}` : "-")}</td>
+        <td>${escapeHtml(formatMoney(p.valor))}</td>
+        <td>${escapeHtml(formatDate(p.data))}</td>
       </tr>
     `,
       )
@@ -213,7 +214,7 @@ function FinanceiroPageContent() {
         </head>
         <body>
           <h1>Recebimentos</h1>
-          <p>Gerado em ${new Date().toLocaleString("pt-BR")}</p>
+          <p>Gerado em ${escapeHtml(new Date().toLocaleString("pt-BR"))}</p>
           <table>
             <thead>
               <tr>

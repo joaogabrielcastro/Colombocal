@@ -10,6 +10,7 @@ const {
 } = require("../services/tenantFeaturesResolver");
 const { getTenantSlug } = require("../utils/tenantRequest");
 const { handleRouteError } = require("../utils/api");
+const { timingSafeEqualString } = require("../utils/setupSecret");
 
 /**
  * POST /api/config/reset-financeiro-legacy
@@ -39,7 +40,7 @@ router.post("/reset-financeiro-legacy", requireAdmin, async (req, res) => {
           "Operação desativada: defina ADMIN_RESET_SECRET ou RESET_FINANCE_SECRET no servidor.",
       });
     }
-    if (req.body?.secret !== secret) {
+    if (!timingSafeEqualString(String(req.body?.secret ?? ""), String(secret))) {
       return res.status(401).json({ error: "Não autorizado" });
     }
     if (req.body?.confirm !== true) {

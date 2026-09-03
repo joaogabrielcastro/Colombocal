@@ -38,10 +38,24 @@ if (typeof trustProxy !== "undefined") {
   app.set("trust proxy", 1);
 }
 
-const corsOrigin = process.env.CORS_ORIGIN;
+function resolveCorsOrigin() {
+  const raw = process.env.CORS_ORIGIN;
+  if (raw && String(raw).trim()) {
+    const list = String(raw)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (list.length === 1) return list[0];
+    return list;
+  }
+  // Produção: não refletir qualquer Origin. O frontend usa rewrite same-origin.
+  if (process.env.NODE_ENV === "production") return false;
+  return true;
+}
+
 app.use(
   cors({
-    origin: corsOrigin || true,
+    origin: resolveCorsOrigin(),
     exposedHeaders: [
       "X-Tenant-Id",
       "X-Total-Count",
@@ -55,7 +69,7 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" }));
 
 function skipGlobalApiLimiter(req) {
   const url = req.originalUrl || "";
@@ -161,6 +175,18 @@ app.use("/api/cnpj", requireTenantUser, require("./routes/cnpj"));
 // Global error handler
 app.use((err, req, res, next) => {
   const requestId = req.requestId || "unknown";
+  if (err?.type === "entity.too.large" || err?.status === 413) {
+    return res.status(413).json({
+      error: "Requisição grande demais",
+      requestId,
+    });
+  }
+  if (err instanceof SyntaxError && "body" in err) {
+    return res.status(400).json({
+      error: "JSON inválido",
+      requestId,
+    });
+  }
   console.error(
     JSON.stringify({
       level: "error",

@@ -33,7 +33,6 @@ async function registrarPagamento(prisma, payload) {
       clienteId: payload.clienteId,
     });
 
-    let valorPrincipal = payload.valor;
     let trocoValor = 0;
 
     if (payload.vendaId) {
@@ -42,7 +41,6 @@ async function registrarPagamento(prisma, payload) {
         const saldoAberto = calcularSaldoAbertoVenda(venda);
         const split = splitValorComTroco(payload.valor, saldoAberto);
         trocoValor = split.trocoValor;
-        valorPrincipal = split.valorPrincipal;
       }
     }
 
@@ -53,7 +51,9 @@ async function registrarPagamento(prisma, payload) {
         clienteId: payload.clienteId,
         vendaId: payload.vendaId ?? null,
         tipo: payload.tipo,
-        valor: valorPrincipal,
+        // Valor recebido (integral). O excesso vira lançamento de troco negativo,
+        // alinhado ao lote de cheques — assim o recálculo não apaga o troco legítimo.
+        valor: payload.valor,
         data: dataPagamento,
         observacoes: payload.observacoes,
       },

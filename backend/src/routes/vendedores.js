@@ -6,9 +6,40 @@ const {
   setPaginationHeaders,
   handleRouteError,
 } = require("../utils/api");
+const {
+  parseRequiredString,
+  parseOptionalString,
+  parseNumberField,
+} = require("../utils/validation");
 
 function tw(req) {
   return { tenantId: req.tenantId };
+}
+
+function parseVendedorBody(body, { partial = false } = {}) {
+  const data = {};
+  if (!partial || body?.nome !== undefined) {
+    data.nome = parseRequiredString(body?.nome, "nome", { maxLength: 120 });
+  }
+  if (!partial || body?.telefone !== undefined) {
+    data.telefone = parseOptionalString(body?.telefone, "telefone");
+  }
+  if (!partial || body?.comissaoPercentual !== undefined) {
+    data.comissaoPercentual =
+      parseNumberField(body?.comissaoPercentual, "comissaoPercentual", {
+        required: false,
+        min: 0,
+      }) ?? 0;
+  }
+  if (body?.ativo !== undefined) {
+    if (typeof body.ativo !== "boolean") {
+      const err = new Error("ativo inválido");
+      err.statusCode = 400;
+      throw err;
+    }
+    data.ativo = body.ativo;
+  }
+  return data;
 }
 
 router.get("/", async (req, res) => {
@@ -53,14 +84,9 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { nome, telefone, comissaoPercentual } = req.body;
+    const data = parseVendedorBody(req.body);
     const vendedor = await prisma.vendedor.create({
-      data: {
-        ...tw(req),
-        nome,
-        telefone,
-        comissaoPercentual: comissaoPercentual || 0,
-      },
+      data: { ...tw(req), ...data },
     });
     res.status(201).json(vendedor);
   } catch (error) {
@@ -71,13 +97,15 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const exists = await prisma.vendedor.count({ where: { id, ...tw(req) } });
-    if (!exists) return res.status(404).json({ error: "Vendedor não encontrado" });
+    const data = parseVendedorBody(req.body, { partial: true });
+    const updated = await prisma.vendedor.updateMany({
+      where: { id, ...tw(req) },
+      data,
+    });
+    if (!updated.count) return res.status(404).json({ error: "Vendedor não encontrado" });
 
-    const { nome, telefone, comissaoPercentual, ativo } = req.body;
-    const vendedor = await prisma.vendedor.update({
-      where: { id },
-      data: { nome, telefone, comissaoPercentual, ativo },
+    const vendedor = await prisma.vendedor.findFirst({
+      where: { id, ...tw(req) },
     });
     res.json(vendedor);
   } catch (error) {
@@ -88,13 +116,11 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const exists = await prisma.vendedor.count({ where: { id, ...tw(req) } });
-    if (!exists) return res.status(404).json({ error: "Vendedor não encontrado" });
-
-    await prisma.vendedor.update({
-      where: { id },
+    const updated = await prisma.vendedor.updateMany({
+      where: { id, ...tw(req) },
       data: { ativo: false },
     });
+    if (!updated.count) return res.status(404).json({ error: "Vendedor não encontrado" });
     res.json({ success: true });
   } catch (error) {
     handleRouteError(res, error);

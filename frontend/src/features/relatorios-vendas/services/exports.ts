@@ -7,6 +7,7 @@ import {
   formatMoney,
   vendaNumeroPublico,
 } from "@/lib/utils";
+import { escapeHtml } from "@/lib/html";
 import type { RelVendas } from "../types";
 import type {
   ResumoCliente,
@@ -31,14 +32,6 @@ export const RELATORIO_VENDAS_PDF_SECOES: {
   { id: "produtos", label: "Por produto" },
   { id: "detalhes", label: "Detalhamento das vendas" },
 ];
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function periodoLabel(dataInicio: string, dataFim: string) {
   const ini = dataInicio

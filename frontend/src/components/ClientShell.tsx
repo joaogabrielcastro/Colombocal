@@ -6,7 +6,8 @@ import TopNav from '@/components/TopNav';
 import BrandLogo from '@/components/BrandLogo';
 import { AUTH_SESSION_EVENT, getAuthTenantId, getAuthToken } from '@/lib/auth-token';
 import { canAccessPath } from '@/lib/navigation';
-import api from '@/lib/api';
+import api, { ApiError } from '@/lib/api';
+import { nextPathFromSearch } from '@/lib/safe-next-path';
 
 /**
  * Por omissão exige JWT: rotas internas redirecionam para /login sem token.
@@ -19,12 +20,17 @@ type MeUser = {
   navPermissions?: string[] | null;
 };
 
-function initialAllowBody(pathname: string): boolean {
-  const isPublic =
+function isPublicPath(pathname: string): boolean {
+  return (
     pathname === '/login' ||
+    pathname === '/cadastro' ||
     pathname === '/setup' ||
-    pathname === '/cadastro';
-  if (isPublic || !requireLogin) return true;
+    pathname.startsWith('/setup/')
+  );
+}
+
+function initialAllowBody(pathname: string): boolean {
+  if (isPublicPath(pathname) || !requireLogin) return true;
   return false;
 }
 
@@ -36,14 +42,16 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === '/login';
-  const isSetup = pathname === '/setup';
+  const isSetupRoot = pathname === '/setup';
   const isCadastro = pathname === '/cadastro';
-  const isPublicShell = isLogin || isSetup || isCadastro;
+  const isPublicShell = isPublicPath(pathname);
 
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
   const [sessionKey, setSessionKey] = useState('boot');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [navChecked, setNavChecked] = useState(!requireLogin || isPublicShell);
+  const [navError, setNavError] = useState(false);
+  const [navRetry, setNavRetry] = useState(0);
 
   useEffect(() => {
     const refreshSessionKey = () => {
@@ -60,11 +68,16 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (isPublicShell) {
-      if (isLogin && getAuthToken()) router.replace('/');
-      else if (isSetup && getAuthToken()) router.replace('/');
-      else if (isCadastro && getAuthToken()) router.replace('/');
+      if (isLogin && getAuthToken()) {
+        router.replace(nextPathFromSearch(window.location.search));
+      } else if (isSetupRoot && getAuthToken()) {
+        router.replace('/');
+      } else if (isCadastro && getAuthToken()) {
+        router.replace('/');
+      }
       setAllowBody(true);
       setNavChecked(true);
+      setNavError(false);
       return;
     }
 
@@ -76,17 +89,19 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
     if (!getAuthToken()) {
       setNavChecked(false);
-      router.replace('/login');
+      const next = encodeURIComponent(pathname || '/');
+      router.replace(`/login?next=${next}`);
       return;
     }
     setAllowBody(true);
-  }, [isLogin, isSetup, isCadastro, isPublicShell, pathname, router]);
+  }, [isLogin, isSetupRoot, isCadastro, isPublicShell, pathname, router]);
 
   useEffect(() => {
     if (isPublicShell || !requireLogin || !getAuthToken()) return;
 
     let cancelled = false;
     setNavChecked(false);
+    setNavError(false);
     api
       .get<{ user: MeUser }>('/auth/me')
       .then((r) => {
@@ -103,20 +118,37 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         }
         setNavChecked(true);
       })
-      .catch(() => {
-        if (!cancelled) setNavChecked(true);
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) return;
+        setNavError(true);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [pathname, isPublicShell, router, sessionKey]);
+  }, [pathname, isPublicShell, router, sessionKey, navRetry]);
 
   if (!allowBody || (!isPublicShell && !navChecked)) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-sm gap-4">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-sm gap-4 px-4">
         <BrandLogo variant="full" className="opacity-90 scale-90" />
-        A carregar…
+        {navError ? (
+          <>
+            <p className="text-center max-w-sm">
+              Não foi possível verificar sua sessão. Confira a conexão e tente novamente.
+            </p>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setNavRetry((n) => n + 1)}
+            >
+              Tentar novamente
+            </button>
+          </>
+        ) : (
+          <p>A carregar…</p>
+        )}
       </div>
     );
   }

@@ -16,8 +16,11 @@ describe("document-validation", () => {
     expect(isValidCpf("529.982.247-25")).toBe(true);
   });
 
-  it("CNPJ exige 14 dígitos", () => {
+  it("CNPJ exige dígitos verificadores válidos", () => {
+    expect(isValidCnpjDigits("11.222.333/0001-81")).toBe(true);
     expect(isValidCnpjDigits("12.345.678/0001-95")).toBe(true);
+    expect(isValidCnpjDigits("12.345.678/0001-00")).toBe(false);
     expect(isValidCnpjDigits("123")).toBe(false);
+    expect(isValidCnpjDigits("00000000000000")).toBe(false);
   });
 });

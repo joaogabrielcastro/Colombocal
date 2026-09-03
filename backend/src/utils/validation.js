@@ -4,6 +4,32 @@ function validationError(message) {
   return error;
 }
 
+function parseRequiredString(value, fieldName, { maxLength = 200 } = {}) {
+  if (value == null || typeof value !== "string") {
+    throw validationError(`${fieldName} é obrigatório`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw validationError(`${fieldName} é obrigatório`);
+  }
+  if (trimmed.length > maxLength) {
+    throw validationError(`${fieldName} muito longo`);
+  }
+  return trimmed;
+}
+
+function parseOptionalString(value, fieldName, { maxLength = 200 } = {}) {
+  if (value == null) return null;
+  if (typeof value !== "string") {
+    throw validationError(`${fieldName} inválido`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw validationError(`${fieldName} muito longo`);
+  }
+  return trimmed;
+}
+
 function parseIntField(value, fieldName, { required = true, min = null } = {}) {
   if (value == null || value === "") {
     if (!required) return null;
@@ -148,6 +174,8 @@ function ensureEnum(value, fieldName, allowedValues) {
 
 module.exports = {
   validationError,
+  parseRequiredString,
+  parseOptionalString,
   parseIntField,
   parseNumberField,
   parseDateField,

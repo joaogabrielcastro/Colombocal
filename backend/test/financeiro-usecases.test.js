@@ -56,6 +56,10 @@ function makeFakePrisma() {
           .filter((p) => p.clienteId === where.clienteId)
           .sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime() || a.id - b.id);
       },
+      delete: async ({ where }) => {
+        const i = state.pagamentos.findIndex((p) => p.id === where.id);
+        if (i >= 0) state.pagamentos.splice(i, 1);
+      },
     },
     cheque: {
       aggregate: async ({ where }) => {
@@ -92,6 +96,10 @@ function makeFakePrisma() {
         state.titulos[idx] = { ...state.titulos[idx], ...data };
         return state.titulos[idx];
       },
+      deleteMany: async () => ({ count: 0 }),
+    },
+    freteMovimento: {
+      findMany: async () => [],
     },
     financeiroEvento: {
       create: async ({ data }) => {
@@ -121,10 +129,10 @@ test("registrarPagamento cria troco quando pagamento excede saldo da venda", asy
     data: "2026-04-27",
   });
 
-  assert.equal(pagamento.valor, 100);
+  assert.equal(pagamento.valor, 150);
   assert.equal(state.pagamentos.length, 2);
   assert.equal(state.pagamentos[0].tipo, "dinheiro");
-  assert.equal(state.pagamentos[0].valor, 100);
+  assert.equal(state.pagamentos[0].valor, 150);
   assert.equal(state.pagamentos[1].tipo, "troco_transferencia");
   assert.equal(state.pagamentos[1].valor, -50);
 });
@@ -146,7 +154,7 @@ test("registrarCheque retorna troco quando cheque excede saldo da venda", async 
   assert.equal(state.cheques.length, 1);
   assert.equal(state.pagamentos.length, 2);
   assert.equal(state.pagamentos[0].tipo, "cheque");
-  assert.equal(state.pagamentos[0].valor, 100);
+  assert.equal(state.pagamentos[0].valor, 120);
   assert.equal(state.pagamentos[1].tipo, "troco_dinheiro");
   assert.equal(state.pagamentos[1].valor, -20);
 });

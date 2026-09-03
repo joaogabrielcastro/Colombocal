@@ -12,7 +12,6 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { toast } from "sonner";
 import { downloadCsvPtBr } from "@/lib/csv";
-import * as XLSX from "xlsx";
 
 interface VendaComissaoLinha {
   id: number;
@@ -99,7 +98,8 @@ export default function ComissoesPage() {
     );
   };
 
-  const exportarTemplateAjustes = (alvo?: ComissaoVendedor) => {
+  const exportarTemplateAjustes = async (alvo?: ComissaoVendedor) => {
+    const XLSX = await import("xlsx");
     const grupos = alvo ? [alvo] : dados;
     const rows = grupos.flatMap((d) =>
       d.vendas.map((v: any) => ({
@@ -132,6 +132,7 @@ export default function ComissoesPage() {
   const importarAjustes = async (file: File) => {
     setImportando(true);
     try {
+      const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];

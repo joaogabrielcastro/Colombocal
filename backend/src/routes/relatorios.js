@@ -9,6 +9,7 @@ const {
 } = require("../services/exportJobs");
 const { listarClientesDevedores } = require("../services/financeiroDevedores");
 const { requireNavKey } = require("../middleware/navPermission");
+const { userHasNavKey } = require("../constants/navPermissions");
 const { comissaoPorEmissao } = require("../services/comissao");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { getDateRange } = require("../utils/dateRangeQuery");
@@ -18,6 +19,18 @@ const { registrarAuditoria } = require("../services/financeiroEventos");
 /** Limite de linhas de venda no relatório de comissões (UI + memória). */
 const COMISSOES_DEFAULT_TAKE = 500;
 const COMISSOES_MAX_TAKE = 2000;
+
+const EXPORT_TYPE_NAV = {
+  vendas_csv: "rel_vendas",
+  financeiro_csv: "rel_financeiro",
+  titulos_csv: "rel_financeiro",
+};
+
+function canAccessExportJob(user, job) {
+  const key = EXPORT_TYPE_NAV[job?.type];
+  if (!key) return false;
+  return userHasNavKey(user, key);
+}
 
 const relatorioNavByPrefix = [
   ["/vendas", "rel_vendas"],
@@ -969,6 +982,9 @@ router.get("/exports/:jobId", async (req, res) => {
     if (!job || !exportJobBelongsToTenant(job, req.tenantId)) {
       return res.status(404).json({ error: "Job não encontrado" });
     }
+    if (!canAccessExportJob(req.authUser, job)) {
+      return res.status(403).json({ error: "Sem permissão para este relatório" });
+    }
     res.json({
       jobId: job.id,
       type: job.type,
@@ -993,6 +1009,9 @@ router.get("/exports/:jobId/download", async (req, res) => {
     const job = await getExportJob(req.params.jobId);
     if (!job || !exportJobBelongsToTenant(job, req.tenantId)) {
       return res.status(404).json({ error: "Job não encontrado" });
+    }
+    if (!canAccessExportJob(req.authUser, job)) {
+      return res.status(403).json({ error: "Sem permissão para este relatório" });
     }
     if (job.status !== "completed" || !job.result?.content) {
       return res.status(409).json({ error: "Exportação ainda não concluída" });

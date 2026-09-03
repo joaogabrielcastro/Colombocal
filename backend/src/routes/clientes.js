@@ -199,36 +199,52 @@ router.get("/:id/conta", async (req, res) => {
       return res.status(404).json({ error: "Cliente não encontrado" });
 
     const tw = tenant(req);
-    const vendas = await prisma.venda.findMany({
-      where: { clienteId: id, ...tw },
-      include: {
-        itens: { include: { produto: true } },
-        vendedor: true,
-        motorista: true,
-      },
-      orderBy: { dataVenda: "desc" },
-    });
+    const [vendas, pagamentos, titulos, vendasAgg, pagsAgg] = await Promise.all([
+      prisma.venda.findMany({
+        where: { clienteId: id, ...tw },
+        select: {
+          id: true,
+          numeroVenda: true,
+          dataVenda: true,
+          valorTotal: true,
+        },
+        orderBy: { dataVenda: "desc" },
+      }),
+      prisma.pagamento.findMany({
+        where: { clienteId: id, ...tw },
+        select: {
+          id: true,
+          tipo: true,
+          data: true,
+          valor: true,
+          vendaId: true,
+          venda: { select: { numeroVenda: true } },
+        },
+        orderBy: { data: "desc" },
+      }),
+      prisma.tituloReceber.findMany({
+        where: { clienteId: id, ...tw },
+        select: {
+          id: true,
+          vencimento: true,
+          valorOriginal: true,
+          valorPago: true,
+          status: true,
+        },
+        orderBy: { vencimento: "asc" },
+      }),
+      prisma.venda.aggregate({
+        where: { clienteId: id, ...tw },
+        _sum: { valorTotal: true },
+      }),
+      prisma.pagamento.aggregate({
+        where: { clienteId: id, ...tw },
+        _sum: { valor: true },
+      }),
+    ]);
 
-    const pagamentos = await prisma.pagamento.findMany({
-      where: { clienteId: id, ...tw },
-      include: { cheque: true, venda: true },
-      orderBy: { data: "desc" },
-    });
-
-    const titulos = await prisma.tituloReceber.findMany({
-      where: { clienteId: id, ...tw },
-      include: { venda: true },
-      orderBy: { vencimento: "asc" },
-    });
-
-    const totalDebitos = vendas.reduce(
-      (acc, v) => acc + parseFloat(v.valorTotal),
-      0,
-    );
-    const totalCreditos = pagamentos.reduce(
-      (acc, p) => acc + parseFloat(p.valor),
-      0,
-    );
+    const totalDebitos = parseFloat(String(vendasAgg._sum.valorTotal ?? 0));
+    const totalCreditos = parseFloat(String(pagsAgg._sum.valor ?? 0));
     const saldo = Math.max(0, totalDebitos - totalCreditos);
     const resumoFinanceiro = resumoFinanceiroCliente({
       totalDebitos,

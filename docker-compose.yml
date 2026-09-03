@@ -3,7 +3,7 @@
 # Uso na raiz: docker compose up --build
 # - frontend: http://localhost:3010
 # - backend:  http://localhost:3011  (health: /health, DB: /ready)
-# - postgres: localhost:5432
+# - postgres: localhost:5434  (5432 no host costuma estar ocupada por outros stacks locais)
 # - redis:    localhost:6380  (fila durable de export CSV; dentro da rede Docker: redis:6379)
 #
 # O backend roda `prisma migrate deploy` antes do `npm run dev` (banco vazio ganha schema).
@@ -24,14 +24,21 @@ services:
       POSTGRES_PASSWORD: colombocal_dev
       POSTGRES_DB: colombocal_dev
     ports:
-      - "5432:5432"
+      # 5432 no host está ocupada (ex.: relatoriofabiano). Backend usa db:5432 na rede Docker.
+      - "5434:5432"
     volumes:
       - colombocal_pgdata:/var/lib/postgresql/data
+    networks:
+      default:
+        aliases:
+          - db
+          - postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d colombocal_dev"]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -52,11 +59,13 @@ services:
     image: node:20
     container_name: colombocal-backend-dev
     working_dir: /app
-    command: sh -c "npm install && npx prisma migrate deploy && npx prisma generate && npm run dev"
+    # wait-for-db: pg_isready no Postgres não garante DNS/rede do backend no Docker Desktop (P1001).
+    command: sh -c "set -e; npm install; node scripts/wait-for-db.js; npx prisma migrate deploy; npx prisma generate; npm run dev"
+    restart: unless-stopped
     environment:
       NODE_ENV: development
       PORT: 3011
-      DATABASE_URL: postgresql://postgres:colombocal_dev@db:5432/colombocal_dev?schema=public
+      DATABASE_URL: postgresql://postgres:colombocal_dev@db:5432/colombocal_dev?schema=public&connect_timeout=30
       REDIS_URL: redis://redis:6379
       EXPORT_QUEUE_MODE: redis
       PRISMA_CLIENT_ENGINE_TYPE: library
@@ -122,3 +131,7 @@ volumes:
   colombocal_redis:
   backend_node_modules:
   frontend_node_modules:
+
+networks:
+  default:
+    name: colombocal-dev
