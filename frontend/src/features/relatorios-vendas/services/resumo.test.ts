@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  isRepresentanteSemComissao,
   montarResumoRelatorioVendas,
   ordenarResumoRepresentantes,
+  resumoComissaoVisual,
   type ResumoRepresentante,
 } from "./resumo";
 import type { RelVendas } from "../types";
@@ -204,8 +206,8 @@ describe("montarResumoRelatorioVendas casos extras", () => {
       },
     ];
     const { resumoClientes, resumoProdutos, resumoClienteProdutos } = montarResumoRelatorioVendas(data);
-    expect(resumoClientes).toEqual([{ nome: "Cli API", total: 300, quantidade: 2 }]);
-    expect(resumoProdutos[0]).toMatchObject({ nome: "Prod API", total: 400, unidade: "" });
+    expect(resumoClientes).toEqual([{ nome: "Cli API", total: 300, quantidade: 2, participacao: 20 }]);
+    expect(resumoProdutos[0]).toMatchObject({ nome: "Prod API", total: 400, unidade: "", participacao: expect.any(Number) });
     expect(resumoClienteProdutos).toEqual([
       {
         nome: "Cli API",
@@ -219,5 +221,76 @@ describe("montarResumoRelatorioVendas casos extras", () => {
     data.totalFaturamento = 0;
     const { resumoRepresentantes } = montarResumoRelatorioVendas(data);
     expect(resumoRepresentantes.every((r) => r.participacao === 0)).toBe(true);
+  });
+
+  it("calcula participação de clientes e produtos a partir do total do período", () => {
+    const data = makeDataSemResumo();
+    const { resumoClientes, resumoProdutos } = montarResumoRelatorioVendas(data);
+    const cliA = resumoClientes.find((c) => c.nome === "Cliente A");
+    expect(cliA?.participacao).toBeCloseTo((1000 / 1500) * 100);
+    const p1 = resumoProdutos.find((p) => p.nome === "Produto P1");
+    expect(p1?.participacao).toBeCloseTo((600 / 1500) * 100);
+  });
+});
+
+describe("isRepresentanteSemComissao / resumoComissaoVisual", () => {
+  it("reconhece SEM COMISSÃO e SEN COMISSÃO sem alterar totais", () => {
+    expect(isRepresentanteSemComissao("SEM COMISSÃO")).toBe(true);
+    expect(isRepresentanteSemComissao("Sen Comissao")).toBe(true);
+    expect(isRepresentanteSemComissao("  sem   comissão  ")).toBe(true);
+    expect(isRepresentanteSemComissao("LUISTA REPRESENTAÇÕES")).toBe(false);
+  });
+
+  it("não classifica outro representante só porque o nome contém o trecho", () => {
+    expect(isRepresentanteSemComissao("REPRESENTAÇÃO SEM COMISSÃO")).toBe(false);
+    expect(isRepresentanteSemComissao("JOAO SEN COMISSAO SILVA")).toBe(false);
+    expect(isRepresentanteSemComissao("COMISSAO")).toBe(false);
+    expect(isRepresentanteSemComissao("")).toBe(false);
+  });
+
+  it("resume comissão visual a partir do agrupamento existente", () => {
+    const reps: ResumoRepresentante[] = [
+      {
+        nome: "SEM COMISSÃO",
+        total: 565.58,
+        frete: 0,
+        quantidade: 4,
+        ticketMedio: 141.4,
+        participacao: 42.15,
+      },
+      {
+        nome: "LUISTA REPRESENTAÇÕES",
+        total: 776.42,
+        frete: 0,
+        quantidade: 6,
+        ticketMedio: 129.4,
+        participacao: 57.85,
+      },
+    ];
+    const r = resumoComissaoVisual(reps, 1342);
+    expect(r.temSemComissao).toBe(true);
+    expect(r.totalSem).toBeCloseTo(565.58);
+    expect(r.participacaoSem).toBeCloseTo((565.58 / 1342) * 100);
+    expect(r.totalCom).toBeCloseTo(1342 - 565.58);
+    expect(r.quantidadeCom).toBe(6);
+  });
+
+  it("não inventa categoria quando não existe representante sem comissão", () => {
+    const r = resumoComissaoVisual(
+      [
+        {
+          nome: "Ana",
+          total: 100,
+          frete: 0,
+          quantidade: 1,
+          ticketMedio: 100,
+          participacao: 100,
+        },
+      ],
+      100,
+    );
+    expect(r.temSemComissao).toBe(false);
+    expect(r.totalSem).toBe(0);
+    expect(r.totalCom).toBe(100);
   });
 });

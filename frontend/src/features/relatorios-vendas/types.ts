@@ -1,4 +1,5 @@
 import type { Venda } from "@/lib/utils";
+import type { EvolucaoPeriodo } from "./services/evolucao";
 
 export interface RelVendas {
   vendas: Venda[];
@@ -7,6 +8,7 @@ export interface RelVendas {
   totalQuantidade: number;
   quantidade: number;
   totalRegistros?: number;
+  evolucao?: EvolucaoPeriodo;
   resumoRepresentantes?: Array<{
     vendedorId: number;
     vendedorNome: string;

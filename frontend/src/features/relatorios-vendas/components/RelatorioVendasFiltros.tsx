@@ -34,6 +34,7 @@ type Props = {
   onLimpar: () => void;
   onExportExcel: () => void;
   onExportPdfCompleto: () => void;
+  exportando?: boolean;
 };
 
 export function RelatorioVendasFiltros(props: Props) {
@@ -61,6 +62,7 @@ export function RelatorioVendasFiltros(props: Props) {
     onLimpar,
     onExportExcel,
     onExportPdfCompleto,
+    exportando = false,
   } = props;
 
   const [maisFiltrosAbertos, setMaisFiltrosAbertos] = useState(
@@ -71,7 +73,7 @@ export function RelatorioVendasFiltros(props: Props) {
     <div className="card p-4 sm:p-5 mb-6 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Data Início</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Data Inicial</label>
           <input
             type="date"
             value={dataInicio}
@@ -80,7 +82,7 @@ export function RelatorioVendasFiltros(props: Props) {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Data Fim</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Data Final</label>
           <input
             type="date"
             value={dataFim}
@@ -89,7 +91,7 @@ export function RelatorioVendasFiltros(props: Props) {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Representante</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Representante</label>
           <select
             value={vendedorId}
             onChange={(e) => setVendedorId(e.target.value)}
@@ -104,7 +106,7 @@ export function RelatorioVendasFiltros(props: Props) {
           </select>
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Busca</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Busca</label>
           <input
             type="text"
             value={busca}
@@ -119,7 +121,7 @@ export function RelatorioVendasFiltros(props: Props) {
         {maisFiltrosAbertos ? (
           <>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Cliente</label>
               <select
                 value={clienteId}
                 onChange={(e) => setClienteId(e.target.value)}
@@ -134,7 +136,7 @@ export function RelatorioVendasFiltros(props: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Produto</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Produto</label>
               <select
                 value={produtoId}
                 onChange={(e) => setProdutoId(e.target.value)}
@@ -149,7 +151,7 @@ export function RelatorioVendasFiltros(props: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Motorista</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Motorista</label>
               <select
                 value={motoristaId}
                 onChange={(e) => setMotoristaId(e.target.value)}
@@ -194,19 +196,21 @@ export function RelatorioVendasFiltros(props: Props) {
             <button
               type="button"
               onClick={onExportExcel}
+              disabled={exportando}
               className="btn-secondary h-10 shrink-0"
             >
               <ArrowDownTrayIcon className="w-4 h-4" />
-              Excel
+              {exportando ? "Exportando..." : "Excel"}
             </button>
             <button
               type="button"
               onClick={onExportPdfCompleto}
+              disabled={exportando}
               className="btn-secondary h-10 shrink-0"
               title="Relatório completo para enviar ao cliente (Salvar como PDF na impressão)"
             >
               <ArrowDownTrayIcon className="w-4 h-4" />
-              PDF completo
+              {exportando ? "Exportando..." : "PDF completo"}
             </button>
           </div>
         ) : null}

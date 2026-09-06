@@ -55,6 +55,9 @@ test("GET /api/relatorios/vendas retorna resumos", async () => {
   assert.equal(res.body.resumoClienteProdutos.length, 1);
   assert.equal(res.body.resumoClienteProdutos[0].produtos[0].quantidade, 2);
   assert.equal(res.body.resumoClienteProdutos[0].produtos[0].unidade, "ton");
+  assert.ok(res.body.evolucao);
+  assert.ok(Array.isArray(res.body.evolucao.pontos));
+  assert.ok(["dia", "mes"].includes(res.body.evolucao.granularidade));
 });
 
 test("GET /api/relatorios/vendas com filtros e busca", async () => {
@@ -88,6 +91,156 @@ test("GET /api/relatorios/vendas filtra por motoristaId", async () => {
   const outro = await agent.get("/api/relatorios/vendas").query({ motoristaId: 99999 });
   assert.equal(outro.status, 200);
   assert.equal(outro.body.quantidade, 0);
+});
+
+test("GET /api/relatorios/vendas somenteDetalhes não recalcula agregados", async () => {
+  await criarVenda();
+  const res = await agent.get("/api/relatorios/vendas").query({
+    somenteDetalhes: "true",
+    take: 10,
+    skip: 0,
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.quantidade, 1);
+  assert.equal(res.body.vendas.length, 1);
+  assert.equal(res.body.resumoRepresentantes, undefined);
+  assert.ok(res.body.totalRegistros >= 1);
+});
+
+test("GET /api/relatorios/vendas evolução respeita filtros de data e representante", async () => {
+  await criarVenda();
+  const outroVendedor = await seedVendedor(ctx.tenant.id, { nome: "Outro Rep", comissaoPercentual: 5 });
+  const outroCliente = await seedCliente(ctx.tenant.id, {
+    vendedorId: outroVendedor.id,
+    cnpj: "22333444000192",
+    razaoSocial: "Outro Cliente LTDA",
+    nomeFantasia: "Outro Cliente",
+  });
+  await agent.post("/api/vendas").send({
+    clienteId: outroCliente.id,
+    vendedorId: outroVendedor.id,
+    itens: [{ produtoId: ctx.produto.id, quantidade: 1, precoUnitario: 100 }],
+  });
+
+  const filtrado = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+    vendedorId: ctx.vendedor.id,
+  });
+  assert.equal(filtrado.status, 200);
+  assert.equal(filtrado.body.quantidade, 1);
+  assert.equal(filtrado.body.totalFaturamento, 200);
+  const qtdEvolucao = filtrado.body.evolucao.pontos.reduce((acc, p) => acc + p.quantidade, 0);
+  assert.equal(qtdEvolucao, 1);
+  const fatEvolucao = filtrado.body.evolucao.pontos.reduce((acc, p) => acc + p.faturamento, 0);
+  assert.equal(fatEvolucao, 200);
+});
+
+test("GET /api/relatorios/vendas: totais e evolução não dependem do take da página", async () => {
+  await criarVenda();
+  await criarVenda();
+  const res = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+    take: 1,
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.quantidade, 1);
+  assert.equal(res.body.vendas.length, 1);
+  assert.equal(res.body.totalRegistros, 2);
+  assert.equal(res.body.totalFaturamento, 400);
+  assert.equal(res.body.resumoRepresentantes[0].quantidadeVendas, 2);
+  assert.equal(res.body.resumoClientes[0].quantidadeVendas, 2);
+  const qtdEvo = res.body.evolucao.pontos.reduce((acc, p) => acc + p.quantidade, 0);
+  assert.equal(qtdEvo, 2);
+  const fatEvo = res.body.evolucao.pontos.reduce((acc, p) => acc + p.faturamento, 0);
+  assert.equal(fatEvo, 400);
+  const ticket = res.body.totalFaturamento / res.body.totalRegistros;
+  assert.equal(ticket, 200);
+});
+
+test("GET /api/relatorios/vendas: combinação de filtros e conjunto vazio", async () => {
+  await criarVenda();
+  const outroVendedor = await seedVendedor(ctx.tenant.id, { nome: "Rep B", comissaoPercentual: 2 });
+  const outroCliente = await seedCliente(ctx.tenant.id, {
+    vendedorId: outroVendedor.id,
+    cnpj: "33444555000103",
+    razaoSocial: "Cliente B LTDA",
+    nomeFantasia: "Cliente B",
+  });
+  const outroProduto = await seedProduto(ctx.tenant.id, { nome: "Cal Hidratada", unidade: "saco", codigo: "CH2" });
+  await agent.post("/api/vendas").send({
+    clienteId: outroCliente.id,
+    vendedorId: outroVendedor.id,
+    itens: [{ produtoId: outroProduto.id, quantidade: 3, precoUnitario: 50 }],
+  });
+
+  const soPeriodo = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+  });
+  assert.equal(soPeriodo.body.totalRegistros, 2);
+  assert.equal(soPeriodo.body.totalFaturamento, 350);
+
+  const soRep = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+    vendedorId: ctx.vendedor.id,
+  });
+  assert.equal(soRep.body.totalFaturamento, 200);
+  assert.equal(soRep.body.resumoRepresentantes.length, 1);
+
+  const soCli = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+    clienteId: outroCliente.id,
+  });
+  assert.equal(soCli.body.totalFaturamento, 150);
+  assert.equal(soCli.body.resumoClientes[0].clienteNome, "Cliente B");
+
+  const soProd = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+    produtoId: outroProduto.id,
+  });
+  assert.equal(soProd.body.totalFaturamento, 150);
+  assert.equal(soProd.body.resumoProdutos.length, 1);
+  assert.equal(soProd.body.resumoProdutos[0].produtoNome, "Cal Hidratada");
+
+  const multi = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+    vendedorId: outroVendedor.id,
+    clienteId: outroCliente.id,
+    produtoId: outroProduto.id,
+  });
+  assert.equal(multi.body.totalRegistros, 1);
+  assert.equal(multi.body.totalFaturamento, 150);
+  const fatEvo = multi.body.evolucao.pontos.reduce((acc, p) => acc + p.faturamento, 0);
+  assert.equal(fatEvo, 150);
+
+  const vazio = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "1990-01-01",
+    dataFim: "1990-01-02",
+  });
+  assert.equal(vazio.body.totalRegistros, 0);
+  assert.equal(vazio.body.totalFaturamento, 0);
+  assert.equal(vazio.body.resumoRepresentantes.length, 0);
+  const qtdEvoVazio = vazio.body.evolucao.pontos.reduce((acc, p) => acc + p.quantidade, 0);
+  assert.equal(qtdEvoVazio, 0);
+});
+
+test("GET /api/relatorios/vendas somenteDetalhes respeita os mesmos filtros e tenant", async () => {
+  await criarVenda();
+  const detalhe = await agent.get("/api/relatorios/vendas").query({
+    somenteDetalhes: "true",
+    dataInicio: "1990-01-01",
+    dataFim: "1990-01-02",
+  });
+  assert.equal(detalhe.status, 200);
+  assert.equal(detalhe.body.vendas.length, 0);
+  assert.equal(detalhe.body.totalRegistros, 0);
+  assert.equal(detalhe.body.resumoRepresentantes, undefined);
 });
 
 test("GET /api/relatorios/comissoes emissao e caixa", async () => {

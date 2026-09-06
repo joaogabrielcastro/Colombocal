@@ -13,8 +13,17 @@ const { userHasNavKey } = require("../constants/navPermissions");
 const { comissaoPorEmissao } = require("../services/comissao");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { getDateRange } = require("../utils/dateRangeQuery");
+const { montarEvolucaoPeriodo } = require("../utils/evolucaoVendas");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+
+const VENDA_DETALHE_INCLUDE = {
+  cliente: true,
+  vendedor: true,
+  motorista: true,
+  itens: { include: { produto: true } },
+  fretes: { orderBy: { id: "asc" }, take: 3 },
+};
 
 /** Limite de linhas de venda no relatório de comissões (UI + memória). */
 const COMISSOES_DEFAULT_TAKE = 500;
@@ -72,6 +81,26 @@ router.get("/vendas", async (req, res) => {
     });
     const where = buildVendasWhere(req.query, req.tenantId);
 
+    // Páginas extras para PDF/Excel: só detalhe, sem reprocessar agregados.
+    if (String(req.query.somenteDetalhes || "") === "true") {
+      const [vendasDetalhe, totalDetalhe] = await Promise.all([
+        prisma.venda.findMany({
+          where,
+          include: VENDA_DETALHE_INCLUDE,
+          orderBy: { dataVenda: "desc" },
+          take,
+          skip,
+        }),
+        prisma.venda.count({ where }),
+      ]);
+      setPaginationHeaders(res, { total: totalDetalhe, take, skip });
+      return res.json({
+        vendas: vendasDetalhe,
+        quantidade: vendasDetalhe.length,
+        totalRegistros: totalDetalhe,
+      });
+    }
+
     const aggWhere = { ...where };
     const produtoIdFiltro = req.query.produtoId
       ? parseInt(String(req.query.produtoId), 10)
@@ -83,7 +112,7 @@ router.get("/vendas", async (req, res) => {
         : {}),
     };
 
-    const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg, itensClienteProduto] = await Promise.all([
+    const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg, itensClienteProduto, pontosEvolucao] = await Promise.all([
       prisma.venda.aggregate({
         where: aggWhere,
         _sum: { valorTotal: true, frete: true },
@@ -91,13 +120,7 @@ router.get("/vendas", async (req, res) => {
       }),
       prisma.venda.findMany({
         where,
-        include: {
-          cliente: true,
-          vendedor: true,
-          motorista: true,
-          itens: { include: { produto: true } },
-          fretes: { orderBy: { id: "asc" }, take: 3 },
-        },
+        include: VENDA_DETALHE_INCLUDE,
         orderBy: { dataVenda: "desc" },
         take,
         skip,
@@ -130,6 +153,10 @@ router.get("/vendas", async (req, res) => {
           produto: { select: { nome: true, unidade: true } },
           venda: { select: { clienteId: true } },
         },
+      }),
+      prisma.venda.findMany({
+        where,
+        select: { dataVenda: true, valorTotal: true },
       }),
     ]);
 
@@ -229,6 +256,12 @@ router.get("/vendas", async (req, res) => {
       clienteMap,
     );
 
+    const evolucao = montarEvolucaoPeriodo(
+      pontosEvolucao,
+      req.query.dataInicio,
+      req.query.dataFim,
+    );
+
     setPaginationHeaders(res, { total, take, skip });
     res.json({
       vendas,
@@ -241,6 +274,7 @@ router.get("/vendas", async (req, res) => {
       resumoClientes,
       resumoProdutos,
       resumoClienteProdutos,
+      evolucao,
     });
   } catch (error) {
     handleRouteError(res, error);

@@ -16,6 +16,7 @@ export type ResumoCliente = {
   nome: string;
   total: number;
   quantidade: number;
+  participacao: number;
 };
 
 export type ResumoProduto = {
@@ -23,6 +24,7 @@ export type ResumoProduto = {
   quantidade: number;
   total: number;
   unidade: string;
+  participacao: number;
 };
 
 export type ResumoClienteProdutoLinha = {
@@ -84,6 +86,7 @@ export function montarResumoRelatorioVendas(data: RelVendas | null) {
         nome: v.cliente.nomeFantasia || v.cliente.razaoSocial,
         total: 0,
         quantidade: 0,
+        participacao: 0,
       };
     }
     porCliente[v.clienteId].total += parseFloat(String(v.valorTotal));
@@ -106,12 +109,16 @@ export function montarResumoRelatorioVendas(data: RelVendas | null) {
           quantidade: 0,
           total: 0,
           unidade: item.produto.unidade,
+          participacao: 0,
         };
       }
       porProduto[item.produtoId].quantidade += parseFloat(String(item.quantidade));
       porProduto[item.produtoId].total += parseFloat(String(item.subtotal));
     });
   });
+
+  const totalFat = data?.totalFaturamento ?? 0;
+  const partPct = (valor: number) => (totalFat > 0 ? (valor / totalFat) * 100 : 0);
 
   const resumoRepresentantes: ResumoRepresentante[] =
     data?.resumoRepresentantes?.map((r) => ({
@@ -130,8 +137,7 @@ export function montarResumoRelatorioVendas(data: RelVendas | null) {
         frete: 0,
         quantidade: x.quantidade,
         ticketMedio: x.quantidade > 0 ? x.total / x.quantidade : 0,
-        participacao:
-          data && data.totalFaturamento > 0 ? (x.total / data.totalFaturamento) * 100 : 0,
+        participacao: partPct(x.total),
       }));
 
   const resumoClientes: ResumoCliente[] =
@@ -139,7 +145,11 @@ export function montarResumoRelatorioVendas(data: RelVendas | null) {
       nome: r.clienteNome,
       total: r.faturamento,
       quantidade: r.quantidadeVendas,
-    })) ?? Object.values(porCliente).sort((a, b) => b.total - a.total);
+      participacao: partPct(r.faturamento),
+    })) ??
+    Object.values(porCliente)
+      .map((c) => ({ ...c, participacao: partPct(c.total) }))
+      .sort((a, b) => b.total - a.total);
 
   const resumoProdutos: ResumoProduto[] =
     data?.resumoProdutos?.map((r) => ({
@@ -147,7 +157,11 @@ export function montarResumoRelatorioVendas(data: RelVendas | null) {
       quantidade: r.quantidade,
       total: r.faturamento,
       unidade: r.unidade || "",
-    })) ?? Object.values(porProduto).sort((a, b) => b.total - a.total);
+      participacao: partPct(r.faturamento),
+    })) ??
+    Object.values(porProduto)
+      .map((p) => ({ ...p, participacao: partPct(p.total) }))
+      .sort((a, b) => b.total - a.total);
 
   const resumoClienteProdutos: ResumoClienteProduto[] =
     data?.resumoClienteProdutos?.map((r) => ({
@@ -174,4 +188,42 @@ export function ordenarResumoRepresentantes(
     if (repSort.key === "participacao") return (a.participacao - b.participacao) * dir;
     return (a.total - b.total) * dir;
   });
+}
+
+/** Representante cadastrado como categoria "sem comissão" (não inventa regra de cálculo). */
+export function isRepresentanteSemComissao(nome: string): boolean {
+  const n = String(nome || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return n === "SEM COMISSAO" || n === "SEN COMISSAO";
+}
+
+export type ResumoComissaoVisual = {
+  temSemComissao: boolean;
+  totalSem: number;
+  quantidadeSem: number;
+  participacaoSem: number;
+  totalCom: number;
+  quantidadeCom: number;
+};
+
+export function resumoComissaoVisual(
+  representantes: ResumoRepresentante[],
+  totalFaturamento: number,
+): ResumoComissaoVisual {
+  const sem = representantes.filter((r) => isRepresentanteSemComissao(r.nome));
+  const totalSem = sem.reduce((acc, r) => acc + r.total, 0);
+  const quantidadeSem = sem.reduce((acc, r) => acc + r.quantidade, 0);
+  const quantidadeTotal = representantes.reduce((acc, r) => acc + r.quantidade, 0);
+  return {
+    temSemComissao: sem.length > 0,
+    totalSem,
+    quantidadeSem,
+    participacaoSem: totalFaturamento > 0 ? (totalSem / totalFaturamento) * 100 : 0,
+    totalCom: Math.max(0, totalFaturamento - totalSem),
+    quantidadeCom: Math.max(0, quantidadeTotal - quantidadeSem),
+  };
 }

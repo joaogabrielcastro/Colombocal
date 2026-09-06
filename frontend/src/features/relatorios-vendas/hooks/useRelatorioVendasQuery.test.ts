@@ -6,7 +6,7 @@ vi.mock("@/lib/api", () => ({
   apiFetchWithMeta: (...args: unknown[]) => apiFetchWithMeta(...args),
 }));
 
-import { useRelatorioVendasQuery } from "./useRelatorioVendasQuery";
+import { fetchVendasDetalhesCompletos, useRelatorioVendasQuery } from "./useRelatorioVendasQuery";
 import { createQueryWrapper } from "@/test-utils/reactQuery";
 import type { RelatorioVendasParams } from "../types";
 
@@ -84,5 +84,41 @@ describe("useRelatorioVendasQuery", () => {
     expect(url).not.toContain("vendedorId=");
     expect(url).not.toContain("dataInicio=");
     expect(url).toContain("take=500");
+  });
+});
+
+describe("fetchVendasDetalhesCompletos", () => {
+  it("não busca de novo quando a página já tem todos os registros", async () => {
+    const atual = {
+      vendas: [{ id: 1 }] as never,
+      totalFaturamento: 10,
+      totalQuantidade: 0,
+      quantidade: 1,
+      totalRegistros: 1,
+    };
+    const out = await fetchVendasDetalhesCompletos(params, atual);
+    expect(out.vendas).toHaveLength(1);
+    expect(apiFetchWithMeta).not.toHaveBeenCalled();
+  });
+
+  it("completa o detalhe com páginas somenteDetalhes", async () => {
+    apiFetchWithMeta.mockResolvedValue({
+      data: { vendas: [{ id: 2 }, { id: 3 }] },
+      meta: {},
+    });
+    const atual = {
+      vendas: [{ id: 1 }] as never,
+      totalFaturamento: 30,
+      totalQuantidade: 0,
+      quantidade: 1,
+      totalRegistros: 3,
+    };
+    const out = await fetchVendasDetalhesCompletos(params, atual);
+    expect(out.vendas.map((v) => v.id)).toEqual([1, 2, 3]);
+    expect(out.totalFaturamento).toBe(30);
+    const url = apiFetchWithMeta.mock.calls[0][0] as string;
+    expect(url).toContain("somenteDetalhes=true");
+    expect(url).toContain("skip=1");
+    expect(url).toContain("busca=cal");
   });
 });
