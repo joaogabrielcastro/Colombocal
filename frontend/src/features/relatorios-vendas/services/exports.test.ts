@@ -108,6 +108,19 @@ describe("exportarRelatorioVendasPdfSecao", () => {
     expect(win.document.write).toHaveBeenCalled();
   });
 
+  it("Produtos por cliente não impede quebra de página da tabela", () => {
+    exportarRelatorioVendasPdfSecao("clienteProdutos", {
+      data: makeData(),
+      dataInicio: "2026-01-01",
+      dataFim: "2026-12-31",
+      ...resumo,
+    });
+    const html = String(win.document.write.mock.calls[0][0]);
+    expect(html).toContain(".secao { page-break-inside: auto; break-inside: auto; }");
+    expect(html).toContain("thead { display: table-header-group; }");
+    expect(html).toContain(".meta + .secao-detalhes { page-break-before: auto; }");
+  });
+
   it("exportarRelatorioVendasPdfCompleto inclui todas as seções", () => {
     exportarRelatorioVendasPdfCompleto({
       data: makeData(),

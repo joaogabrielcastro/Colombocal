@@ -25,6 +25,9 @@ type Props = {
   onExportPdfSecao: (secao: RelatorioVendasPdfSecao) => void;
 };
 
+/** Na tela: recorte curto. A lista inteira vai no PDF da seção. */
+export const LIMITE_LISTA_ABA = 8;
+
 function SecaoHeader({
   title,
   secao,
@@ -42,6 +45,31 @@ function SecaoHeader({
   );
 }
 
+function RodapeListaPdf({
+  visiveis,
+  total,
+  rotulo,
+}: {
+  visiveis: number;
+  total: number;
+  rotulo: string;
+}) {
+  if (total <= visiveis) return null;
+  return (
+    <p className="px-4 sm:px-5 py-3 text-xs text-gray-500 border-t border-gray-100 bg-slate-50/70">
+      {visiveis} de {total} {rotulo} na tela. Lista completa no PDF desta seção.
+    </p>
+  );
+}
+
+function NomeCurto({ nome }: { nome: string }) {
+  return (
+    <span className="block truncate" title={nome}>
+      {nome}
+    </span>
+  );
+}
+
 export function RelatorioVendasResumo({
   freteEnabled = true,
   totalRegistros,
@@ -55,6 +83,10 @@ export function RelatorioVendasResumo({
   sortIndicator,
   onExportPdfSecao,
 }: Props) {
+  const clientesAba = resumoClientes.slice(0, LIMITE_LISTA_ABA);
+  const produtosAba = resumoProdutos.slice(0, LIMITE_LISTA_ABA);
+  const clienteProdutosAba = resumoClienteProdutos.slice(0, LIMITE_LISTA_ABA);
+
   return (
     <>
       <div className="flex items-center justify-between gap-2 mb-3 print:hidden">
@@ -177,18 +209,20 @@ export function RelatorioVendasResumo({
             onExportPdfSecao={onExportPdfSecao}
           />
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px]">
+            <table className="w-full table-fixed min-w-[280px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-slate-50/80">
                   <th className="table-header text-left px-4 py-3">Cliente</th>
-                  <th className="table-header text-right px-4 py-3">Qtd</th>
-                  <th className="table-header text-right px-4 py-3">Total</th>
+                  <th className="table-header text-right px-4 py-3 w-14">Qtd</th>
+                  <th className="table-header text-right px-4 py-3 w-[6.5rem]">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {resumoClientes.map((c, i) => (
+                {clientesAba.map((c, i) => (
                   <tr key={i} className="table-row">
-                    <td className="table-cell px-4 py-3 font-medium">{c.nome}</td>
+                    <td className="table-cell px-4 py-3 font-medium">
+                      <NomeCurto nome={c.nome} />
+                    </td>
                     <td className="table-cell text-right px-4 py-3 text-gray-500 tabular-nums">
                       {c.quantidade}
                     </td>
@@ -200,6 +234,11 @@ export function RelatorioVendasResumo({
               </tbody>
             </table>
           </div>
+          <RodapeListaPdf
+            visiveis={clientesAba.length}
+            total={resumoClientes.length}
+            rotulo="clientes"
+          />
         </div>
 
         <div className="card overflow-hidden">
@@ -209,18 +248,20 @@ export function RelatorioVendasResumo({
             onExportPdfSecao={onExportPdfSecao}
           />
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px]">
+            <table className="w-full table-fixed min-w-[280px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-slate-50/80">
                   <th className="table-header text-left px-4 py-3">Produto</th>
-                  <th className="table-header text-right px-4 py-3">Quantidade</th>
-                  <th className="table-header text-right px-4 py-3">Total</th>
+                  <th className="table-header text-right px-4 py-3 w-28">Quantidade</th>
+                  <th className="table-header text-right px-4 py-3 w-[6.5rem]">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {resumoProdutos.map((p, i) => (
+                {produtosAba.map((p, i) => (
                   <tr key={i} className="table-row">
-                    <td className="table-cell px-4 py-3 font-medium">{p.nome}</td>
+                    <td className="table-cell px-4 py-3 font-medium">
+                      <NomeCurto nome={p.nome} />
+                    </td>
                     <td className="table-cell text-right px-4 py-3 text-gray-500 tabular-nums">
                       {p.quantidade.toLocaleString("pt-BR")} {p.unidade}
                     </td>
@@ -232,6 +273,11 @@ export function RelatorioVendasResumo({
               </tbody>
             </table>
           </div>
+          <RodapeListaPdf
+            visiveis={produtosAba.length}
+            total={resumoProdutos.length}
+            rotulo="produtos"
+          />
         </div>
       </div>
 
@@ -243,29 +289,31 @@ export function RelatorioVendasResumo({
             onExportPdfSecao={onExportPdfSecao}
           />
           <p className="px-4 sm:px-5 pt-3 text-sm text-gray-500">
-            Quanto cada cliente levou de cada produto no período (sacos, toneladas, etc.).
+            Preview na tela. Use o PDF para a lista completa de cada cliente.
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px]">
+            <table className="w-full table-fixed min-w-[480px]">
               <thead>
                 <tr className="border-b border-gray-100 bg-slate-50/80">
                   <th className="table-header text-left px-4 py-3">Cliente</th>
                   <th className="table-header text-left px-4 py-3">Produto</th>
-                  <th className="table-header text-right px-4 py-3">Quantidade</th>
-                  <th className="table-header text-right px-4 py-3">Total</th>
+                  <th className="table-header text-right px-4 py-3 w-36">Quantidade</th>
+                  <th className="table-header text-right px-4 py-3 w-[6.5rem]">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {resumoClienteProdutos.map((c) =>
+                {clienteProdutosAba.map((c) =>
                   c.produtos.map((p, pi) => (
                     <tr
                       key={`${c.nome}-${p.produtoNome}-${pi}`}
                       className={`table-row ${pi === 0 ? "border-t border-gray-200" : ""}`}
                     >
                       <td className="table-cell px-4 py-3 font-medium">
-                        {pi === 0 ? c.nome : ""}
+                        {pi === 0 ? <NomeCurto nome={c.nome} /> : ""}
                       </td>
-                      <td className="table-cell px-4 py-3">{p.produtoNome}</td>
+                      <td className="table-cell px-4 py-3">
+                        <NomeCurto nome={p.produtoNome} />
+                      </td>
                       <td className="table-cell text-right px-4 py-3 text-gray-700 tabular-nums">
                         {formatQuantidade(p.quantidade, p.unidade)}
                       </td>
@@ -278,6 +326,11 @@ export function RelatorioVendasResumo({
               </tbody>
             </table>
           </div>
+          <RodapeListaPdf
+            visiveis={clienteProdutosAba.length}
+            total={resumoClienteProdutos.length}
+            rotulo="clientes"
+          />
         </div>
       ) : null}
     </>

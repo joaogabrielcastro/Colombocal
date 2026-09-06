@@ -54,8 +54,11 @@ const PDF_STYLES = `
   h2:first-of-type { margin-top: 16px; }
   .meta { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
   .hint { margin-top: 16px; font-size: 10px; color: #666; }
-  .secao { page-break-inside: avoid; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .secao { page-break-inside: auto; break-inside: auto; }
+  .secao-compacta { page-break-inside: avoid; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: auto; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
   th, td { border: 1px solid #e5e7eb; padding: 8px; font-size: 12px; text-align: left; }
   th { background: #f3f4f6; }
   td.num, th.num { text-align: right; white-space: nowrap; }
@@ -65,8 +68,11 @@ const PDF_STYLES = `
   .kpi label { display: block; font-size: 11px; color: #6b7280; }
   .kpi strong { font-size: 18px; }
   @media print {
+    body { padding: 12px; }
     h2 { page-break-before: auto; }
     .secao-detalhes { page-break-before: always; }
+    /* Seção única (ex.: só produtos por cliente / só detalhamento): não deixa a 1ª folha vazia. */
+    .meta + .secao-detalhes { page-break-before: auto; }
   }
 `;
 
@@ -112,7 +118,7 @@ function htmlTotais(data: RelVendas, freteEnabled: boolean) {
   const freteKpi = freteEnabled
     ? `<div class="kpi"><label>Frete total</label><strong>${escapeHtml(formatMoney(data.totalFrete ?? 0))}</strong></div>`
     : "";
-  return `<div class="secao">
+  return `<div class="secao secao-compacta">
     <h2>Resumo geral</h2>
     <div class="kpis">
       <div class="kpi"><label>Vendas no período</label><strong>${totalRegistros}</strong></div>
