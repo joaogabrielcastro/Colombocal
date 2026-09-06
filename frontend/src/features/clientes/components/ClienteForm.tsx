@@ -21,6 +21,13 @@ export type ClienteFormState = {
   fretePadrao?: string | number;
   vendedorId?: string | number | null;
   comissaoFixaPercentual?: string | number | null;
+  inscricaoEstadual?: string | null;
+  indIEDest?: string | number | null;
+  cep?: string | null;
+  bairro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  codigoMunicipio?: string | null;
 };
 
 type Props = {
@@ -28,6 +35,7 @@ type Props = {
   form: ClienteFormState;
   setForm: Dispatch<SetStateAction<ClienteFormState>>;
   freteEnabled: boolean;
+  nfeEnabled?: boolean;
   permiteCpf?: boolean;
   tipoPessoa?: TipoPessoa;
   setTipoPessoa?: (t: TipoPessoa) => void;
@@ -66,6 +74,7 @@ export function ClienteForm({
   form,
   setForm,
   freteEnabled,
+  nfeEnabled = false,
   permiteCpf = false,
   tipoPessoa = 'PJ',
   setTipoPessoa,
@@ -229,6 +238,68 @@ export function ClienteForm({
           <Field label="Endereço" className="md:col-span-2">
             <input value={form.endereco ?? ''} onChange={setField('endereco')} className="input-field" />
           </Field>
+
+          {nfeEnabled ? (
+            <>
+              <Field label="Número">
+                <input
+                  value={form.numero ?? ''}
+                  onChange={setField('numero')}
+                  className="input-field"
+                  placeholder="123"
+                />
+              </Field>
+              <Field label="Bairro">
+                <input value={form.bairro ?? ''} onChange={setField('bairro')} className="input-field" />
+              </Field>
+              <Field label="Complemento">
+                <input value={form.complemento ?? ''} onChange={setField('complemento')} className="input-field" />
+              </Field>
+              <Field label="CEP">
+                <input
+                  value={form.cep ?? ''}
+                  onChange={setField('cep')}
+                  className="input-field"
+                  placeholder="00000-000"
+                  maxLength={9}
+                />
+              </Field>
+              <Field label="Código IBGE do município">
+                <input
+                  value={form.codigoMunicipio ?? ''}
+                  onChange={setField('codigoMunicipio')}
+                  className="input-field"
+                  placeholder="7 dígitos"
+                  maxLength={7}
+                />
+              </Field>
+              <Field label="Inscrição estadual">
+                <input
+                  value={form.inscricaoEstadual ?? ''}
+                  onChange={setField('inscricaoEstadual')}
+                  className="input-field"
+                  placeholder="Números ou ISENTO"
+                />
+              </Field>
+              <Field label="Indicador IE (destinatário)">
+                <select
+                  className="input-field"
+                  value={form.indIEDest == null || form.indIEDest === '' ? '' : String(form.indIEDest)}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      indIEDest: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                >
+                  <option value="">Automático</option>
+                  <option value="1">1 — Contribuinte ICMS</option>
+                  <option value="2">2 — Contribuinte isento</option>
+                  <option value="9">9 — Não contribuinte</option>
+                </select>
+              </Field>
+            </>
+          ) : null}
 
           {freteEnabled ? (
             <>

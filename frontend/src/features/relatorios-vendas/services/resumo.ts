@@ -25,6 +25,54 @@ export type ResumoProduto = {
   unidade: string;
 };
 
+export type ResumoClienteProdutoLinha = {
+  produtoNome: string;
+  unidade: string;
+  quantidade: number;
+  total: number;
+};
+
+export type ResumoClienteProduto = {
+  nome: string;
+  produtos: ResumoClienteProdutoLinha[];
+};
+
+function agregarClienteProdutosDasVendas(
+  data: RelVendas | null,
+): ResumoClienteProduto[] {
+  const porCliente = new Map<
+    number,
+    { nome: string; produtos: Map<number, ResumoClienteProdutoLinha> }
+  >();
+  data?.vendas.forEach((v) => {
+    if (!porCliente.has(v.clienteId)) {
+      porCliente.set(v.clienteId, {
+        nome: v.cliente.nomeFantasia || v.cliente.razaoSocial,
+        produtos: new Map(),
+      });
+    }
+    const row = porCliente.get(v.clienteId)!;
+    v.itens?.forEach((item) => {
+      const atual = row.produtos.get(item.produtoId) || {
+        produtoNome: item.produto.nome,
+        unidade: item.produto.unidade,
+        quantidade: 0,
+        total: 0,
+      };
+      atual.quantidade += parseFloat(String(item.quantidade));
+      atual.total += parseFloat(String(item.subtotal));
+      row.produtos.set(item.produtoId, atual);
+    });
+  });
+  return [...porCliente.values()]
+    .map((c) => ({
+      nome: c.nome,
+      produtos: [...c.produtos.values()].sort((a, b) => b.quantidade - a.quantidade),
+    }))
+    .filter((c) => c.produtos.length > 0)
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
 export function montarResumoRelatorioVendas(data: RelVendas | null) {
   const porCliente: Record<number, ResumoCliente> = {};
   const porVendedor: Record<number, { nome: string; total: number; quantidade: number }> = {};
@@ -101,7 +149,18 @@ export function montarResumoRelatorioVendas(data: RelVendas | null) {
       unidade: r.unidade || "",
     })) ?? Object.values(porProduto).sort((a, b) => b.total - a.total);
 
-  return { resumoRepresentantes, resumoClientes, resumoProdutos };
+  const resumoClienteProdutos: ResumoClienteProduto[] =
+    data?.resumoClienteProdutos?.map((r) => ({
+      nome: r.clienteNome,
+      produtos: r.produtos.map((p) => ({
+        produtoNome: p.produtoNome,
+        unidade: p.unidade || "",
+        quantidade: p.quantidade,
+        total: p.faturamento,
+      })),
+    })) ?? agregarClienteProdutosDasVendas(data);
+
+  return { resumoRepresentantes, resumoClientes, resumoProdutos, resumoClienteProdutos };
 }
 
 export function ordenarResumoRepresentantes(

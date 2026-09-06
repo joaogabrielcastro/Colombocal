@@ -6,6 +6,7 @@ type Props = {
   form: Partial<Cliente>;
   setForm: Dispatch<SetStateAction<Partial<Cliente>>>;
   freteEnabled: boolean;
+  nfeEnabled?: boolean;
   erro: string;
   salvando: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -17,6 +18,7 @@ export function ClienteEditForm({
   form,
   setForm,
   freteEnabled,
+  nfeEnabled = false,
   erro,
   salvando,
   onSubmit,
@@ -29,6 +31,7 @@ export function ClienteEditForm({
       form={form as ClienteFormState}
       setForm={setForm as Dispatch<SetStateAction<ClienteFormState>>}
       freteEnabled={freteEnabled}
+      nfeEnabled={nfeEnabled}
       loadVendedorOptions={loadVendedorOptions}
       loadVendedorLabelById={loadVendedorLabelById}
       erro={erro}

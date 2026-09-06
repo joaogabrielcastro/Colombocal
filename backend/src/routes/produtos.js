@@ -12,9 +12,28 @@ const {
   parseOptionalString,
   parseNumberField,
 } = require("../utils/validation");
+const { z } = require("zod");
+const { produtoFiscalPatch } = require("../schemas/produtoFiscal");
+
+const produtoFiscalSchema = z.object(produtoFiscalPatch).partial();
 
 function tw(req) {
   return { tenantId: req.tenantId };
+}
+
+function pickProdutoFiscal(body) {
+  const parsed = produtoFiscalSchema.safeParse(body || {});
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message || "Dados fiscais do produto inválidos";
+    const err = new Error(msg);
+    err.httpStatus = 400;
+    throw err;
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(parsed.data)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
 }
 
 // GET /api/produtos
@@ -102,6 +121,7 @@ router.post("/", async (req, res) => {
           precoPadrao,
           unidade,
           pesoKg: pesoKg != null && pesoKg > 0 ? pesoKg : null,
+          ...pickProdutoFiscal(req.body),
         },
       });
       await registrarAuditoria(tx, req, {
@@ -162,6 +182,7 @@ router.put("/:id", async (req, res) => {
         data.pesoKg = peso > 0 ? peso : null;
       }
     }
+    Object.assign(data, pickProdutoFiscal(req.body));
     const produto = await prisma.$transaction(async (tx) => {
       const updated = await tx.produto.updateMany({
         where: { id, ...tw(req) },

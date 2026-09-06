@@ -73,7 +73,17 @@ router.get("/vendas", async (req, res) => {
     const where = buildVendasWhere(req.query, req.tenantId);
 
     const aggWhere = { ...where };
-    const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg] = await Promise.all([
+    const produtoIdFiltro = req.query.produtoId
+      ? parseInt(String(req.query.produtoId), 10)
+      : NaN;
+    const itemWhere = {
+      venda: where,
+      ...(Number.isFinite(produtoIdFiltro) && produtoIdFiltro > 0
+        ? { produtoId: produtoIdFiltro }
+        : {}),
+    };
+
+    const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg, itensClienteProduto] = await Promise.all([
       prisma.venda.aggregate({
         where: aggWhere,
         _sum: { valorTotal: true, frete: true },
@@ -111,6 +121,16 @@ router.get("/vendas", async (req, res) => {
         _sum: { quantidade: true, subtotal: true },
         _count: { id: true },
       }),
+      prisma.itemVenda.findMany({
+        where: itemWhere,
+        select: {
+          produtoId: true,
+          quantidade: true,
+          subtotal: true,
+          produto: { select: { nome: true, unidade: true } },
+          venda: { select: { clienteId: true } },
+        },
+      }),
     ]);
 
     const totalFaturamento = parseFloat(totaisAgg._sum.valorTotal || 0);
@@ -122,7 +142,12 @@ router.get("/vendas", async (req, res) => {
     );
 
     const vendedorIds = porVendedorAgg.map((x) => x.vendedorId).filter(Boolean);
-    const clienteIds = porClienteAgg.map((x) => x.clienteId).filter(Boolean);
+    const clienteIds = [
+      ...new Set([
+        ...porClienteAgg.map((x) => x.clienteId),
+        ...itensClienteProduto.map((i) => i.venda?.clienteId),
+      ]),
+    ].filter(Boolean);
     const produtoIds = porProdutoAgg.map((x) => x.produtoId).filter(Boolean);
 
     const [vendedores, clientes, produtos] = await Promise.all([
@@ -199,6 +224,11 @@ router.get("/vendas", async (req, res) => {
       })
       .sort((a, b) => b.faturamento - a.faturamento);
 
+    const resumoClienteProdutos = agruparResumoClienteProdutos(
+      itensClienteProduto,
+      clienteMap,
+    );
+
     setPaginationHeaders(res, { total, take, skip });
     res.json({
       vendas,
@@ -210,6 +240,7 @@ router.get("/vendas", async (req, res) => {
       resumoRepresentantes,
       resumoClientes,
       resumoProdutos,
+      resumoClienteProdutos,
     });
   } catch (error) {
     handleRouteError(res, error);
@@ -1026,5 +1057,42 @@ router.get("/exports/:jobId/download", async (req, res) => {
     handleRouteError(res, error);
   }
 });
+
+function agruparResumoClienteProdutos(itens, clienteMap) {
+  const byCliente = new Map();
+  for (const item of itens) {
+    const clienteId = item.venda?.clienteId;
+    if (!clienteId) continue;
+    if (!byCliente.has(clienteId)) {
+      const cliente = clienteMap.get(clienteId);
+      byCliente.set(clienteId, {
+        clienteId,
+        clienteNome:
+          cliente?.nomeFantasia?.trim() ||
+          cliente?.razaoSocial ||
+          `Cliente #${clienteId}`,
+        produtos: new Map(),
+      });
+    }
+    const row = byCliente.get(clienteId);
+    const existing = row.produtos.get(item.produtoId) || {
+      produtoId: item.produtoId,
+      produtoNome: item.produto?.nome || `Produto #${item.produtoId}`,
+      unidade: item.produto?.unidade || "",
+      quantidade: 0,
+      faturamento: 0,
+    };
+    existing.quantidade += parseFloat(String(item.quantidade || 0));
+    existing.faturamento += parseFloat(String(item.subtotal || 0));
+    row.produtos.set(item.produtoId, existing);
+  }
+  return [...byCliente.values()]
+    .map((c) => ({
+      clienteId: c.clienteId,
+      clienteNome: c.clienteNome,
+      produtos: [...c.produtos.values()].sort((a, b) => b.quantidade - a.quantidade),
+    }))
+    .sort((a, b) => a.clienteNome.localeCompare(b.clienteNome, "pt-BR"));
+}
 
 module.exports = router;

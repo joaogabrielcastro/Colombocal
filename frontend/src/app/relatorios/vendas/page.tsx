@@ -64,7 +64,7 @@ export default function RelatorioVendasPage() {
     exportarRelatorioVendasExcel(data, dataInicio, dataFim);
   };
 
-  const { resumoRepresentantes, resumoClientes, resumoProdutos } = useMemo(
+  const { resumoRepresentantes, resumoClientes, resumoProdutos, resumoClienteProdutos } = useMemo(
     () => montarResumoRelatorioVendas(data),
     [data],
   );
@@ -82,6 +82,7 @@ export default function RelatorioVendasPage() {
             resumoRepresentantes: resumoRepresentantesOrdenado,
             resumoClientes,
             resumoProdutos,
+            resumoClienteProdutos,
             freteEnabled,
           }
         : null,
@@ -92,6 +93,7 @@ export default function RelatorioVendasPage() {
       resumoRepresentantesOrdenado,
       resumoClientes,
       resumoProdutos,
+      resumoClienteProdutos,
       freteEnabled,
     ],
   );
@@ -219,6 +221,7 @@ export default function RelatorioVendasPage() {
             resumoRepresentantesOrdenado={resumoRepresentantesOrdenado}
             resumoClientes={resumoClientes}
             resumoProdutos={resumoProdutos}
+            resumoClienteProdutos={resumoClienteProdutos}
             onSortRep={toggleRepSort}
             sortIndicator={sortIndicator}
             onExportPdfSecao={exportarPdfSecao}

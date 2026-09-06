@@ -31,7 +31,7 @@ export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { freteEnabled } = useTenantFeatures();
+  const { freteEnabled, nfeEnabled } = useTenantFeatures();
   const [aba, setAba] = useState<ClienteAba>("conta");
   const detail = useClienteDetail(id, freteEnabled, { onClienteSalvo: () => setAba("conta") });
 
@@ -99,7 +99,7 @@ export default function ClienteDetailPage() {
       {aba === "cheques" && <ClienteChequesTab clienteId={id} cheques={detail.cheques} filtroChqIni={detail.filtroChqIni} filtroChqFim={detail.filtroChqFim} buscaChq={detail.buscaChq} setFiltroChqIni={detail.setFiltroChqIni} setFiltroChqFim={detail.setFiltroChqFim} setBuscaChq={detail.setBuscaChq} onFiltrar={() => void detail.carregarCheques()} />}
       {aba === "precos" && <ClientePrecosTab produtos={detail.produtos} precosEdit={detail.precosEdit} setPrecosEdit={detail.setPrecosEdit} salvando={detail.salvandoPrecos} onSalvar={() => void detail.handleSalvarPrecos()} />}
       {aba === "comissoes" && <ClienteComissoesTab comissoesData={detail.comissoesData} comissoesEdit={detail.comissoesEdit} setComissoesEdit={detail.setComissoesEdit} salvando={detail.salvandoComissoes} onSalvar={() => void detail.handleSalvarComissoes()} />}
-      {aba === "editar" && <ClienteEditForm form={detail.form} setForm={detail.setForm} freteEnabled={freteEnabled} erro={detail.erro} salvando={detail.salvandoForm} onSubmit={detail.handleSalvarCliente} loadVendedorOptions={detail.loadVendedorOptions} loadVendedorLabelById={detail.loadVendedorLabelById} />}
+      {aba === "editar" && <ClienteEditForm form={detail.form} setForm={detail.setForm} freteEnabled={freteEnabled} nfeEnabled={nfeEnabled} erro={detail.erro} salvando={detail.salvandoForm} onSubmit={detail.handleSalvarCliente} loadVendedorOptions={detail.loadVendedorOptions} loadVendedorLabelById={detail.loadVendedorLabelById} />}
     </div>
   );
 }

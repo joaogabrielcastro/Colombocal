@@ -22,6 +22,8 @@ const TIPO_LABEL = {
   PRODUTO_CRIADO: "Produto criado",
   PRODUTO_ATUALIZADO: "Produto editado",
   PRODUTO_INATIVADO: "Produto inativado",
+  NFE_EMITIDA: "NF-e emitida",
+  NFE_CANCELADA: "NF-e cancelada",
   COMISSAO_AJUSTE_LOTE: "Ajuste de comissão (lote)",
   USER_NAV_PERMISSOES: "Permissões de menu",
 };

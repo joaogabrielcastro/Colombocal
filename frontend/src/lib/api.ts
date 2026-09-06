@@ -208,6 +208,31 @@ export async function apiFetchWithMeta<T>(
   throw new ApiError('Falha após retentativas', 0);
 }
 
+export async function apiFetchBlob(path: string): Promise<{
+  blob: Blob;
+  contentType: string;
+  filename: string | null;
+}> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    const parsed = await parseJsonSafe(text);
+    if (res.status === 401) handleUnauthorized();
+    throw new ApiError(messageFromErrorBody(parsed, res.status), res.status, parsed);
+  }
+  const cd = res.headers.get('content-disposition');
+  const match = cd?.match(/filename="?([^"]+)"?/i);
+  return {
+    blob: await res.blob(),
+    contentType: res.headers.get('content-type') || 'application/octet-stream',
+    filename: match?.[1] ?? null,
+  };
+}
+
 export const api = {
   get: <T>(path: string, options?: FetchOptions) =>
     apiFetch<T>(path, { ...options, method: 'GET' }),
@@ -233,6 +258,7 @@ export const api = {
     }),
   delete: <T>(path: string, options?: FetchOptions) =>
     apiFetch<T>(path, { ...options, method: 'DELETE' }),
+  getBlob: (path: string) => apiFetchBlob(path),
 };
 
 export default api;

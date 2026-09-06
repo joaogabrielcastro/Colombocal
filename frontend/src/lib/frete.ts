@@ -13,7 +13,7 @@ export function roundMoney(n: unknown): number {
   return Math.round((toNum(n) + Number.EPSILON) * 100) / 100;
 }
 
-function normalizarUnidade(unidadeRaw: unknown): string {
+export function normalizarUnidade(unidadeRaw: unknown): string {
   const u = String(unidadeRaw || "")
     .trim()
     .toLowerCase();

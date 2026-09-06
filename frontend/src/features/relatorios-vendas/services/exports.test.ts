@@ -53,12 +53,13 @@ const resumo = {
 };
 
 describe("RELATORIO_VENDAS_PDF_SECOES", () => {
-  it("lista as 5 seções", () => {
+  it("lista as 6 seções", () => {
     expect(RELATORIO_VENDAS_PDF_SECOES.map((s) => s.id)).toEqual([
       "totais",
       "representantes",
       "clientes",
       "produtos",
+      "clienteProdutos",
       "detalhes",
     ]);
   });
@@ -76,7 +77,7 @@ describe("exportarRelatorioVendasPdfSecao", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  const secoes = ["totais", "representantes", "clientes", "produtos", "detalhes"] as const;
+  const secoes = ["totais", "representantes", "clientes", "produtos", "clienteProdutos", "detalhes"] as const;
   for (const secao of secoes) {
     it(`gera a seção ${secao}`, () => {
       exportarRelatorioVendasPdfSecao(secao, {
@@ -120,6 +121,7 @@ describe("exportarRelatorioVendasPdfSecao", () => {
     expect(html).toContain("Por representante");
     expect(html).toContain("Por cliente");
     expect(html).toContain("Por produto");
+    expect(html).toContain("Produtos por cliente");
     expect(html).toContain("Detalhamento das vendas");
     expect(win.print).toHaveBeenCalled();
   });

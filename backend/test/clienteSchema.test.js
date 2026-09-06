@@ -71,6 +71,14 @@ test("update: aceita campos parciais", () => {
   assert.equal(res.success, true);
 });
 
+test("update: omitir CEP/IE não zera campos fiscais", () => {
+  const res = clienteUpdateSchema.safeParse({ razaoSocial: "Novo" });
+  assert.equal(res.success, true);
+  assert.equal(res.data.cep, undefined);
+  assert.equal(res.data.inscricaoEstadual, undefined);
+  assert.equal(res.data.indIEDest, undefined);
+});
+
 test("update: rejeita razaoSocial vazia", () => {
   const res = clienteUpdateSchema.safeParse({ razaoSocial: "" });
   assert.equal(res.success, false);

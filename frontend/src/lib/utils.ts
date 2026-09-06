@@ -113,6 +113,13 @@ export interface Cliente {
   cidade?: string;
   estado?: string;
   endereco?: string;
+  inscricaoEstadual?: string | null;
+  indIEDest?: number | null;
+  cep?: string | null;
+  bairro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  codigoMunicipio?: string | null;
   observacoes?: string;
   fretePadrao: number; // legado
   fretePadraoSaco: number;
@@ -132,6 +139,12 @@ export interface Produto {
   unidade: string;
   /** Peso de 1 unidade em kg; se setado, frete usa qtd × pesoKg × (tarifaTon/1000). */
   pesoKg?: number | null;
+  ncm?: string | null;
+  cfopPadraoDentro?: string | null;
+  cfopPadraoFora?: string | null;
+  origem?: number | null;
+  cst?: string | null;
+  csosn?: string | null;
   ativo: boolean;
 }
 
@@ -186,6 +199,8 @@ export interface Venda {
   /** Soma do saldo em aberto nos títulos desta venda (API GET /vendas). */
   saldoEmAbertoTitulos?: number;
   podeEditar?: boolean;
+  nfeBloqueiaEdicao?: boolean;
+  notaFiscal?: NotaFiscal | null;
   cheques?: {
     id: number;
     numeroOrdem?: number;
@@ -193,6 +208,23 @@ export interface Venda {
     numero?: string | null;
     valor?: number;
   }[];
+}
+
+export interface NotaFiscal {
+  id: number;
+  vendaId: number;
+  status: string;
+  serie?: number | null;
+  numero?: number | null;
+  chaveAcesso?: string | null;
+  protocolo?: string | null;
+  motivoRejeicao?: string | null;
+  refProvedor?: string;
+  emitidaEm?: string | null;
+  autorizadaEm?: string | null;
+  canceladaEm?: string | null;
+  temDanfe?: boolean;
+  temXml?: boolean;
 }
 
 export interface TituloReceber {

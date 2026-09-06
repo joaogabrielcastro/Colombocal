@@ -38,6 +38,13 @@ router.get("/:cnpj", async (req, res) => {
       estado: data.uf,
       endereco: `${data.logradouro}, ${data.numero}${data.complemento ? " " + data.complemento : ""} - ${data.bairro}`,
       cep: data.cep,
+      logradouro: data.logradouro || "",
+      numero: data.numero || "",
+      complemento: data.complemento || "",
+      bairro: data.bairro || "",
+      codigoMunicipio: data.codigo_municipio_ibge
+        ? String(data.codigo_municipio_ibge)
+        : "",
     });
   } catch (error) {
     if (error.response?.status === 404) {

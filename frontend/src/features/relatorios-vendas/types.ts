@@ -32,6 +32,17 @@ export interface RelVendas {
     faturamento: number;
     quantidadeItens: number;
   }>;
+  resumoClienteProdutos?: Array<{
+    clienteId: number;
+    clienteNome: string;
+    produtos: Array<{
+      produtoId: number;
+      produtoNome: string;
+      unidade: string;
+      quantidade: number;
+      faturamento: number;
+    }>;
+  }>;
 }
 
 export type RelatorioVendasParams = {

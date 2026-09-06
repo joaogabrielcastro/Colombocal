@@ -11,6 +11,9 @@ const {
 const { getTenantSlug } = require("../utils/tenantRequest");
 const { handleRouteError } = require("../utils/api");
 const { timingSafeEqualString } = require("../utils/setupSecret");
+const { parseBody } = require("../utils/zodParse");
+const { emitenteFiscalSchema } = require("../schemas/nfe");
+const { onlyDigits } = require("../utils/cpf");
 
 /**
  * POST /api/config/reset-financeiro-legacy
@@ -76,16 +79,20 @@ router.get("/tenant-features", requireAdmin, async (req, res) => {
 // PUT /api/config/tenant-features — { clienteCpf?: boolean, frete?: boolean }
 router.put("/tenant-features", requireAdmin, async (req, res) => {
   try {
-    const { clienteCpf, frete } = req.body ?? {};
+    const { clienteCpf, frete, nfe } = req.body ?? {};
     if (clienteCpf !== undefined && typeof clienteCpf !== "boolean") {
       return res.status(400).json({ error: "clienteCpf deve ser boolean" });
     }
     if (frete !== undefined && typeof frete !== "boolean") {
       return res.status(400).json({ error: "frete deve ser boolean" });
     }
+    if (nfe !== undefined && typeof nfe !== "boolean") {
+      return res.status(400).json({ error: "nfe deve ser boolean" });
+    }
     const features = await setTenantFeatures(prisma, req.tenantId, {
       clienteCpf,
       frete,
+      nfe,
     });
     res.json(features);
   } catch (e) {
@@ -122,6 +129,74 @@ router.put("/", requireAdmin, async (req, res) => {
       await setConfig(prisma, req.tenantId, "COMISSAO_MODO", "emissao");
     }
     res.json({ comissaoModo: "emissao" });
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+function publicEmitente(row) {
+  if (!row) return null;
+  const { provedorToken, ...rest } = row;
+  return {
+    ...rest,
+    provedorTokenConfigurado: !!(
+      (provedorToken && String(provedorToken).trim()) ||
+      String(process.env.FOCUS_NFE_TOKEN || "").trim()
+    ),
+  };
+}
+
+router.get("/emitente-fiscal", requireAdmin, async (req, res) => {
+  try {
+    const row = await prisma.emitenteFiscal.findUnique({
+      where: { tenantId: req.tenantId },
+    });
+    res.json(publicEmitente(row));
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+router.put("/emitente-fiscal", requireAdmin, async (req, res) => {
+  try {
+    const b = parseBody(emitenteFiscalSchema, req.body);
+    const atual = await prisma.emitenteFiscal.findUnique({
+      where: { tenantId: req.tenantId },
+    });
+    const tokenNovo =
+      b.provedorToken != null && String(b.provedorToken).trim()
+        ? String(b.provedorToken).trim()
+        : undefined;
+    const data = {
+      cnpj: onlyDigits(b.cnpj),
+      inscricaoEstadual: b.inscricaoEstadual,
+      razaoSocial: b.razaoSocial,
+      nomeFantasia: b.nomeFantasia ?? null,
+      crt: b.crt,
+      logradouro: b.logradouro,
+      numero: b.numero,
+      complemento: b.complemento ?? null,
+      bairro: b.bairro,
+      municipio: b.municipio,
+      codigoMunicipio: b.codigoMunicipio,
+      uf: b.uf,
+      cep: b.cep,
+      telefone: b.telefone ?? null,
+      serieNfe: b.serieNfe ?? 1,
+      ambiente: b.ambiente,
+      naturezaOperacao: b.naturezaOperacao || "Venda de mercadoria",
+      modalidadeFrete: b.modalidadeFrete ?? 9,
+      ...(tokenNovo !== undefined ? { provedorToken: tokenNovo } : {}),
+    };
+    const row = atual
+      ? await prisma.emitenteFiscal.update({
+          where: { tenantId: req.tenantId },
+          data,
+        })
+      : await prisma.emitenteFiscal.create({
+          data: { tenantId: req.tenantId, ...data },
+        });
+    res.json(publicEmitente(row));
   } catch (e) {
     handleRouteError(res, e);
   }

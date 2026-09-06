@@ -32,6 +32,8 @@ const { clearTenantSlugCache } = require("../../src/utils/tenantRequest");
 
 const TABLES = [
   "FinanceiroEvento",
+  "NotaFiscal",
+  "EmitenteFiscal",
   "ComissaoAjusteVenda",
   "ConfigSistema",
   "FreteMovimento",
@@ -101,6 +103,12 @@ async function seedProduto(tenantId, over = {}) {
       unidade: over.unidade || "ton",
       pesoKg: over.pesoKg ?? null,
       ativo: over.ativo ?? true,
+      ncm: over.ncm ?? null,
+      cfopPadraoDentro: over.cfopPadraoDentro ?? null,
+      cfopPadraoFora: over.cfopPadraoFora ?? null,
+      origem: over.origem ?? 0,
+      cst: over.cst ?? null,
+      csosn: over.csosn ?? null,
     },
   });
 }
@@ -118,6 +126,13 @@ async function seedCliente(tenantId, over = {}) {
       cidade: over.cidade ?? null,
       estado: over.estado ?? null,
       endereco: over.endereco ?? null,
+      inscricaoEstadual: over.inscricaoEstadual ?? null,
+      indIEDest: over.indIEDest ?? null,
+      cep: over.cep ?? null,
+      bairro: over.bairro ?? null,
+      numero: over.numero ?? null,
+      complemento: over.complemento ?? null,
+      codigoMunicipio: over.codigoMunicipio ?? null,
       observacoes: over.observacoes ?? null,
       fretePadrao: over.fretePadrao ?? 0,
       fretePadraoSaco: over.fretePadraoSaco ?? 0,

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 type ConfirmDialogProps = {
   open: boolean;
   title: string;
@@ -12,6 +14,7 @@ type ConfirmDialogProps = {
   onCancel: () => void;
   secondaryText?: string;
   onSecondary?: () => void;
+  children?: ReactNode;
 };
 
 export function ConfirmDialog({
@@ -26,6 +29,7 @@ export function ConfirmDialog({
   onCancel,
   secondaryText,
   onSecondary,
+  children,
 }: ConfirmDialogProps) {
   if (!open) return null;
 
@@ -38,6 +42,7 @@ export function ConfirmDialog({
             {description}
           </p>
         ) : null}
+        {children}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
             {cancelText}

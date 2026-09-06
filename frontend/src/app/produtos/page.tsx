@@ -10,9 +10,11 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ListScaffold } from "@/components/ui/list-scaffold";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 
 function ProdutosPageContent() {
   const searchParams = useSearchParams();
+  const { nfeEnabled } = useTenantFeatures();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
@@ -239,6 +241,7 @@ function ProdutosPageContent() {
                   <tr className="border-b border-gray-200">
                     <th className="table-header">Produto</th>
                     <th className="table-header">Unidade</th>
+                    {nfeEnabled ? <th className="table-header">NCM</th> : null}
                     <th className="table-header">Preço Padrão</th>
                     <th className="table-header">Situação</th>
                     <th className="table-header"></th>
@@ -249,6 +252,9 @@ function ProdutosPageContent() {
                     <tr key={p.id} className="table-row">
                       <td className="table-cell font-medium">{p.nome}</td>
                       <td className="table-cell">{p.unidade}</td>
+                      {nfeEnabled ? (
+                        <td className="table-cell font-mono text-xs">{p.ncm || "—"}</td>
+                      ) : null}
                       <td className="table-cell">{formatMoney(p.precoPadrao)}</td>
                       <td className="table-cell">
                         {p.ativo === false ? (
@@ -299,7 +305,7 @@ function ProdutosPageContent() {
 
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-5 py-4 border-b border-gray-200">
               <h2 className="font-semibold text-gray-900">
                 {editando ? "Editar Produto" : "Novo Produto"}
@@ -371,6 +377,77 @@ function ProdutosPageContent() {
                     className="input-field"
                   />
                 </div>
+                {nfeEnabled ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        NCM
+                      </label>
+                      <input
+                        value={form.ncm || ""}
+                        onChange={set("ncm")}
+                        className="input-field"
+                        placeholder="25221000"
+                        maxLength={10}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        8 dígitos. Confirme com o contador (ex.: 2522.10.00 cal virgem).
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          CFOP dentro do estado
+                        </label>
+                        <input
+                          value={form.cfopPadraoDentro || ""}
+                          onChange={set("cfopPadraoDentro")}
+                          className="input-field"
+                          placeholder="5102"
+                          maxLength={4}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          CFOP fora do estado
+                        </label>
+                        <input
+                          value={form.cfopPadraoFora || ""}
+                          onChange={set("cfopPadraoFora")}
+                          className="input-field"
+                          placeholder="6102"
+                          maxLength={4}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          CSOSN (Simples)
+                        </label>
+                        <input
+                          value={form.csosn || ""}
+                          onChange={set("csosn")}
+                          className="input-field"
+                          placeholder="102"
+                          maxLength={4}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          CST (regime normal)
+                        </label>
+                        <input
+                          value={form.cst || ""}
+                          onChange={set("cst")}
+                          className="input-field"
+                          placeholder="00"
+                          maxLength={3}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : null}
               </div>
               <div className="flex gap-3 mt-4">
                 <button type="submit" disabled={salvando} className="btn-primary">

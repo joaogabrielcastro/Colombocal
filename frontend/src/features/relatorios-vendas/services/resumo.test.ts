@@ -80,6 +80,18 @@ describe("montarResumoRelatorioVendas", () => {
     expect(resumoProdutos.find((p) => p.nome === "Produto P1")?.total).toBe(600);
   });
 
+  it("agrega produtos por cliente a partir das vendas", () => {
+    const data = makeDataSemResumo();
+    const { resumoClienteProdutos } = montarResumoRelatorioVendas(data);
+    expect(resumoClienteProdutos).toHaveLength(2);
+    const cliA = resumoClienteProdutos.find((c) => c.nome === "Cliente A");
+    expect(cliA?.produtos).toEqual([
+      { produtoNome: "Produto P1", unidade: "saco", quantidade: 2, total: 400 },
+    ]);
+    const cliB = resumoClienteProdutos.find((c) => c.nome === "Cliente B SA");
+    expect(cliB?.produtos.find((p) => p.produtoNome === "Produto P2")?.quantidade).toBe(3);
+  });
+
   it("prioriza resumo vindo da API quando existe", () => {
     const data = makeDataSemResumo();
     data.resumoRepresentantes = [
@@ -164,6 +176,7 @@ describe("montarResumoRelatorioVendas casos extras", () => {
     expect(r.resumoRepresentantes).toEqual([]);
     expect(r.resumoClientes).toEqual([]);
     expect(r.resumoProdutos).toEqual([]);
+    expect(r.resumoClienteProdutos).toEqual([]);
   });
 
   it("prioriza resumoClientes e resumoProdutos da API", () => {
@@ -181,9 +194,24 @@ describe("montarResumoRelatorioVendas casos extras", () => {
         quantidadeItens: 4,
       },
     ];
-    const { resumoClientes, resumoProdutos } = montarResumoRelatorioVendas(data);
+    data.resumoClienteProdutos = [
+      {
+        clienteId: 9,
+        clienteNome: "Cli API",
+        produtos: [
+          { produtoId: 1, produtoNome: "Dolomita", unidade: "ton", quantidade: 12.5, faturamento: 1250 },
+        ],
+      },
+    ];
+    const { resumoClientes, resumoProdutos, resumoClienteProdutos } = montarResumoRelatorioVendas(data);
     expect(resumoClientes).toEqual([{ nome: "Cli API", total: 300, quantidade: 2 }]);
     expect(resumoProdutos[0]).toMatchObject({ nome: "Prod API", total: 400, unidade: "" });
+    expect(resumoClienteProdutos).toEqual([
+      {
+        nome: "Cli API",
+        produtos: [{ produtoNome: "Dolomita", unidade: "ton", quantidade: 12.5, total: 1250 }],
+      },
+    ]);
   });
 
   it("participação é 0 quando faturamento total é 0", () => {

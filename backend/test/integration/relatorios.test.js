@@ -51,6 +51,10 @@ test("GET /api/relatorios/vendas retorna resumos", async () => {
   assert.equal(res.body.resumoRepresentantes.length, 1);
   assert.equal(res.body.resumoClientes.length, 1);
   assert.equal(res.body.resumoProdutos.length, 1);
+  assert.ok(Array.isArray(res.body.resumoClienteProdutos));
+  assert.equal(res.body.resumoClienteProdutos.length, 1);
+  assert.equal(res.body.resumoClienteProdutos[0].produtos[0].quantidade, 2);
+  assert.equal(res.body.resumoClienteProdutos[0].produtos[0].unidade, "ton");
 });
 
 test("GET /api/relatorios/vendas com filtros e busca", async () => {

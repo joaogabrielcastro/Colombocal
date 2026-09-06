@@ -68,8 +68,11 @@ const vendaCreateBase = {
   atualizarCliente: atualizarClienteSchema,
 };
 
-/** POST /vendas — criação. */
-const vendaPostSchema = z.object(vendaCreateBase);
+/** POST /vendas — criação. emitirNfe não impede gravar a ordem se a nota falhar. */
+const vendaPostSchema = z.object({
+  ...vendaCreateBase,
+  emitirNfe: z.boolean().optional(),
+});
 
 /** PUT /vendas/:id — edição completa (mesmos campos do POST). */
 const vendaPutSchema = z.object(vendaCreateBase);

@@ -9,6 +9,7 @@ Sistema completo de gestão comercial para distribuidora de cal.
 - **Motoristas** — Cadastro de motoristas para vincular às vendas
 - **Vendedores** — Cadastro com percentual de comissão
 - **Vendas** — Emissão com itens, frete e registro de movimentação de produto (histórico)
+- **NF-e** — Opcional (desligada por padrão). Depois do certificado A1, ligue em Configurações para vender com ou sem nota. Ver [docs/nfe-homologacao-producao.md](docs/nfe-homologacao-producao.md)
 - **Cheques** — Controle com ciclo de vida: Recebido → Depositado → Compensado / Devolvido
 - **Pagamentos** — Registro de pagamentos em dinheiro e transferência
 - **Dashboard** — KPIs em tempo real

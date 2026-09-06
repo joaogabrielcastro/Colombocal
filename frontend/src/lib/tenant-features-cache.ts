@@ -4,17 +4,20 @@ export type TenantFeatures = {
   frete: boolean;
   /** Colombocal: "Frete pago" sempre marcado por padrão. */
   fretePagoDefault: boolean;
+  /** Emissão de NF-e (modelo 55) via provedor. */
+  nfe: boolean;
 };
 
 type StoredFeatures = TenantFeatures & { tenantId: number };
 
-const STORAGE_KEY = "colombocal_tenant_features_v3";
+const STORAGE_KEY = "colombocal_tenant_features_v4";
 
-/** Fallback só se /auth/me falhar — conservador (sem frete). */
+/** Fallback só se /auth/me falhar — conservador (sem frete / sem NF-e). */
 export const TENANT_FEATURES_DEFAULTS: TenantFeatures = {
   clienteCpf: false,
   frete: false,
   fretePagoDefault: false,
+  nfe: false,
 };
 
 let cache: StoredFeatures | null = null;
@@ -32,6 +35,7 @@ function readStorage(): StoredFeatures | null {
       clienteCpf: !!parsed.clienteCpf,
       frete: !!parsed.frete,
       fretePagoDefault: !!parsed.fretePagoDefault,
+      nfe: !!parsed.nfe,
     };
   } catch {
     return null;
@@ -43,6 +47,7 @@ function writeStorage(value: StoredFeatures | null) {
   try {
     if (value == null) {
       sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem("colombocal_tenant_features_v3");
       sessionStorage.removeItem("colombocal_tenant_features_v2");
       sessionStorage.removeItem("colombocal_tenant_features");
     } else {
@@ -66,6 +71,7 @@ export function getTenantFeaturesCache(tenantId?: number | null): TenantFeatures
     clienteCpf: current.clienteCpf,
     frete: current.frete,
     fretePagoDefault: current.fretePagoDefault,
+    nfe: current.nfe,
   };
 }
 
@@ -84,6 +90,7 @@ export function setTenantFeaturesCache(
     clienteCpf: !!value.clienteCpf,
     frete: !!value.frete,
     fretePagoDefault: !!value.fretePagoDefault,
+    nfe: !!value.nfe,
   };
   writeStorage(cache);
 }

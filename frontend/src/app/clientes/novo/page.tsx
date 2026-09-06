@@ -22,6 +22,12 @@ interface CnpjData {
   cidade: string;
   estado: string;
   endereco: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  complemento?: string;
+  codigoMunicipio?: string;
 }
 
 const initialForm: ClienteFormState = {
@@ -33,6 +39,13 @@ const initialForm: ClienteFormState = {
   cidade: '',
   estado: '',
   endereco: '',
+  numero: '',
+  bairro: '',
+  complemento: '',
+  cep: '',
+  codigoMunicipio: '',
+  inscricaoEstadual: '',
+  indIEDest: '',
   observacoes: '',
   fretePadraoSaco: '',
   fretePadraoTonelada: '',
@@ -42,7 +55,7 @@ const initialForm: ClienteFormState = {
 
 export default function NovoClientePage() {
   const router = useRouter();
-  const { clienteCpfEnabled: permiteCpf, freteEnabled } = useTenantFeatures();
+  const { clienteCpfEnabled: permiteCpf, freteEnabled, nfeEnabled } = useTenantFeatures();
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>('PJ');
   const [form, setForm] = useState<ClienteFormState>(initialForm);
   const [cnpjBusca, setCnpjBusca] = useState('');
@@ -90,6 +103,11 @@ export default function NovoClientePage() {
         cidade: data.cidade || '',
         estado: data.estado || '',
         endereco: data.endereco || '',
+        cep: data.cep || '',
+        numero: data.numero || '',
+        bairro: data.bairro || '',
+        complemento: data.complemento || '',
+        codigoMunicipio: data.codigoMunicipio || '',
       }));
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao buscar CNPJ');
@@ -124,6 +142,13 @@ export default function NovoClientePage() {
         cidade: (form.cidade ?? '').trim() || null,
         estado: (form.estado ?? '').trim() || null,
         endereco: (form.endereco ?? '').trim() || null,
+        numero: (form.numero ?? '').trim() || null,
+        bairro: (form.bairro ?? '').trim() || null,
+        complemento: (form.complemento ?? '').trim() || null,
+        cep: (form.cep ?? '').trim() || null,
+        codigoMunicipio: (form.codigoMunicipio ?? '').trim() || null,
+        inscricaoEstadual: (form.inscricaoEstadual ?? '').trim() || null,
+        indIEDest: form.indIEDest ? Number(form.indIEDest) : null,
         observacoes: (form.observacoes ?? '').trim() || null,
         ...(freteEnabled
           ? {
@@ -173,6 +198,7 @@ export default function NovoClientePage() {
         form={form}
         setForm={setForm}
         freteEnabled={freteEnabled}
+        nfeEnabled={nfeEnabled}
         permiteCpf={permiteCpf}
         tipoPessoa={tipoPessoa}
         setTipoPessoa={setTipoPessoa}

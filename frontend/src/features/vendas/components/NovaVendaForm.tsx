@@ -32,6 +32,8 @@ import {
 import SearchableSelect from "@/components/SearchableSelect";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { freteLinha } from "@/lib/frete";
+import { toast } from "sonner";
+import { nfeStatusLabel } from "@/features/nfe/status";
 
 interface ItemForm {
   produtoId: string;
@@ -60,7 +62,7 @@ interface ProdutoPreco extends Produto {
 
 export function NovaVendaForm({ editId }: { editId?: string }) {
   const router = useRouter();
-  const { freteEnabled, fretePagoDefault } = useTenantFeatures();
+  const { freteEnabled, fretePagoDefault, nfeEnabled } = useTenantFeatures();
   const searchParams = useSearchParams();
   const clienteIdFromQuery = searchParams.get("clienteId");
   const isEdit = !!editId;
@@ -95,6 +97,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [mostrarDetalhes, setMostrarDetalhes] = useState(isEdit);
+  const [emissaoNfe, setEmissaoNfe] = useState<"sem" | "com">("sem");
 
   useEffect(() => {
     if (!isEdit && fretePagoDefault) {
@@ -457,14 +460,34 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       const venda = await api.put<Venda>(`/vendas/${editId}`, payload);
       router.push(`/vendas/${venda.id}`);
     } else {
-      const venda = await api.post<{ id: number }>("/vendas", {
+      const venda = await api.post<
+        Venda & {
+          nfeErro?: { message: string; details?: string[] | null };
+        }
+      >("/vendas", {
         ...payload,
         frete: freteVal,
         clienteId,
         vendedorId,
         motoristaId: motoristaId || undefined,
         itens: itensValidos,
+        emitirNfe: nfeEnabled && emissaoNfe === "com",
       });
+      if (venda.nfeErro) {
+        const extra = Array.isArray(venda.nfeErro.details)
+          ? venda.nfeErro.details.filter(Boolean).join("\n")
+          : "";
+        toast.error("Venda registrada, mas a NF-e não foi emitida", {
+          description: extra
+            ? `${venda.nfeErro.message}\n${extra}`
+            : venda.nfeErro.message,
+          duration: 9000,
+        });
+      } else if (venda.notaFiscal?.status === "autorizada") {
+        toast.success("Venda registrada e NF-e autorizada");
+      } else if (venda.notaFiscal?.status) {
+        toast.message(`Venda registrada. NF-e: ${nfeStatusLabel(venda.notaFiscal.status)}`);
+      }
       router.push(`/vendas/${venda.id}`);
     }
   };
@@ -939,6 +962,55 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
           </div>
         </div>
 
+        {nfeEnabled && !isEdit ? (
+          <div className="card p-5">
+            <h2 className="font-semibold text-gray-900">Nota fiscal</h2>
+            <p className="text-sm text-gray-500 mt-1 mb-3">
+              A venda é sempre registrada. A NF-e é opcional e não entra no valor
+              da ordem nem no título a receber.
+            </p>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  type="radio"
+                  name="emissaoNfe"
+                  className="mt-1"
+                  checked={emissaoNfe === "sem"}
+                  onChange={() => setEmissaoNfe("sem")}
+                />
+                <span>
+                  <span className="font-medium">Sem nota</span>
+                  <span className="block text-gray-500 text-xs">
+                    Só a ordem de venda (padrão)
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  type="radio"
+                  name="emissaoNfe"
+                  className="mt-1"
+                  checked={emissaoNfe === "com"}
+                  onChange={() => setEmissaoNfe("com")}
+                />
+                <span>
+                  <span className="font-medium">Com NF-e</span>
+                  <span className="block text-gray-500 text-xs">
+                    Registra a venda e tenta emitir a nota (produtos, sem frete)
+                  </span>
+                </span>
+              </label>
+            </div>
+            {emissaoNfe === "com" ? (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                Cliente e produtos precisam de cadastro fiscal (NCM, endereço,
+                IE). Se a SEFAZ recusar, a venda fica gravada e você emite a
+                nota depois.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex gap-3">
           <button
             type="submit"
@@ -948,10 +1020,14 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             {salvando
               ? isEdit
                 ? "Salvando..."
-                : "Registrando..."
+                : emissaoNfe === "com" && nfeEnabled
+                  ? "Registrando e emitindo NF-e..."
+                  : "Registrando..."
               : isEdit
                 ? "Salvar alterações"
-                : "Registrar Venda"}
+                : emissaoNfe === "com" && nfeEnabled
+                  ? "Registrar venda e emitir NF-e"
+                  : "Registrar Venda"}
           </button>
           <Link
             href={isEdit && editId ? `/vendas/${editId}` : "/vendas"}

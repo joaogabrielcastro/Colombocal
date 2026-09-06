@@ -59,6 +59,7 @@ function handleRouteError(res, error) {
   if (!status) status = 500;
   const payload = { error: friendlyErrorMessage(error) };
   if (error?.code) payload.code = error.code;
+  if (error?.details != null) payload.details = error.details;
   res.status(status).json(payload);
 }
 

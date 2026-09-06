@@ -24,11 +24,12 @@ import { reportApiError } from '@/lib/report-api-error';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useTenantFeatures } from '@/hooks/useTenantFeatures';
+import { NfeStatusBadge } from '@/features/nfe/status';
 
 const pageSize = 20;
 
 function VendasPageContent() {
-  const { freteEnabled } = useTenantFeatures();
+  const { freteEnabled, nfeEnabled } = useTenantFeatures();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -410,26 +411,28 @@ function VendasPageContent() {
                 <>
                   <col style={{ width: "4%" }} />
                   <col style={{ width: "7%" }} />
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "14%" }} />
                   <col style={{ width: "10%" }} />
+                  <col style={{ width: "9%" }} />
                   <col style={{ width: "4%" }} />
                   <col style={{ width: "7%" }} />
                   <col style={{ width: "7%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "7%" }} />
-                  <col style={{ width: "15%" }} />
+                  {nfeEnabled ? <col style={{ width: "9%" }} /> : null}
+                  <col style={{ width: nfeEnabled ? "14%" : "15%" }} />
                 </>
               ) : (
                 <>
                   <col style={{ width: "5%" }} />
                   <col style={{ width: "8%" }} />
-                  <col style={{ width: "22%" }} />
-                  <col style={{ width: "16%" }} />
+                  <col style={{ width: nfeEnabled ? "20%" : "22%" }} />
+                  <col style={{ width: nfeEnabled ? "14%" : "16%" }} />
                   <col style={{ width: "5%" }} />
                   <col style={{ width: "12%" }} />
                   <col style={{ width: "10%" }} />
-                  <col style={{ width: "16%" }} />
+                  {nfeEnabled ? <col style={{ width: "10%" }} /> : null}
+                  <col style={{ width: nfeEnabled ? "16%" : "16%" }} />
                 </>
               )}
             </colgroup>
@@ -453,6 +456,9 @@ function VendasPageContent() {
                 ) : null}
                 <th className="table-header text-right whitespace-nowrap !px-2">Total</th>
                 <th className="table-header whitespace-nowrap !px-2">Status</th>
+                {nfeEnabled ? (
+                  <th className="table-header whitespace-nowrap !px-2">NF-e</th>
+                ) : null}
                 <th className="table-header text-right whitespace-nowrap !px-2 sticky right-0 bg-slate-50 z-[1]">
                   Ações
                 </th>
@@ -542,6 +548,11 @@ function VendasPageContent() {
                       </span>
                     )}
                   </td>
+                  {nfeEnabled ? (
+                    <td className="table-cell whitespace-nowrap !px-2 !py-2">
+                      <NfeStatusBadge status={v.notaFiscal?.status} />
+                    </td>
+                  ) : null}
                   <td className="table-cell text-right !px-2 !py-2 sticky right-0 bg-white group-hover:bg-gray-50 z-[1] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]">
                     <div className="inline-flex flex-nowrap items-center justify-end gap-x-4 text-xs whitespace-nowrap">
                       <Link
@@ -579,7 +590,7 @@ function VendasPageContent() {
                 <td className="px-2 py-3 font-bold text-green-700 text-right whitespace-nowrap tabular-nums">
                   {formatMoney(subtotalPagina)}
                 </td>
-                <td colSpan={2} />
+                <td colSpan={nfeEnabled ? 3 : 2} />
               </tr>
             </tfoot>
           </table>

@@ -7,6 +7,7 @@ import {
   clearTenantFeaturesCache,
   fetchTenantFeatures,
 } from '@/hooks/useTenantFeatures';
+import { EmitenteFiscalForm } from '@/features/nfe/EmitenteFiscalForm';
 
 type MeUser = {
   role: string;
@@ -15,6 +16,7 @@ type MeUser = {
 type TenantFeaturesConfig = {
   clienteCpf: boolean;
   frete: boolean;
+  nfe: boolean;
 };
 
 export default function ConfiguracoesPage() {
@@ -120,6 +122,24 @@ export default function ConfiguracoesPage() {
                 />
                 Habilitar módulo de frete nas vendas
               </label>
+              <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!features.nfe}
+                  onChange={(e) =>
+                    setFeatures((f) => (f ? { ...f, nfe: e.target.checked } : f))
+                  }
+                  className="w-4 h-4 rounded mt-0.5"
+                />
+                <span>
+                  Habilitar emissão de NF-e (nota fiscal eletrônica)
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Deixe desmarcado até ter o certificado A1 no provedor. Enquanto
+                    isso, as vendas são só sem nota. Ao ligar, a nova venda passa a
+                    ter as duas opções: sem nota ou com NF-e.
+                  </span>
+                </span>
+              </label>
               <button
                 type="button"
                 className="btn-primary mt-2"
@@ -138,6 +158,16 @@ export default function ConfiguracoesPage() {
           Apenas administradores podem alterar as configurações da organização.
         </p>
       )}
+
+      {isAdmin && features?.nfe ? (
+        <section className="card p-5">
+          <h2 className="font-semibold text-gray-900 mb-1">Dados fiscais do emitente</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            CNPJ, IE, CRT e endereço da empresa que emite a NF-e. Confirme NCM/CFOP/CST com o contador.
+          </p>
+          <EmitenteFiscalForm />
+        </section>
+      ) : null}
     </div>
   );
 }

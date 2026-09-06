@@ -46,10 +46,36 @@ function tenantFretePagoDefault(slug) {
   return s === "default" || s === "colombocal";
 }
 
+/**
+ * NF-e é opt-in: desligada até o admin marcar em Configurações (depois do certificado).
+ * Env NFE_TENANT_SLUGS liga o fallback por slug, sem gravar ConfigSistema.
+ */
+function getNfeTenantSlugs() {
+  const multi = process.env.NFE_TENANT_SLUGS;
+  if (multi && String(multi).trim()) {
+    return [
+      ...new Set(
+        String(multi)
+          .split(/[,;]/)
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+  }
+  return [];
+}
+
+function tenantAllowsNfe(slug) {
+  if (!slug) return false;
+  return getNfeTenantSlugs().includes(String(slug).trim().toLowerCase());
+}
+
 module.exports = {
   getClientCpfTenantSlugs,
   getNoFreteTenantSlugs,
+  getNfeTenantSlugs,
   tenantAllowsClienteCpf,
   tenantAllowsFrete,
   tenantFretePagoDefault,
+  tenantAllowsNfe,
 };

@@ -30,7 +30,7 @@ describe("auth-token", () => {
   });
 
   it("limpa cache de features ao trocar sessão", () => {
-    setTenantFeaturesCache({ clienteCpf: true, frete: false, fretePagoDefault: false }, 1);
+    setTenantFeaturesCache({ clienteCpf: true, frete: false, fretePagoDefault: false, nfe: false }, 1);
     setAuthToken("novo");
     expect(getTenantFeaturesCache(1)).toBeNull();
   });

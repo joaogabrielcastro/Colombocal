@@ -31,6 +31,8 @@ model Tenant {
   eventos         FinanceiroEvento[]
   comissaoAjustes ComissaoAjusteVenda[]
   ordensCarregamento OrdemCarregamento[]
+  emitenteFiscal  EmitenteFiscal?
+  notasFiscais    NotaFiscal[]
 }
 
 model User {
@@ -64,6 +66,16 @@ model Cliente {
   cidade                 String?
   estado                 String?
   endereco               String?
+  /// Inscrição estadual (dígitos) ou "ISENTO"
+  inscricaoEstadual      String?
+  /// 1=contribuinte ICMS, 2=isento, 9=não contribuinte
+  indIEDest              Int?
+  cep                    String?
+  bairro                 String?
+  numero                 String?
+  complemento            String?
+  /// Código IBGE do município (7 dígitos)
+  codigoMunicipio        String?
   observacoes            String?
   fretePadrao            Decimal  @default(0) @db.Decimal(10, 2) // legado (mantido por compatibilidade)
   fretePadraoSaco        Decimal  @default(0) @db.Decimal(10, 2)
@@ -99,6 +111,16 @@ model Produto {
   unidade     String   @default("ton")
   /// Peso de 1 unidade em kg. Se preenchido, frete = qtd × pesoKg × (tarifaTon/1000).
   pesoKg      Decimal? @db.Decimal(10, 3)
+  /// NCM sem pontuação (8 dígitos). Contador define.
+  ncm         String?
+  cfopPadraoDentro String?
+  cfopPadraoFora   String?
+  /// Origem da mercadoria (0 = nacional)
+  origem      Int      @default(0)
+  /// CST (regime normal) — 2 ou 3 dígitos
+  cst         String?
+  /// CSOSN (Simples Nacional) — 3 dígitos
+  csosn       String?
   ativo       Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -207,6 +229,7 @@ model Venda {
   fretes         FreteMovimento[]
   comissaoAjuste ComissaoAjusteVenda?
   ordensCarregamento OrdemCarregamento[]
+  notasFiscais       NotaFiscal[]
 
   @@unique([tenantId, numeroVenda])
   @@index([tenantId, clienteId, dataVenda])
@@ -410,6 +433,72 @@ model OrdemCarregamentoItem {
   ordem OrdemCarregamento @relation(fields: [ordemId], references: [id], onDelete: Cascade)
 
   @@index([ordemId])
+}
+
+/// Dados fiscais do emitente (empresa do tenant) para NF-e. Token do provedor não é exposto na API.
+model EmitenteFiscal {
+  id                 Int      @id @default(autoincrement())
+  tenantId           Int      @unique
+  cnpj               String
+  inscricaoEstadual  String
+  razaoSocial        String
+  nomeFantasia       String?
+  /// 1=Simples Nacional, 2=Simples excesso, 3=Regime Normal
+  crt                Int      @default(1)
+  logradouro         String
+  numero             String
+  complemento        String?
+  bairro             String
+  municipio          String
+  codigoMunicipio    String
+  uf                 String
+  cep                String
+  telefone           String?
+  serieNfe           Int      @default(1)
+  /// homologacao | producao
+  ambiente           String   @default("homologacao")
+  provedor           String   @default("focusnfe")
+  provedorToken      String?
+  naturezaOperacao   String   @default("Venda de mercadoria")
+  /// 9 = sem ocorrência de transporte (frete da venda não entra na NF)
+  modalidadeFrete    Int      @default(9)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// NF-e (modelo 55) vinculada a uma venda comercial. Numeração é do provedor/SEFAZ.
+model NotaFiscal {
+  id              Int       @id @default(autoincrement())
+  tenantId        Int
+  vendaId         Int
+  /// rascunho | processando | autorizada | rejeitada | cancelada | denegada
+  status          String    @default("rascunho")
+  serie           Int?
+  numero          Int?
+  chaveAcesso     String?
+  protocolo       String?
+  motivoRejeicao  String?
+  xmlUrl          String?
+  danfeUrl        String?
+  /// Referência única no provedor (Focus `ref`)
+  refProvedor     String
+  payloadEnviado  Json?
+  payloadResposta Json?
+  emitidaEm       DateTime?
+  autorizadaEm    DateTime?
+  canceladaEm     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venda  Venda  @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, refProvedor])
+  @@index([tenantId, status])
+  @@index([vendaId])
+  @@index([tenantId, vendaId, createdAt])
 }
 
 /// Eventos de auditoria (append-only). Ver política de retenção em `services/financeiroEventos.js`.

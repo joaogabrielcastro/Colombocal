@@ -26,6 +26,22 @@ function toMoneyNumber(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function pickClienteFiscal(b) {
+  const out = {};
+  for (const key of [
+    "inscricaoEstadual",
+    "indIEDest",
+    "cep",
+    "bairro",
+    "numero",
+    "complemento",
+    "codigoMunicipio",
+  ]) {
+    if (b[key] !== undefined) out[key] = b[key];
+  }
+  return out;
+}
+
 function tenant(req) {
   return { tenantId: req.tenantId };
 }
@@ -347,6 +363,7 @@ router.post("/", async (req, res) => {
         b.comissaoFixaPercentual === null
           ? null
           : parseFloat(String(b.comissaoFixaPercentual)),
+      ...pickClienteFiscal(b),
     };
 
     const docWhere =
@@ -447,6 +464,7 @@ router.put("/:id", async (req, res) => {
               : b.comissaoFixaPercentual === null
                 ? null
                 : parseFloat(String(b.comissaoFixaPercentual)),
+          ...pickClienteFiscal(b),
         },
         include: { vendedor: true },
       });

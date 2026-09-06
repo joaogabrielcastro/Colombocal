@@ -1,8 +1,9 @@
 "use client";
 
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, formatQuantidade } from "@/lib/utils";
 import type {
   ResumoCliente,
+  ResumoClienteProduto,
   ResumoProduto,
   ResumoRepresentante,
   SortRepKey,
@@ -18,6 +19,7 @@ type Props = {
   resumoRepresentantesOrdenado: ResumoRepresentante[];
   resumoClientes: ResumoCliente[];
   resumoProdutos: ResumoProduto[];
+  resumoClienteProdutos: ResumoClienteProduto[];
   onSortRep: (key: SortRepKey) => void;
   sortIndicator: (key: SortRepKey) => string;
   onExportPdfSecao: (secao: RelatorioVendasPdfSecao) => void;
@@ -48,6 +50,7 @@ export function RelatorioVendasResumo({
   resumoRepresentantesOrdenado,
   resumoClientes,
   resumoProdutos,
+  resumoClienteProdutos,
   onSortRep,
   sortIndicator,
   onExportPdfSecao,
@@ -231,6 +234,52 @@ export function RelatorioVendasResumo({
           </div>
         </div>
       </div>
+
+      {resumoClienteProdutos.length > 0 ? (
+        <div className="card overflow-hidden mb-5">
+          <SecaoHeader
+            title="Produtos por cliente"
+            secao="clienteProdutos"
+            onExportPdfSecao={onExportPdfSecao}
+          />
+          <p className="px-4 sm:px-5 pt-3 text-sm text-gray-500">
+            Quanto cada cliente levou de cada produto no período (sacos, toneladas, etc.).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px]">
+              <thead>
+                <tr className="border-b border-gray-100 bg-slate-50/80">
+                  <th className="table-header text-left px-4 py-3">Cliente</th>
+                  <th className="table-header text-left px-4 py-3">Produto</th>
+                  <th className="table-header text-right px-4 py-3">Quantidade</th>
+                  <th className="table-header text-right px-4 py-3">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumoClienteProdutos.map((c) =>
+                  c.produtos.map((p, pi) => (
+                    <tr
+                      key={`${c.nome}-${p.produtoNome}-${pi}`}
+                      className={`table-row ${pi === 0 ? "border-t border-gray-200" : ""}`}
+                    >
+                      <td className="table-cell px-4 py-3 font-medium">
+                        {pi === 0 ? c.nome : ""}
+                      </td>
+                      <td className="table-cell px-4 py-3">{p.produtoNome}</td>
+                      <td className="table-cell text-right px-4 py-3 text-gray-700 tabular-nums">
+                        {formatQuantidade(p.quantidade, p.unidade)}
+                      </td>
+                      <td className="table-cell text-right px-4 py-3 font-semibold tabular-nums">
+                        {formatMoney(p.total)}
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

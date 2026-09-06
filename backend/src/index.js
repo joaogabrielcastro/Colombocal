@@ -77,7 +77,7 @@ function skipGlobalApiLimiter(req) {
   if (url.startsWith("/api/setup")) return true;
   // /register-status e /register têm limiter próprio em auth.js
   if (url.startsWith("/api/auth/register")) return true;
-  if (url.startsWith("/api/auth/login")) return true;
+  if (url.startsWith("/api/webhooks")) return true;
   return false;
 }
 
@@ -148,6 +148,9 @@ app.use("/api/setup", setupLimiter, require("./routes/setup"));
 
 // Rotas públicas de autenticação (sem JWT)
 app.use("/api/auth", require("./routes/auth"));
+
+// Webhook do provedor NF-e (sem JWT; autenticado por NFE_WEBHOOK_SECRET)
+app.use("/api/webhooks/nfe", require("./routes/webhooksNfe"));
 
 // API protegida: multi-tenant + JWT (ou AUTH_DISABLED=true em desenvolvimento)
 app.use("/api/clientes", requireTenantUser, requireNavKey("clientes"), require("./routes/clientes"));

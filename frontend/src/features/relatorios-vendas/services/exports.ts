@@ -9,10 +9,12 @@ import {
 } from "@/lib/utils";
 import { escapeHtml } from "@/lib/html";
 import type { RelVendas } from "../types";
-import type {
-  ResumoCliente,
-  ResumoProduto,
-  ResumoRepresentante,
+import {
+  montarResumoRelatorioVendas,
+  type ResumoCliente,
+  type ResumoClienteProduto,
+  type ResumoProduto,
+  type ResumoRepresentante,
 } from "./resumo";
 
 export type RelatorioVendasPdfSecao =
@@ -20,6 +22,7 @@ export type RelatorioVendasPdfSecao =
   | "representantes"
   | "clientes"
   | "produtos"
+  | "clienteProdutos"
   | "detalhes";
 
 export const RELATORIO_VENDAS_PDF_SECOES: {
@@ -30,6 +33,7 @@ export const RELATORIO_VENDAS_PDF_SECOES: {
   { id: "representantes", label: "Por representante" },
   { id: "clientes", label: "Por cliente" },
   { id: "produtos", label: "Por produto" },
+  { id: "clienteProdutos", label: "Produtos por cliente" },
   { id: "detalhes", label: "Detalhamento das vendas" },
 ];
 
@@ -98,6 +102,7 @@ export type ExportarPdfSecaoOpts = {
   resumoRepresentantes: ResumoRepresentante[];
   resumoClientes: ResumoCliente[];
   resumoProdutos: ResumoProduto[];
+  resumoClienteProdutos?: ResumoClienteProduto[];
   freteEnabled?: boolean;
 };
 
@@ -155,6 +160,31 @@ function htmlClientes(clientes: ResumoCliente[]) {
     <table>
       <thead><tr><th>Cliente</th><th class="num">Qtd</th><th class="num">Total</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+function htmlClienteProdutos(grupos: ResumoClienteProduto[]) {
+  const rows = grupos
+    .flatMap((c) =>
+      c.produtos.map(
+        (p, pi) => `<tr>
+        <td>${pi === 0 ? escapeHtml(c.nome) : ""}</td>
+        <td>${escapeHtml(p.produtoNome)}</td>
+        <td class="num">${escapeHtml(p.quantidade.toLocaleString("pt-BR"))} ${escapeHtml(p.unidade)}</td>
+        <td class="num">${escapeHtml(formatMoney(p.total))}</td>
+      </tr>`,
+      ),
+    )
+    .join("");
+  return `<div class="secao">
+    <h2>Produtos por cliente</h2>
+    <p class="meta">Quanto cada cliente levou de cada produto no período.</p>
+    <table>
+      <thead><tr>
+        <th>Cliente</th><th>Produto</th><th class="num">Quantidade</th><th class="num">Total</th>
+      </tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" style="text-align:center;color:#666">Sem dados no período.</td></tr>`}</tbody>
     </table>
   </div>`;
 }
@@ -220,6 +250,7 @@ export function exportarRelatorioVendasPdfCompleto(opts: ExportarPdfSecaoOpts) {
     ${htmlRepresentantes(opts.resumoRepresentantes)}
     ${htmlClientes(opts.resumoClientes)}
     ${htmlProdutos(opts.resumoProdutos)}
+    ${htmlClienteProdutos(opts.resumoClienteProdutos ?? [])}
     ${htmlDetalhes(data, freteEnabled)}`;
   abrirImpressaoPdf("Relatório de Vendas — Completo", corpo);
 }
@@ -260,6 +291,13 @@ export function exportarRelatorioVendasPdfSecao(
         ${htmlProdutos(opts.resumoProdutos)}`,
       );
       break;
+    case "clienteProdutos":
+      abrirImpressaoPdf(
+        "Relatório de Vendas — Produtos por cliente",
+        `${cabecalhoSecao("Produtos por cliente", dataInicio, dataFim)}
+        ${htmlClienteProdutos(opts.resumoClienteProdutos ?? [])}`,
+      );
+      break;
     case "detalhes":
       abrirImpressaoPdf(
         "Relatório de Vendas — Detalhamento",
@@ -283,6 +321,7 @@ export function exportarRelatorioVendasPdf(
     resumoRepresentantes: [],
     resumoClientes: [],
     resumoProdutos: [],
+    resumoClienteProdutos: [],
   });
 }
 
@@ -314,9 +353,26 @@ export function exportarRelatorioVendasExcel(data: RelVendas, dataInicio: string
   });
   const porV = Object.values(aggV).sort((a, b) => b.total - a.total).map((x) => ({ vendedor: x.nome, vendas: x.quantidade, total: x.total }));
   const porC = Object.values(aggC).sort((a, b) => b.total - a.total).map((x) => ({ cliente: x.nome, pedidos: x.quantidade, total: x.total }));
+  const { resumoClienteProdutos } = montarResumoRelatorioVendas(data);
+  const porClienteProduto = resumoClienteProdutos.flatMap((c) =>
+    c.produtos.map((p) => ({
+      Cliente: c.nome,
+      Produto: p.produtoNome,
+      Quantidade: p.quantidade,
+      Unidade: p.unidade,
+      Total: p.total,
+    })),
+  );
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalhes), "Vendas");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(porV), "Por vendedor");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(porC), "Por cliente");
+  if (porClienteProduto.length) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(porClienteProduto),
+      "Produtos por cliente",
+    );
+  }
   XLSX.writeFile(wb, `relatorio-vendas-${dataInicio}-${dataFim}.xlsx`);
 }

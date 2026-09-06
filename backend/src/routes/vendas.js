@@ -35,6 +35,13 @@ const {
   calcularFreteAutomatico,
   freteLinha,
 } = require("../domain/frete/calcularFrete");
+const { registerVendaNfeRoutes, anexarNotaNaVendaJson } = require("./vendasNfe");
+const { notaBloqueanteDaVenda, sanitizarNota } = require("../domain/nfe/notaDaVenda");
+const { STATUS } = require("../domain/nfe/constants");
+const { emitirNfe } = require("../application/use-cases/emitirNfe");
+const { getTenantFeatures } = require("../services/tenantFeaturesResolver");
+
+registerVendaNfeRoutes(router);
 
 function formatMoneyBr(v) {
   const n = parseFloat(String(v || 0));
@@ -164,6 +171,28 @@ router.get("/", async (req, res) => {
           itens: { include: { produto: true } },
           titulos: true,
           fretes: true,
+          notasFiscais: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              vendaId: true,
+              status: true,
+              serie: true,
+              numero: true,
+              chaveAcesso: true,
+              protocolo: true,
+              motivoRejeicao: true,
+              refProvedor: true,
+              emitidaEm: true,
+              autorizadaEm: true,
+              canceladaEm: true,
+              createdAt: true,
+              updatedAt: true,
+              danfeUrl: true,
+              xmlUrl: true,
+            },
+          },
         },
         orderBy: [
           { dataVenda: "desc" },
@@ -184,10 +213,14 @@ router.get("/", async (req, res) => {
     const somaNum = soma != null ? parseFloat(String(soma)) : 0;
     res.set("x-sum-valor-total", Number.isFinite(somaNum) ? somaNum.toFixed(2) : "0");
     res.set("X-Tenant-Id", String(req.tenantId));
-    const comSaldo = vendas.map((v) => ({
-      ...v,
-      saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(v),
-    }));
+    const comSaldo = vendas.map((v) => {
+      const { notasFiscais, ...rest } = v;
+      return {
+        ...rest,
+        saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(v),
+        notaFiscal: sanitizarNota(notasFiscais?.[0] || null),
+      };
+    });
     res.json(comSaldo);
   } catch (error) {
     handleRouteError(res, error);
@@ -350,13 +383,16 @@ router.get("/:id", async (req, res) => {
     const tituloComPagamento = (venda.titulos || []).some(
       (t) => parseFloat(String(t.valorPago ?? 0)) > 0,
     );
+    const nfeMeta = await anexarNotaNaVendaJson(req, venda);
     const podeEditar =
       venda.pagamentos.length === 0 &&
       venda.cheques.length === 0 &&
-      !tituloComPagamento;
+      !tituloComPagamento &&
+      !nfeMeta.nfeBloqueiaEdicao;
     res.json({
       ...venda,
       podeEditar,
+      ...nfeMeta,
       saldoEmAbertoTitulos: calcSaldoEmAbertoTitulos(venda),
     });
   } catch (error) {
@@ -458,7 +494,9 @@ router.patch("/:id", async (req, res) => {
         fretes: { orderBy: { data: "desc" } },
       },
     });
-    res.json(completa);
+    if (!completa) return res.status(404).json({ error: "Venda não encontrada" });
+    const nfeMeta = await anexarNotaNaVendaJson(req, completa);
+    res.json({ ...completa, ...nfeMeta });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -488,7 +526,37 @@ router.post("/", async (req, res) => {
       req,
     });
 
-    res.status(201).json(vendaCompleta);
+    const payload = { ...vendaCompleta };
+    if (body.emitirNfe) {
+      const slug = await getTenantSlug(req.tenantId);
+      const features = await getTenantFeatures(prisma, req.tenantId, slug);
+      if (!features.nfe) {
+        payload.nfeErro = {
+          message: "Módulo de NF-e não está habilitado nesta organização.",
+        };
+      } else {
+        try {
+          await emitirNfe(prisma, {
+            tenantId: req.tenantId,
+            vendaId: vendaCompleta.id,
+            audit: (p) =>
+              registrarAuditoria(prisma, req, {
+                tenantId: req.tenantId,
+                ...p,
+              }),
+          });
+        } catch (nfeErr) {
+          payload.nfeErro = {
+            message: nfeErr.message || "Não foi possível emitir a NF-e.",
+            code: nfeErr.code || null,
+            details: nfeErr.details || null,
+          };
+        }
+      }
+    }
+
+    Object.assign(payload, await anexarNotaNaVendaJson(req, vendaCompleta));
+    res.status(201).json(payload);
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -522,6 +590,19 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({
         error:
           "Venda com cheques vinculados não pode ser editada. Ajuste os cheques primeiro.",
+      });
+    }
+
+    const nfeBloqueante = await notaBloqueanteDaVenda(prisma, {
+      tenantId,
+      vendaId: id,
+    });
+    if (nfeBloqueante) {
+      return res.status(400).json({
+        error:
+          nfeBloqueante.status === STATUS.AUTORIZADA
+            ? "Venda com NF-e autorizada não pode ser editada. Cancele a nota primeiro."
+            : "Venda com NF-e em processamento não pode ser editada.",
       });
     }
 
@@ -819,6 +900,19 @@ router.delete("/:id", async (req, res) => {
       return res.status(400).json({
         error:
           "Venda com cheques vinculados não pode ser cancelada. Ajuste os cheques primeiro.",
+      });
+    }
+
+    const nfeBloqueante = await notaBloqueanteDaVenda(prisma, {
+      tenantId,
+      vendaId: id,
+    });
+    if (nfeBloqueante) {
+      return res.status(400).json({
+        error:
+          nfeBloqueante.status === STATUS.AUTORIZADA
+            ? "Venda com NF-e autorizada não pode ser cancelada. Cancele a nota fiscal primeiro."
+            : "Venda com NF-e em processamento não pode ser cancelada.",
       });
     }
 

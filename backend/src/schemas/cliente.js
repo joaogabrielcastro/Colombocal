@@ -1,21 +1,24 @@
 const { z } = require("zod");
 const { onlyDigits, isValidCpf } = require("../utils/cpf");
+const { clienteFiscalFieldsSchema } = require("./nfe");
 
-const clienteFieldsSchema = z.object({
-  razaoSocial: z.string().min(1, "Nome / razão social é obrigatório"),
-  nomeFantasia: z.string().nullable().optional(),
-  telefone: z.string().nullable().optional(),
-  cidade: z.string().nullable().optional(),
-  estado: z.string().nullable().optional(),
-  endereco: z.string().nullable().optional(),
-  observacoes: z.string().nullable().optional(),
-  fretePadraoSaco: z.coerce.number().nonnegative().optional(),
-  fretePadraoTonelada: z.coerce.number().nonnegative().optional(),
-  vendedorId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
-  comissaoFixaPercentual: z
-    .union([z.coerce.number().nonnegative(), z.null()])
-    .optional(),
-});
+const clienteFieldsSchema = z
+  .object({
+    razaoSocial: z.string().min(1, "Nome / razão social é obrigatório"),
+    nomeFantasia: z.string().nullable().optional(),
+    telefone: z.string().nullable().optional(),
+    cidade: z.string().nullable().optional(),
+    estado: z.string().nullable().optional(),
+    endereco: z.string().nullable().optional(),
+    observacoes: z.string().nullable().optional(),
+    fretePadraoSaco: z.coerce.number().nonnegative().optional(),
+    fretePadraoTonelada: z.coerce.number().nonnegative().optional(),
+    vendedorId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
+    comissaoFixaPercentual: z
+      .union([z.coerce.number().nonnegative(), z.null()])
+      .optional(),
+  })
+  .merge(clienteFiscalFieldsSchema);
 
 function getClienteCreateSchema({ allowsClienteCpf }) {
   return z
@@ -86,22 +89,24 @@ function getClienteCreateSchema({ allowsClienteCpf }) {
     });
 }
 
-const clienteUpdateSchema = z.object({
-  razaoSocial: z.string().min(1).optional(),
-  nomeFantasia: z.string().nullable().optional(),
-  telefone: z.string().nullable().optional(),
-  cidade: z.string().nullable().optional(),
-  estado: z.string().nullable().optional(),
-  endereco: z.string().nullable().optional(),
-  observacoes: z.string().nullable().optional(),
-  fretePadraoSaco: z.coerce.number().nonnegative().optional(),
-  fretePadraoTonelada: z.coerce.number().nonnegative().optional(),
-  ativo: z.boolean().optional(),
-  vendedorId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
-  comissaoFixaPercentual: z
-    .union([z.coerce.number().nonnegative(), z.null()])
-    .optional(),
-});
+const clienteUpdateSchema = z
+  .object({
+    razaoSocial: z.string().min(1).optional(),
+    nomeFantasia: z.string().nullable().optional(),
+    telefone: z.string().nullable().optional(),
+    cidade: z.string().nullable().optional(),
+    estado: z.string().nullable().optional(),
+    endereco: z.string().nullable().optional(),
+    observacoes: z.string().nullable().optional(),
+    fretePadraoSaco: z.coerce.number().nonnegative().optional(),
+    fretePadraoTonelada: z.coerce.number().nonnegative().optional(),
+    ativo: z.boolean().optional(),
+    vendedorId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
+    comissaoFixaPercentual: z
+      .union([z.coerce.number().nonnegative(), z.null()])
+      .optional(),
+  })
+  .merge(clienteFiscalFieldsSchema);
 
 const clientePrecosSchema = z.object({
   precos: z
