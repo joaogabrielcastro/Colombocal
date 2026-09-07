@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatVendaProdutos, formatVendaQuantidades, textoObservacao } from "./detalheVenda";
+import { formatVendaProdutos, formatVendaQuantidades, linhasItensVenda, textoObservacao } from "./detalheVenda";
 import type { Venda } from "@/lib/utils";
 
 const venda = {
@@ -15,6 +15,15 @@ describe("detalheVenda", () => {
     expect(formatVendaProdutos(venda)).toBe("Cal hidratada, Cal virgem");
     expect(formatVendaQuantidades(venda)).toContain("ton");
     expect(formatVendaQuantidades(venda)).toContain("saco");
+    expect(linhasItensVenda(venda).map((l) => l.produto)).toEqual(["Cal hidratada", "Cal virgem"]);
+    expect(linhasItensVenda(venda)[0].quantidade).toContain("ton");
+    expect(linhasItensVenda(venda)[1].quantidade).toContain("saco");
+  });
+
+  it("linhasItensVenda preenche traço quando não há itens", () => {
+    expect(linhasItensVenda({ itens: [] } as unknown as Venda)).toEqual([
+      { produto: "—", quantidade: "—" },
+    ]);
   });
 
   it("trata venda sem itens e sem observação", () => {

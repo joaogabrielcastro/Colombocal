@@ -18,7 +18,12 @@ import {
   type ResumoProduto,
   type ResumoRepresentante,
 } from "./resumo";
-import { formatVendaProdutos, formatVendaQuantidades, textoObservacao } from "./detalheVenda";
+import {
+  formatVendaProdutos,
+  formatVendaQuantidades,
+  linhasItensVenda,
+  textoObservacao,
+} from "./detalheVenda";
 
 export type RelatorioVendasPdfSecao =
   | "totais"
@@ -63,10 +68,29 @@ const PDF_STYLES = `
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }
   tr { page-break-inside: avoid; break-inside: avoid; }
-  th, td { border: 1px solid #e5e7eb; padding: 7px 8px; font-size: 11px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+  th, td { border: 1px solid #e5e7eb; padding: 7px 8px; font-size: 11px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-break: normal; }
   th { background: #f3f4f6; font-weight: 700; }
   td.num, th.num { text-align: right; white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
   td.ordem, th.ordem { font-weight: 700; color: #1d4ed8; font-family: ui-monospace, monospace; white-space: nowrap; width: 4.5rem; }
+  td.qtd, th.qtd { text-align: right; white-space: nowrap; overflow-wrap: normal; word-break: keep-all; font-variant-numeric: tabular-nums; }
+  .tabela-detalhes th, .tabela-detalhes td { font-size: 10px; padding: 5px 6px; }
+  .tabela-detalhes col.col-data { width: 6.5%; }
+  .tabela-detalhes col.col-ordem { width: 4.5%; }
+  .tabela-detalhes col.col-cliente { width: 14%; }
+  .tabela-detalhes col.col-produto { width: 14%; }
+  .tabela-detalhes col.col-rep { width: 9%; }
+  .tabela-detalhes col.col-mot { width: 8%; }
+  .tabela-detalhes col.col-qtd { width: 12%; }
+  .tabela-detalhes col.col-frete { width: 8%; }
+  .tabela-detalhes col.col-frete-pago { width: 6.5%; }
+  .tabela-detalhes col.col-total { width: 8%; }
+  .tabela-detalhes col.col-obs { width: 9.5%; }
+  .tabela-detalhes.sem-frete col.col-cliente { width: 20%; }
+  .tabela-detalhes.sem-frete col.col-produto { width: 18%; }
+  .tabela-detalhes.sem-frete col.col-rep { width: 11%; }
+  .tabela-detalhes.sem-frete col.col-mot { width: 10%; }
+  .tabela-detalhes.sem-frete col.col-qtd { width: 14%; }
+  .tabela-detalhes.sem-frete col.col-obs { width: 7%; }
   .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
   .kpi { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
   .kpi label { display: block; font-size: 11px; color: #6b7280; }
@@ -82,15 +106,18 @@ const PDF_STYLES = `
   }
 `;
 
-function abrirImpressaoPdf(titulo: string, corpo: string) {
+function abrirImpressaoPdf(titulo: string, corpo: string, opts?: { paisagem?: boolean }) {
   const w = window.open("", "_blank");
   if (!w) return;
+  const pagina = opts?.paisagem
+    ? "@page { size: A4 landscape; margin: 10mm; }"
+    : "@page { size: A4 portrait; margin: 12mm; }";
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(titulo)}</title>
-  <style>${PDF_STYLES}</style>
+  <style>${PDF_STYLES}\n${pagina}</style>
 </head>
 <body>
   ${corpo}
@@ -263,8 +290,14 @@ function htmlDetalhes(data: RelVendas, freteEnabled: boolean) {
   const freteHead = freteEnabled
     ? `<th class="num">Frete</th><th>Frete pago</th>`
     : "";
+  const colsFrete = freteEnabled
+    ? `<col class="col-frete" /><col class="col-frete-pago" />`
+    : "";
   const rows = data.vendas
     .map((v) => {
+      const linhas = linhasItensVenda(v);
+      const produtosHtml = linhas.map((l) => escapeHtml(l.produto)).join("<br>");
+      const qtdHtml = linhas.map((l) => escapeHtml(l.quantidade)).join("<br>");
       const freteCols = freteEnabled
         ? `<td class="num">${escapeHtml(formatMoney(v.frete))}</td><td>${escapeHtml(formatFreteReciboLinha(v))}</td>`
         : "";
@@ -272,10 +305,10 @@ function htmlDetalhes(data: RelVendas, freteEnabled: boolean) {
         <td>${escapeHtml(formatDate(v.dataVenda))}</td>
         <td class="ordem">#${vendaNumeroPublico(v)}</td>
         <td>${escapeHtml(v.cliente.nomeFantasia || v.cliente.razaoSocial)}</td>
-        <td>${escapeHtml(formatVendaProdutos(v))}</td>
+        <td>${produtosHtml}</td>
         <td>${escapeHtml(v.vendedor.nome)}</td>
         <td>${escapeHtml(v.motorista?.nome || "—")}</td>
-        <td class="num">${escapeHtml(formatVendaQuantidades(v))}</td>
+        <td class="qtd">${qtdHtml}</td>
         ${freteCols}
         <td class="num">${escapeHtml(formatMoney(v.valorTotal))}</td>
         <td>${escapeHtml(textoObservacao(v))}</td>
@@ -286,10 +319,15 @@ function htmlDetalhes(data: RelVendas, freteEnabled: boolean) {
   return `<div class="secao secao-detalhes">
     <h2>Detalhamento das vendas</h2>
     <p class="meta">${data.vendas.length} registro(s) no detalhamento.</p>
-    <table>
+    <table class="tabela-detalhes${freteEnabled ? "" : " sem-frete"}">
+      <colgroup>
+        <col class="col-data" /><col class="col-ordem" /><col class="col-cliente" />
+        <col class="col-produto" /><col class="col-rep" /><col class="col-mot" />
+        <col class="col-qtd" />${colsFrete}<col class="col-total" /><col class="col-obs" />
+      </colgroup>
       <thead><tr>
         <th>Data</th><th class="ordem">Nº</th><th>Cliente</th><th>Produto</th><th>Representante</th><th>Motorista</th>
-        <th class="num">Quantidade</th>
+        <th class="qtd">Quantidade</th>
         ${freteHead}
         <th class="num">Total</th><th>Observação</th>
       </tr></thead>
@@ -313,7 +351,7 @@ function corpoCompleto(opts: ExportarPdfSecaoOpts) {
 
 /** PDF com todas as seções — ideal para enviar ao cliente. */
 export function exportarRelatorioVendasPdfCompleto(opts: ExportarPdfSecaoOpts) {
-  abrirImpressaoPdf("Relatório de Vendas — Completo", corpoCompleto(opts));
+  abrirImpressaoPdf("Relatório de Vendas — Completo", corpoCompleto(opts), { paisagem: true });
 }
 
 export function exportarRelatorioVendasPdfSecao(
@@ -366,6 +404,7 @@ export function exportarRelatorioVendasPdfSecao(
         "Relatório de Vendas — Detalhamento",
         `${head("Detalhamento das vendas")}
         ${htmlDetalhes(data, freteEnabled)}`,
+        { paisagem: true },
       );
       break;
   }

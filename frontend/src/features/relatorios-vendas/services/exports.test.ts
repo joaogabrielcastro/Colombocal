@@ -124,6 +124,28 @@ describe("exportarRelatorioVendasPdfSecao", () => {
     expect(html).toContain(".secao { page-break-inside: auto; break-inside: auto; }");
     expect(html).toContain("thead { display: table-header-group; }");
     expect(html).toContain(".meta + .secao-detalhes { page-break-before: auto; }");
+    expect(html).toContain("size: A4 portrait");
+  });
+
+  it("detalhamento empilha quantidade por produto e imprime em paisagem", () => {
+    const data = makeData();
+    data.vendas[0].itens = [
+      { quantidade: 50, produto: { nome: "Cal para pintura", unidade: "saco" } },
+      { quantidade: 84, produto: { nome: "Cal hidratada", unidade: "saco" } },
+    ] as RelVendas["vendas"][number]["itens"];
+    exportarRelatorioVendasPdfSecao("detalhes", {
+      data,
+      dataInicio: "2026-01-01",
+      dataFim: "2026-12-31",
+      ...resumo,
+    });
+    const html = String(win.document.write.mock.calls[0][0]);
+    expect(html).toContain("size: A4 landscape");
+    expect(html).toContain('td class="qtd"');
+    expect(html).toContain("col-qtd");
+    expect(html).toContain("50 saco<br>84 saco");
+    expect(html).toContain("Cal para pintura<br>Cal hidratada");
+    expect(html).not.toContain("50 saco + 84");
   });
 
   it("exportarRelatorioVendasPdfCompleto inclui hierarquia e destaque sem comissão", () => {
@@ -147,7 +169,9 @@ describe("exportarRelatorioVendasPdfSecao", () => {
     expect(html).toContain("Vendas sem comissão");
     expect(html).toContain("destaque-sem");
     expect(html).toContain("thead { display: table-header-group; }");
-    expect(html).toContain("overflow-wrap: anywhere");
+    expect(html).toContain("overflow-wrap: break-word");
+    expect(html).toContain("size: A4 landscape");
+    expect(html).toContain("tabela-detalhes");
     expect(win.print).toHaveBeenCalled();
   });
 });
