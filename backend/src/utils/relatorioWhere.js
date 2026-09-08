@@ -1,5 +1,26 @@
 const { getDateRange } = require("./dateRangeQuery");
 
+/**
+ * Filtro de item por produto (id exato e/ou nome contendo texto).
+ * Ex.: produtoBusca=dolomita puxa todas as variantes (M-325, M-200, …).
+ * @returns {object|null}
+ */
+function buildItemProdutoFilter(query) {
+  const produtoIdRaw = query?.produtoId;
+  const produtoId = produtoIdRaw != null && String(produtoIdRaw).trim() !== ""
+    ? parseInt(String(produtoIdRaw), 10)
+    : NaN;
+  const produtoBusca = String(query?.produtoBusca || "").trim();
+  const filter = {};
+  if (Number.isFinite(produtoId) && produtoId > 0) {
+    filter.produtoId = produtoId;
+  }
+  if (produtoBusca) {
+    filter.produto = { nome: { contains: produtoBusca, mode: "insensitive" } };
+  }
+  return Object.keys(filter).length > 0 ? filter : null;
+}
+
 function buildTitulosWhere(query, tenantId) {
   const {
     clienteId,
@@ -34,7 +55,6 @@ function buildVendasWhere(query, tenantId) {
     clienteId,
     vendedorId,
     motoristaId,
-    produtoId,
     busca,
   } = query;
   const where = { tenantId };
@@ -42,8 +62,9 @@ function buildVendasWhere(query, tenantId) {
   if (vendedorId) where.vendedorId = parseInt(vendedorId, 10);
   if (motoristaId) where.motoristaId = parseInt(motoristaId, 10);
   if (dataInicio || dataFim) where.dataVenda = getDateRange(dataInicio, dataFim);
-  if (produtoId) {
-    where.itens = { some: { produtoId: parseInt(produtoId, 10) } };
+  const itemProduto = buildItemProdutoFilter(query);
+  if (itemProduto) {
+    where.itens = { some: itemProduto };
   }
   if (busca && String(busca).trim()) {
     const term = String(busca).trim();
@@ -69,4 +90,5 @@ function buildVendasWhere(query, tenantId) {
 module.exports = {
   buildTitulosWhere,
   buildVendasWhere,
+  buildItemProdutoFilter,
 };

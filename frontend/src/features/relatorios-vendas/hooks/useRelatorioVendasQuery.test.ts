@@ -23,6 +23,7 @@ const params: RelatorioVendasParams = {
   motoristaId: "7",
   clienteId: "4",
   produtoId: "5",
+  produtoBusca: "  dolomita  ",
 };
 
 beforeEach(() => {
@@ -56,6 +57,7 @@ describe("useRelatorioVendasQuery", () => {
     expect(url).toContain("busca=cal");
     expect(url).toContain("vendedorId=3");
     expect(url).toContain("motoristaId=7");
+    expect(url).toContain("produtoBusca=dolomita");
     expect(url).toContain("take=500");
   });
 
@@ -72,6 +74,7 @@ describe("useRelatorioVendasQuery", () => {
       motoristaId: "",
       clienteId: "",
       produtoId: "",
+      produtoBusca: "   ",
     };
     const { result } = renderHook(() => useRelatorioVendasQuery(vazio, true), {
       wrapper: createQueryWrapper(),
@@ -83,6 +86,7 @@ describe("useRelatorioVendasQuery", () => {
     expect(url).not.toContain("busca=");
     expect(url).not.toContain("vendedorId=");
     expect(url).not.toContain("dataInicio=");
+    expect(url).not.toContain("produtoBusca=");
     expect(url).toContain("take=500");
   });
 });

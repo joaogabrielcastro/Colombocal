@@ -33,6 +33,7 @@ export default function RelatorioVendasPage() {
   const [motoristaId, setMotoristaId] = useState("");
   const [clienteId, setClienteId] = useState("");
   const [produtoId, setProdutoId] = useState("");
+  const [produtoBusca, setProdutoBusca] = useState("");
   const [exportando, setExportando] = useState(false);
   const [filtrosAplicados, setFiltrosAplicados] = useState({
     dataInicio: "",
@@ -42,6 +43,7 @@ export default function RelatorioVendasPage() {
     motoristaId: "",
     clienteId: "",
     produtoId: "",
+    produtoBusca: "",
   });
   const { vendedores, clientes, produtos, motoristas } = useRelatorioVendasLookups();
   const {
@@ -94,6 +96,9 @@ export default function RelatorioVendasPage() {
     if (vendedor) partes.push(`Representante: ${vendedor.nome}`);
     if (cliente) partes.push(`Cliente: ${cliente.nomeFantasia || cliente.razaoSocial}`);
     if (produto) partes.push(`Produto: ${produto.nome}`);
+    if (filtrosAplicados.produtoBusca.trim()) {
+      partes.push(`Produto contém: ${filtrosAplicados.produtoBusca.trim()}`);
+    }
     if (motorista) partes.push(`Motorista: ${motorista.nome}`);
     if (filtrosAplicados.busca.trim()) partes.push(`Busca: ${filtrosAplicados.busca.trim()}`);
     return partes.join(" · ");
@@ -188,6 +193,7 @@ export default function RelatorioVendasPage() {
       motoristaId,
       clienteId,
       produtoId,
+      produtoBusca,
       ...override,
     };
     setFiltrosAplicados(next);
@@ -227,6 +233,7 @@ export default function RelatorioVendasPage() {
         motoristaId={motoristaId}
         clienteId={clienteId}
         produtoId={produtoId}
+        produtoBusca={produtoBusca}
         vendedores={vendedores}
         motoristas={motoristas}
         clientes={clientes}
@@ -239,6 +246,7 @@ export default function RelatorioVendasPage() {
         setMotoristaId={setMotoristaId}
         setClienteId={setClienteId}
         setProdutoId={setProdutoId}
+        setProdutoBusca={setProdutoBusca}
         exportando={exportando}
         onBuscar={() => buscar()}
         onLimpar={() => {
@@ -247,12 +255,14 @@ export default function RelatorioVendasPage() {
           setMotoristaId("");
           setClienteId("");
           setProdutoId("");
+          setProdutoBusca("");
           buscar({
             busca: "",
             vendedorId: "",
             motoristaId: "",
             clienteId: "",
             produtoId: "",
+            produtoBusca: "",
           });
         }}
         onExportExcel={() => void exportarExcel()}

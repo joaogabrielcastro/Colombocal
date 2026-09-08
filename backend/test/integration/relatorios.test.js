@@ -93,6 +93,79 @@ test("GET /api/relatorios/vendas filtra por motoristaId", async () => {
   assert.equal(outro.body.quantidade, 0);
 });
 
+test("GET /api/relatorios/vendas filtra por produtoBusca (nome parcial)", async () => {
+  const dolomitaA = await seedProduto(ctx.tenant.id, {
+    nome: "DOLOMITA M-325 ENSACADA",
+    codigo: "DOL325",
+    unidade: "ton",
+    precoPadrao: 340,
+  });
+  const dolomitaB = await seedProduto(ctx.tenant.id, {
+    nome: "DOLOMITA M-200 ENSACADA",
+    codigo: "DOL200",
+    unidade: "ton",
+    precoPadrao: 320,
+  });
+  const cal = await seedProduto(ctx.tenant.id, {
+    nome: "CAL HIDRATADA CH-III",
+    codigo: "CALCH3",
+    unidade: "saco",
+    precoPadrao: 50,
+  });
+  const clienteDolo = await seedCliente(ctx.tenant.id, {
+    vendedorId: ctx.vendedor.id,
+    cnpj: "11222333000181",
+    razaoSocial: "Cliente Dolomita LTDA",
+    nomeFantasia: "Cliente Dolomita",
+  });
+  const clienteCal = await seedCliente(ctx.tenant.id, {
+    vendedorId: ctx.vendedor.id,
+    cnpj: "22333444000192",
+    razaoSocial: "Cliente Cal LTDA",
+    nomeFantasia: "Cliente Cal",
+  });
+
+  await agent.post("/api/vendas").send({
+    clienteId: clienteDolo.id,
+    vendedorId: ctx.vendedor.id,
+    itens: [
+      { produtoId: dolomitaA.id, quantidade: 2, precoUnitario: 340 },
+      { produtoId: dolomitaB.id, quantidade: 1, precoUnitario: 320 },
+      { produtoId: cal.id, quantidade: 10, precoUnitario: 50 },
+    ],
+  }).then((r) => assert.equal(r.status, 201));
+
+  await agent.post("/api/vendas").send({
+    clienteId: clienteCal.id,
+    vendedorId: ctx.vendedor.id,
+    itens: [{ produtoId: cal.id, quantidade: 5, precoUnitario: 50 }],
+  }).then((r) => assert.equal(r.status, 201));
+
+  const res = await agent.get("/api/relatorios/vendas").query({
+    dataInicio: "2000-01-01",
+    dataFim: "2100-01-01",
+    produtoBusca: "dolomita",
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.quantidade, 1);
+  assert.equal(res.body.resumoClientes.length, 1);
+  assert.equal(res.body.resumoClientes[0].clienteNome, "Cliente Dolomita");
+  // Produtos por cliente: só linhas de dolomita (não inclui cal da mesma venda)
+  assert.equal(res.body.resumoClienteProdutos.length, 1);
+  assert.equal(res.body.resumoClienteProdutos[0].produtos.length, 2);
+  assert.ok(
+    res.body.resumoClienteProdutos[0].produtos.every((p) =>
+      String(p.produtoNome).toUpperCase().includes("DOLOMITA"),
+    ),
+  );
+  assert.equal(res.body.resumoProdutos.length, 2);
+  assert.ok(
+    res.body.resumoProdutos.every((p) =>
+      String(p.produtoNome).toUpperCase().includes("DOLOMITA"),
+    ),
+  );
+});
+
 test("GET /api/relatorios/vendas somenteDetalhes não recalcula agregados", async () => {
   await criarVenda();
   const res = await agent.get("/api/relatorios/vendas").query({

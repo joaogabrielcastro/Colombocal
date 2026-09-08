@@ -21,6 +21,7 @@ export function toRelatorioVendasSearchParams(
   if (params.motoristaId) q.set("motoristaId", params.motoristaId);
   if (params.clienteId) q.set("clienteId", params.clienteId);
   if (params.produtoId) q.set("produtoId", params.produtoId);
+  if (params.produtoBusca.trim()) q.set("produtoBusca", params.produtoBusca.trim());
   q.set("take", String(opts?.take ?? PAGE_TAKE));
   q.set("skip", String(opts?.skip ?? 0));
   if (opts?.somenteDetalhes) q.set("somenteDetalhes", "true");
