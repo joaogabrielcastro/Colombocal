@@ -18,6 +18,7 @@ type Props = {
   motoristaId: string;
   clienteId: string;
   produtoId: string;
+  produtoBusca: string;
   vendedores: Vendedor[];
   motoristas: Motorista[];
   clientes: Cliente[];
@@ -30,6 +31,7 @@ type Props = {
   setMotoristaId: (v: string) => void;
   setClienteId: (v: string) => void;
   setProdutoId: (v: string) => void;
+  setProdutoBusca: (v: string) => void;
   onBuscar: () => void;
   onLimpar: () => void;
   onExportExcel: () => void;
@@ -46,6 +48,7 @@ export function RelatorioVendasFiltros(props: Props) {
     motoristaId,
     clienteId,
     produtoId,
+    produtoBusca,
     vendedores,
     motoristas,
     clientes,
@@ -58,6 +61,7 @@ export function RelatorioVendasFiltros(props: Props) {
     setMotoristaId,
     setClienteId,
     setProdutoId,
+    setProdutoBusca,
     onBuscar,
     onLimpar,
     onExportExcel,
@@ -66,7 +70,7 @@ export function RelatorioVendasFiltros(props: Props) {
   } = props;
 
   const [maisFiltrosAbertos, setMaisFiltrosAbertos] = useState(
-    () => Boolean(clienteId || produtoId || motoristaId),
+    () => Boolean(clienteId || produtoId || produtoBusca || motoristaId),
   );
 
   return (
@@ -149,6 +153,21 @@ export function RelatorioVendasFiltros(props: Props) {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                Produto contém
+              </label>
+              <input
+                type="text"
+                value={produtoBusca}
+                onChange={(e) => setProdutoBusca(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onBuscar();
+                }}
+                placeholder="Ex.: dolomita, cal hidratada"
+                className="input-field w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Motorista</label>

@@ -55,4 +55,6 @@ export type RelatorioVendasParams = {
   motoristaId: string;
   clienteId: string;
   produtoId: string;
+  /** Nome parcial do produto (ex.: "dolomita") — puxa todas as variantes. */
+  produtoBusca: string;
 };
