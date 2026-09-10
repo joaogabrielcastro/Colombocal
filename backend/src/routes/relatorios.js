@@ -11,7 +11,11 @@ const { listarClientesDevedores } = require("../services/financeiroDevedores");
 const { requireNavKey } = require("../middleware/navPermission");
 const { userHasNavKey } = require("../constants/navPermissions");
 const { comissaoPorEmissao } = require("../services/comissao");
-const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
+const {
+  buildVendasWhere,
+  buildTitulosWhere,
+  buildItemProdutoFilter,
+} = require("../utils/relatorioWhere");
 const { getDateRange } = require("../utils/dateRangeQuery");
 const { montarEvolucaoPeriodo } = require("../utils/evolucaoVendas");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
@@ -102,14 +106,10 @@ router.get("/vendas", async (req, res) => {
     }
 
     const aggWhere = { ...where };
-    const produtoIdFiltro = req.query.produtoId
-      ? parseInt(String(req.query.produtoId), 10)
-      : NaN;
+    const itemProdutoFiltro = buildItemProdutoFilter(req.query) || {};
     const itemWhere = {
       venda: where,
-      ...(Number.isFinite(produtoIdFiltro) && produtoIdFiltro > 0
-        ? { produtoId: produtoIdFiltro }
-        : {}),
+      ...itemProdutoFiltro,
     };
 
     const [totaisAgg, vendas, total, porVendedorAgg, porClienteAgg, porProdutoAgg, itensClienteProduto, pontosEvolucao] = await Promise.all([
@@ -140,7 +140,7 @@ router.get("/vendas", async (req, res) => {
       }),
       prisma.itemVenda.groupBy({
         by: ["produtoId"],
-        where: { venda: where },
+        where: itemWhere,
         _sum: { quantidade: true, subtotal: true },
         _count: { id: true },
       }),
@@ -290,8 +290,10 @@ router.post("/vendas/export-async", async (req, res) => {
       dataFim: req.body?.dataFim ? String(req.body.dataFim) : "",
       busca: req.body?.busca ? String(req.body.busca) : "",
       vendedorId: req.body?.vendedorId ? String(req.body.vendedorId) : "",
+      motoristaId: req.body?.motoristaId ? String(req.body.motoristaId) : "",
       clienteId: req.body?.clienteId ? String(req.body.clienteId) : "",
       produtoId: req.body?.produtoId ? String(req.body.produtoId) : "",
+      produtoBusca: req.body?.produtoBusca ? String(req.body.produtoBusca) : "",
     };
     const jobId = await enqueueExportJob("vendas_csv", req.tenantId, payload);
     res.status(202).json({ jobId, status: "pending" });
