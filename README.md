@@ -1,142 +1,185 @@
 # Colombocal — Sistema de Gestão Comercial
 
-Sistema completo de gestão comercial para distribuidora de cal.
+Sistema de gestão comercial para distribuidora de cal: vendas, financeiro, frete, carregamento e relatórios. Multi-empresa (tenant), com login e permissões por tela.
 
 ## Funcionalidades
 
-- **Clientes** — Cadastro com consulta automática de CNPJ (BrasilAPI), conta corrente, preços especiais por produto
-- **Produtos** — Cadastro de preços e unidades
-- **Motoristas** — Cadastro de motoristas para vincular às vendas
-- **Vendedores** — Cadastro com percentual de comissão
-- **Vendas** — Emissão com itens, frete e registro de movimentação de produto (histórico)
-- **NF-e** — Opcional (desligada por padrão). Depois do certificado A1, ligue em Configurações para vender com ou sem nota. Ver [docs/nfe-homologacao-producao.md](docs/nfe-homologacao-producao.md)
-- **Cheques** — Controle com ciclo de vida: Recebido → Depositado → Compensado / Devolvido
-- **Pagamentos** — Registro de pagamentos em dinheiro e transferência
-- **Dashboard** — KPIs em tempo real
-- **Relatórios** — Vendas, Comissões, Faturamento, Financeiro
+- **Login e usuários** — JWT, papéis (admin/usuário) e permissões de menu. Primeiro admin em `/setup`; convites em `/usuarios`
+- **Clientes** — Cadastro (CNPJ via BrasilAPI; CPF em alguns tenants), conta corrente, preços especiais e comissão por produto
+- **Produtos** — Cadastro com unidade, preço padrão e dados fiscais (NCM/CFOP)
+- **Vendedores** — Comissão percentual (e regras específicas por cliente/produto)
+- **Vendas** — Itens, preço da venda, motorista, observações e baixa de estoque
+- **Financeiro** — Títulos a receber, pagamentos (dinheiro/transferência) e cheques (Recebido → Depositado → Compensado / Devolvido)
+- **Fretes e carregamento** — Frete da venda, movimentos avulsos e ordens de pátio (podem ficar ocultos em tenants sem frete)
+- **Motoristas** — Cadastro para vincular a vendas e relatórios
+- **Dashboard** — KPIs do período
+- **Relatórios** — Vendas (KPIs, evolução, rankings, produtos por cliente, PDF/Excel), comissões, contas a receber, fretes, carregamento e motoristas
+- **Auditoria** — Trilha de operações relevantes
+- **NF-e** — Opcional, desligada por padrão. Ver [docs/nfe-homologacao-producao.md](docs/nfe-homologacao-producao.md)
 
 ## Pré-requisitos
 
-- [Node.js](https://nodejs.org) 18+
-- [Docker](https://docker.com) Desktop (para o banco de dados)
+- [Node.js](https://nodejs.org) **20.19+** (frontend e imagens Docker usam Node 20)
+- [Docker](https://docker.com) Desktop (PostgreSQL, Redis e, no fluxo recomendado, a stack inteira)
 
-## Instalação e Execução
+## Instalação e execução
 
-### 1. Clonar / abrir a pasta do projeto
+### Fluxo recomendado (Docker Compose)
 
-```bash
-cd Colombocal
-```
-
-### 2. Subir o banco de dados PostgreSQL
+Na raiz do repositório:
 
 ```bash
-docker-compose up -d
+docker compose up --build
 ```
 
-### 3. Configurar e iniciar o backend
+| Serviço   | URL / porta                         |
+| --------- | ----------------------------------- |
+| Frontend  | http://localhost:3010               |
+| Backend   | http://localhost:3011 (`/health`, `/ready`) |
+| PostgreSQL | `localhost:5435`                   |
+| Redis     | `localhost:6380` (fila de export CSV) |
+
+O backend espera o banco, aplica `prisma migrate deploy` e sobe a API. Dados de exemplo:
+
+```bash
+docker compose exec backend npm run db:seed
+```
+
+Primeiro acesso: **http://localhost:3010** → `/login`. Após o seed (não-produção): `admin@local` / `admin123`. Sem seed, crie o admin em `/setup` (use o `SETUP_SECRET` do `docker-compose.yml`).
+
+### Rodar frontend e backend na máquina (banco no Docker)
+
+1. Suba só o banco (e o Redis, se for testar export assíncrono):
+
+```bash
+docker compose up -d db redis
+```
+
+2. Backend:
 
 ```bash
 cd backend
 npm install
-
-# Copiar o arquivo de variáveis de ambiente
-copy .env.example .env   # Windows
-# ou: cp .env.example .env  (Linux/Mac)
-
-# Criar as tabelas no banco
-npx prisma migrate dev --name init
-
-# Popular com dados iniciais (produtos + vendedor padrão)
+npx prisma migrate deploy
+npx prisma generate
 npm run db:seed
-
-# Iniciar o servidor (porta 3001)
 npm run dev
 ```
 
-### 4. Iniciar o frontend
+A API escuta na **3011** por padrão. Aponte `DATABASE_URL` para o Postgres do Compose, por exemplo:
 
-Abrir um **novo terminal**:
+`postgresql://postgres:colombocal_dev@localhost:5435/colombocal_dev`
+
+`REDIS_URL` (opcional): `redis://localhost:6380`
+
+3. Frontend (outro terminal):
 
 ```bash
 cd frontend
 npm install
-
-# Iniciar o servidor Next.js (porta 3000)
-npm run dev
 ```
 
-### 5. Acessar
+Crie `frontend/.env.local` com `NEXT_PUBLIC_API_ORIGIN=http://localhost:3011` e rode `npm run dev` (porta **3010**).
 
-Abrir o navegador em: **http://localhost:3000**
-
----
-
-## Estrutura do Projeto
+## Estrutura do projeto
 
 ```
 Colombocal/
-├── docker-compose.yml          # PostgreSQL 16
+├── docker-compose.yml
+├── docs/                          # NF-e, backup, legado, arquitetura
 ├── backend/
-│   ├── .env                    # Variáveis de ambiente
 │   ├── prisma/
-│   │   ├── schema.prisma       # Modelos do banco de dados
-│   │   └── seed.js             # Dados iniciais
+│   │   ├── schema.prisma
+│   │   ├── migrations/
+│   │   └── seed.js
+│   ├── scripts/                   # seed, tenants, testes de DB, legado
 │   └── src/
-│       ├── index.js            # Servidor Express
-│       └── routes/             # Rotas da API
-│           ├── clientes.js
-│           ├── produtos.js
-│           ├── motoristas.js
-│           ├── vendedores.js
-│           ├── vendas.js
-│           ├── cheques.js
-│           ├── pagamentos.js
-│           ├── relatorios.js
-│           ├── dashboard.js
-│           └── cnpj.js
+│       ├── index.js
+│       ├── routes/
+│       ├── application/use-cases/
+│       ├── domain/
+│       ├── middleware/            # auth, permissões de menu
+│       └── services/
 └── frontend/
-    └── src/app/
-        ├── page.tsx             # Dashboard
-        ├── clientes/
-        ├── produtos/
-        ├── motoristas/
-        ├── vendedores/
-        ├── vendas/
-        ├── cheques/
-        └── relatorios/
-            ├── vendas/
-            ├── comissoes/
-            └── financeiro/
+    └── src/
+        ├── app/                   # rotas Next.js (App Router)
+        ├── features/              # vendas, clientes, relatórios, …
+        ├── components/
+        └── lib/
 ```
 
-## Tech Stack
+## Tech stack
 
-| Camada         | Tecnologia                           |
-| -------------- | ------------------------------------ |
-| Frontend       | Next.js 14 (App Router) + TypeScript |
-| Estilização    | Tailwind CSS 3                       |
-| Backend        | Node.js + Express.js                 |
-| ORM            | Prisma 5                             |
-| Banco de dados | PostgreSQL 16                        |
-| Consulta CNPJ  | BrasilAPI (gratuito, sem auth)       |
+| Camada         | Tecnologia                                      |
+| -------------- | ----------------------------------------------- |
+| Frontend       | Next.js 16 (App Router) + TypeScript + React 18 |
+| Estilização    | Tailwind CSS 3                                  |
+| Dados (UI)     | TanStack Query                                  |
+| Backend        | Node.js + Express                                |
+| ORM            | Prisma 5                                        |
+| Banco          | PostgreSQL 15                                   |
+| Fila (export)  | Redis 7 + BullMQ                                |
+| Auth           | JWT + bcrypt                                    |
+| Consulta CNPJ  | BrasilAPI                                       |
 
-## Variáveis de Ambiente do Backend
+## Variáveis de ambiente (resumo)
 
-```env
-DATABASE_URL="postgresql://colombocal:colombocal123@localhost:5432/colombocal"
-PORT=3001
+Não commite `.env`. No Compose, os valores de desenvolvimento já estão no `docker-compose.yml`.
+
+**Backend (principais)**
+
+| Variável        | Uso |
+| --------------- | --- |
+| `DATABASE_URL` | Postgres |
+| `PORT`          | Padrão `3011` |
+| `JWT_SECRET`    | Obrigatório em produção |
+| `SETUP_SECRET`  | Primeiro admin em `/setup` (mín. 8 caracteres) |
+| `REDIS_URL`     | Fila de export CSV (`EXPORT_QUEUE_MODE=redis`) |
+| `OPEN_REGISTRATION` | `true` só se quiser `/cadastro` aberto |
+
+NF-e, CORS e rate limit: ver [docs/nfe-homologacao-producao.md](docs/nfe-homologacao-producao.md) e `backend/src/index.js`.
+
+**Frontend**
+
+| Variável | Uso |
+| -------- | --- |
+| `NEXT_PUBLIC_API_ORIGIN` | Origem da API (rewrite `/api` → backend). No Compose: `http://backend:3011` |
+
+## Testes
+
+```bash
+# Frontend
+cd frontend
+npm test
+
+# Backend (unitários + integração)
+# Integração precisa do Postgres de teste na 5433:
+cd backend
+npm run test:db:up          # uma vez
+npm run test:db:migrate
+npm test
 ```
 
-## Comandos Úteis
+## Comandos úteis
 
 ```bash
 # Backend
-npm run db:studio     # Abrir Prisma Studio (visualizar dados)
-npm run db:migrate    # Rodar migrações pendentes
-npm run db:reset      # Resetar banco (APAGA TODOS OS DADOS)
+npm run db:studio     # Prisma Studio
+npm run db:migrate     # migrações em desenvolvimento
+npm run db:deploy     # migrate deploy (CI / produção)
+npm run db:seed       # tenants + admin + produtos de exemplo
+npm run tenant:create
+npm run db:reset       # APAGA TODOS OS DADOS do banco apontado
 
 # Docker
-docker-compose stop   # Parar o banco
-docker-compose down   # Remover container
+docker compose stop
+docker compose down     # remove containers; volumes persistentes ficam
 ```
+
+## Documentação
+
+- [NF-e — homologação e produção](docs/nfe-homologacao-producao.md)
+- [Backup e restore](docs/operacao-backup-restore.md)
+- [Migração de legado](docs/migracao-legado.md)
+- [Arquitetura (evolução)](docs/arquitetura-single-tenant-evolucao.md)
+- [Scripts de legado](backend/scripts/README.md)
