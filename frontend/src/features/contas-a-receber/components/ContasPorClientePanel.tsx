@@ -1,69 +1,67 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
-  ExclamationTriangleIcon,
   ArrowPathIcon,
   PrinterIcon,
   MagnifyingGlassIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
-import { formatMoney } from "@/lib/utils";
-import { apiFetchWithMeta } from "@/lib/api";
-import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
+import { formatMoney, type Vendedor } from "@/lib/utils";
+import api, { apiFetchWithMeta } from "@/lib/api";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { downloadCsvPtBr } from "@/lib/csv";
+import { toast } from "sonner";
+import { reportApiError } from "@/lib/report-api-error";
+import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
+import { CONTAS_PAGE_SIZE } from "../constants";
+import { downloadXlsx, nomeArquivoExcel } from "../services/exportExcel";
+import { fetchTodasPaginas } from "../services/fetchPaginas";
+import { formatPct, labelMaiorAtraso, labelOrdenarClientes } from "../services/display";
+import { ContasAgingFaixas } from "./ContasAgingFaixas";
+import { ContasKpiCards, kpisCarteiraClientes } from "./ContasKpiCards";
+import { ContasPrintMeta } from "./ContasPrintMeta";
+import type { ContaCliente, FinanceiroData, OrdenarClientes } from "../types";
 
-interface ContaCliente {
-  cliente: { id: number; razaoSocial: string; nomeFantasia?: string };
-  saldo: number;
-  debito: number;
-  credito: number;
-}
-
-interface FinanceiroData {
-  clientesDevedores: ContaCliente[];
-  clientesDevedoresCount?: number;
-  totalEmAberto: number;
-}
-
-/** Visão agregada: quem deve e quanto (carteira de títulos). */
 export function ContasPorClientePanel() {
   const [dados, setDados] = useState<FinanceiroData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState("");
   const [page, setPage] = useState(1);
   const [totalAba, setTotalAba] = useState(0);
   const [buscaDraft, setBuscaDraft] = useState("");
   const [busca, setBusca] = useState("");
-  const {
-    isExporting: exportandoCsv,
-    error: erroExportacao,
-    exportCsv,
-  } = useExportCsvAsync({
-    startPath: "/relatorios/financeiro/export-async",
-    maxAttempts: 60,
-    pollIntervalMs: 1000,
-    fallback: () => {
-      if (dados) exportarCSV();
-    },
-  });
-  const pageSize = 100;
+  const [vendedorId, setVendedorId] = useState("");
+  const [ordenar, setOrdenar] = useState<OrdenarClientes>("saldo");
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [exportando, setExportando] = useState(false);
+  const csv = useExportCsvAsync({ startPath: "/relatorios/financeiro/export-async" });
+  const pageSize = CONTAS_PAGE_SIZE;
+  const filtrado = Boolean(busca || vendedorId);
+
+  useEffect(() => {
+    api
+      .get<Vendedor[]>("/vendedores?take=500")
+      .then(setVendedores)
+      .catch(() => setVendedores([]));
+  }, []);
 
   const carregar = useCallback(() => {
     const params = new URLSearchParams({
       take: String(pageSize),
       skip: String((page - 1) * pageSize),
+      ordenar,
     });
     if (busca.trim()) params.set("busca", busca.trim());
+    if (vendedorId) params.set("vendedorId", vendedorId);
     setLoading(true);
-    apiFetchWithMeta<FinanceiroData>(
-      `/relatorios/financeiro?${params.toString()}`,
-      {
-        method: "GET",
-        cache: "no-store",
-      },
-    )
+    setErro("");
+    apiFetchWithMeta<FinanceiroData>(`/relatorios/financeiro?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    })
       .then(({ data, meta }) => {
         setDados(data);
         setTotalAba(
@@ -72,31 +70,69 @@ export function ContasPorClientePanel() {
             data.clientesDevedores.length,
         );
       })
+      .catch((e) => {
+        setErro("Não foi possível carregar as contas a receber.");
+        reportApiError(e, {
+          title: "Erro ao carregar contas a receber",
+          onRetry: () => carregar(),
+        });
+      })
       .finally(() => setLoading(false));
-  }, [page, busca]);
+  }, [page, busca, vendedorId, ordenar, pageSize]);
 
   useEffect(() => {
     carregar();
   }, [carregar]);
 
   const totalPages = Math.max(1, Math.ceil(totalAba / pageSize));
+  const nomeRepresentante =
+    vendedores.find((v) => String(v.id) === vendedorId)?.nome || "";
 
-  const exportarCSV = () => {
-    if (!dados) return;
-    downloadCsvPtBr(
-      "financeiro-devedores.csv",
-      ["Cliente", "Original (títulos)", "Pago (títulos)", "Em aberto (títulos)"],
-      dados.clientesDevedores.map((c) => [
-        c.cliente.nomeFantasia || c.cliente.razaoSocial,
-        c.debito,
-        c.credito,
-        c.saldo,
-      ]),
-    );
+  const paramsFiltro = () => {
+    const params = new URLSearchParams();
+    if (busca.trim()) params.set("busca", busca.trim());
+    if (vendedorId) params.set("vendedorId", vendedorId);
+    params.set("ordenar", ordenar);
+    return params;
   };
 
-  const exportarCsvAsync = async () => {
-    await exportCsv({});
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      const { items, truncated } = await fetchTodasPaginas<FinanceiroData>({
+        path: "/relatorios/financeiro",
+        params: paramsFiltro(),
+        pick: (data) => data.clientesDevedores,
+        totalFrom: (data, metaTotal) =>
+          metaTotal ?? data.clientesDevedoresCount ?? data.clientesDevedores.length,
+      });
+      const rows = (items as ContaCliente[]).map((c) => ({
+        Cliente: c.cliente.nomeFantasia || c.cliente.razaoSocial,
+        Representante: c.cliente.vendedor?.nome || "—",
+        "Original (títulos)": c.debito,
+        "Pago (títulos)": c.credito,
+        "Em aberto (títulos)": c.saldo,
+        "Participação %": Number(c.participacao || 0),
+        "Títulos em aberto": Number(c.titulosAbertos || 0),
+        "Maior atraso (dias)": Number(c.maiorAtrasoDias || 0),
+      }));
+      downloadXlsx(nomeArquivoExcel("contas-receber-clientes"), "Por cliente", rows);
+      if (truncated) {
+        toast.message("Excel limitado aos primeiros 5.000 clientes do filtro.");
+      }
+    } catch {
+      toast.error("Não foi possível gerar o Excel.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const exportarCsv = async () => {
+    await csv.exportCsv({
+      busca: busca.trim(),
+      vendedorId,
+      ordenar,
+    });
   };
 
   const imprimirRelatorio = () => {
@@ -115,17 +151,39 @@ export function ContasPorClientePanel() {
   function limparBusca() {
     setBuscaDraft("");
     setBusca("");
+    setVendedorId("");
+    setOrdenar("saldo");
     setPage(1);
   }
 
+  const kpis = dados
+    ? kpisCarteiraClientes({
+        totalEmAberto: dados.totalEmAberto,
+        clientes: dados.clientesDevedoresCount ?? dados.clientesDevedores.length,
+        totalVencido: dados.totalVencido,
+        totalAVencer: dados.totalAVencer,
+        pctVencido: dados.pctVencido,
+        filtrado,
+      })
+    : [];
+
   return (
     <div className="space-y-5">
-      <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
+      <p className="text-sm text-gray-600 leading-relaxed max-w-3xl print:hidden">
         Saldo em aberto por cliente (valor original − pago nos títulos). Cheques
         cadastrados já entram como pagamento e abatem o saldo.
       </p>
 
-      <FilterBar className="p-4 sm:p-5 mb-0">
+      <ContasPrintMeta
+        visao="Por cliente"
+        linhas={[
+          busca ? `Cliente contém “${busca}”` : "",
+          nomeRepresentante ? `Representante: ${nomeRepresentante}` : "",
+          `Ordenação: ${labelOrdenarClientes(ordenar)}`,
+        ]}
+      />
+
+      <FilterBar className="p-4 sm:p-5 mb-0 print:hidden">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <form
             onSubmit={aplicarBusca}
@@ -146,16 +204,49 @@ export function ContasPorClientePanel() {
                 />
               </div>
             </div>
+            <div className="w-full sm:w-56 shrink-0">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Representante
+              </label>
+              <select
+                value={vendedorId}
+                onChange={(e) => {
+                  setVendedorId(e.target.value);
+                  setPage(1);
+                }}
+                className="input-field w-full"
+              >
+                <option value="">Todos</option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={String(v.id)}>
+                    {v.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-full sm:w-56 shrink-0">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ordenar ranking
+              </label>
+              <select
+                value={ordenar}
+                onChange={(e) => {
+                  setOrdenar(e.target.value as OrdenarClientes);
+                  setPage(1);
+                }}
+                className="input-field w-full"
+              >
+                <option value="saldo">Maior valor em aberto</option>
+                <option value="atraso">Maior atraso</option>
+                <option value="titulos">Mais títulos</option>
+              </select>
+            </div>
             <div className="flex flex-wrap gap-2 sm:items-end sm:pb-0.5">
               <button type="submit" className="btn-primary">
                 Buscar
               </button>
-              {busca ? (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={limparBusca}
-                >
+              {busca || vendedorId || ordenar !== "saldo" ? (
+                <button type="button" className="btn-secondary" onClick={limparBusca}>
                   Limpar
                 </button>
               ) : null}
@@ -170,9 +261,7 @@ export function ContasPorClientePanel() {
               className="btn-secondary flex items-center gap-1.5"
               title="Atualiza os números do servidor"
             >
-              <ArrowPathIcon
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-              />
+              <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               Recarregar
             </button>
             {dados ? (
@@ -186,123 +275,140 @@ export function ContasPorClientePanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void exportarCsvAsync()}
-                  disabled={exportandoCsv}
+                  onClick={() => void exportarExcel()}
+                  disabled={exportando}
                   className="btn-secondary flex items-center gap-1.5"
                 >
-                  {exportandoCsv ? "Gerando CSV..." : "Exportar CSV"}
+                  <ArrowDownTrayIcon className="w-4 h-4" />
+                  {exportando ? "Gerando Excel..." : "Exportar Excel"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportarCsv()}
+                  disabled={csv.isExporting}
+                  className="btn-secondary flex items-center gap-1.5"
+                >
+                  {csv.isExporting ? "Gerando CSV..." : "Exportar CSV"}
                 </button>
               </>
             ) : null}
           </div>
         </div>
+        {csv.error ? <p className="mt-2 text-sm text-red-600">{csv.error}</p> : null}
       </FilterBar>
 
-      {erroExportacao ? (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {erroExportacao}
-        </div>
+      {filtrado ? (
+        <p className="text-xs text-gray-500 print:hidden">
+          Filtros aplicados sobre todo o conjunto, não só a página atual.
+        </p>
       ) : null}
 
-      {loading ? (
+      {loading && !dados ? (
         <div className="card p-5">
-          <TableListSkeleton rows={10} cols={4} />
+          <TableListSkeleton rows={10} cols={7} />
         </div>
       ) : null}
 
-      {!loading && dados ? (
+      {erro && !dados ? (
+        <EmptyState
+          title="Não foi possível carregar o ranking"
+          description={erro}
+          action={
+            <button type="button" className="btn-primary" onClick={carregar}>
+              Tentar novamente
+            </button>
+          }
+        />
+      ) : null}
+
+      {dados ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
-            <div className="card p-5 sm:p-6">
-              <p className="text-sm text-gray-500 mb-1">
-                {busca ? "Em aberto (filtro)" : "Total em Aberto"}
-              </p>
-              <p className="text-2xl sm:text-3xl font-bold text-red-600 tracking-tight">
-                {formatMoney(dados.totalEmAberto)}
-              </p>
-            </div>
-            <div className="card p-5 sm:p-6">
-              <p className="text-sm text-gray-500 mb-1">
-                {busca ? "Clientes no filtro" : "Clientes Devendo"}
-              </p>
-              <p className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                {dados.clientesDevedoresCount ?? dados.clientesDevedores.length}
-              </p>
-            </div>
-          </div>
+          <ContasKpiCards items={kpis} />
+          {dados.faixas ? <ContasAgingFaixas faixas={dados.faixas} /> : null}
 
           <div className="card overflow-hidden">
             {dados.clientesDevedores.length === 0 ? (
               <div className="p-6">
                 <EmptyState
                   title={
-                    busca
-                      ? "Nenhum cliente encontrado"
+                    filtrado
+                      ? "Nenhum cliente encontrado para os filtros selecionados."
                       : "Nenhum cliente com saldo devedor"
                   }
                   description={
-                    busca
-                      ? "Tente outro termo ou limpe a busca."
+                    filtrado
+                      ? "Tente outro termo, representante ou limpe os filtros."
                       : "Quando houver títulos em aberto, eles aparecerão aqui."
                   }
                 />
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px]">
+                <table className="w-full min-w-[960px]">
                   <thead>
                     <tr className="border-b border-gray-200 bg-slate-50/80">
-                      <th className="table-header text-left px-4 py-3.5 w-[44%]">
+                      <th className="table-header text-left px-4 py-3.5 w-[28%]">
                         Cliente
                       </th>
+                      <th className="table-header text-right px-4 py-3.5">Original</th>
+                      <th className="table-header text-right px-4 py-3.5">Pago</th>
+                      <th className="table-header text-right px-4 py-3.5">Em aberto</th>
+                      <th className="table-header text-right px-4 py-3.5">Participação</th>
+                      <th className="table-header text-right px-4 py-3.5">Títulos</th>
                       <th className="table-header text-right px-4 py-3.5">
-                        Original (títulos)
-                      </th>
-                      <th className="table-header text-right px-4 py-3.5">
-                        Pago (títulos)
-                      </th>
-                      <th className="table-header text-right px-4 py-3.5">
-                        Em aberto (títulos)
+                        Maior atraso
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {[...dados.clientesDevedores]
-                      .sort((a, b) => b.saldo - a.saldo)
-                      .map((c) => (
-                        <tr key={c.cliente.id} className="table-row">
-                          <td className="table-cell px-4 py-3.5">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <ExclamationTriangleIcon className="w-4 h-4 text-red-400 shrink-0" />
-                              <a
-                                href={`/clientes/${c.cliente.id}`}
-                                className="text-blue-600 hover:underline font-medium truncate"
-                                title={
-                                  c.cliente.nomeFantasia || c.cliente.razaoSocial
-                                }
-                              >
-                                {c.cliente.nomeFantasia || c.cliente.razaoSocial}
-                              </a>
+                    {dados.clientesDevedores.map((c) => (
+                      <tr key={c.cliente.id} className="table-row">
+                        <td className="table-cell px-4 py-3.5">
+                          <Link
+                            href={`/clientes/${c.cliente.id}?aba=conta`}
+                            className="text-blue-600 hover:underline font-medium"
+                            title={c.cliente.nomeFantasia || c.cliente.razaoSocial}
+                          >
+                            {c.cliente.nomeFantasia || c.cliente.razaoSocial}
+                          </Link>
+                          {c.cliente.vendedor?.nome ? (
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              {c.cliente.vendedor.nome}
                             </div>
-                          </td>
-                          <td className="table-cell text-right px-4 py-3.5 tabular-nums">
-                            {formatMoney(c.debito)}
-                          </td>
-                          <td className="table-cell text-right px-4 py-3.5 tabular-nums">
-                            {formatMoney(c.credito)}
-                          </td>
-                          <td className="table-cell text-right px-4 py-3.5 font-bold text-red-600 tabular-nums">
-                            {formatMoney(c.saldo)}
-                          </td>
-                        </tr>
-                      ))}
+                          ) : null}
+                        </td>
+                        <td className="table-cell text-right px-4 py-3.5 tabular-nums">
+                          {formatMoney(c.debito)}
+                        </td>
+                        <td className="table-cell text-right px-4 py-3.5 tabular-nums">
+                          {formatMoney(c.credito)}
+                        </td>
+                        <td className="table-cell text-right px-4 py-3.5 font-semibold tabular-nums text-gray-900">
+                          {formatMoney(c.saldo)}
+                        </td>
+                        <td className="table-cell text-right px-4 py-3.5 tabular-nums text-gray-700">
+                          {formatPct(Number(c.participacao || 0))}
+                        </td>
+                        <td className="table-cell text-right px-4 py-3.5 tabular-nums">
+                          {c.titulosAbertos ?? "—"}
+                        </td>
+                        <td
+                          className={`table-cell text-right px-4 py-3.5 tabular-nums ${
+                            (c.maiorAtrasoDias || 0) > 0 ? "text-red-700" : "text-gray-600"
+                          }`}
+                        >
+                          {labelMaiorAtraso(Number(c.maiorAtrasoDias || 0))}
+                        </td>
+                      </tr>
+                    ))}
                     <tr className="bg-gray-50 font-bold border-t border-gray-200">
                       <td className="table-cell px-4 py-3.5" colSpan={3}>
-                        Total em aberto{busca ? " (filtro)" : " (títulos)"}
+                        Total em aberto{filtrado ? " (filtro)" : ""}
                       </td>
-                      <td className="table-cell text-right px-4 py-3.5 text-red-600 tabular-nums">
+                      <td className="table-cell text-right px-4 py-3.5 tabular-nums">
                         {formatMoney(dados.totalEmAberto)}
                       </td>
+                      <td className="table-cell px-4 py-3.5" colSpan={3} />
                     </tr>
                   </tbody>
                 </table>
@@ -310,9 +416,9 @@ export function ContasPorClientePanel() {
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600 print:hidden">
             <p>
-              {totalAba} cliente(s){busca ? " no filtro" : ""}
+              {totalAba} cliente(s){filtrado ? " no filtro" : ""} · {pageSize} por página
             </p>
             <div className="flex items-center gap-2">
               <button

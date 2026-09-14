@@ -2,6 +2,7 @@ const { prisma } = require("../lib/prisma");
 const { findManyBatched, EXPORT_MAX_ROWS } = require("./exportBatch");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { listarClientesDevedores } = require("./financeiroDevedores");
+const { camposVencimentoTitulo } = require("../domain/financeiro/agingTitulos");
 
 /**
  * Paridade com frontend formatFreteReciboLinha (utils.ts).
@@ -22,9 +23,9 @@ function formatFretePagoCsv(v) {
 }
 
 const FINANCEIRO_CSV_HEADER =
-  "Cliente,Original (titulos),Pago (titulos),Em aberto (titulos)";
+  "Cliente,Original (titulos),Pago (titulos),Em aberto (titulos),Participacao %,Titulos em aberto,Maior atraso (dias)";
 const TITULOS_CSV_HEADER =
-  "Título,Cliente,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Status";
+  "Título,Cliente,Representante,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Dias atraso,Status";
 
 async function processVendasCsv(payload) {
   const tenantId = parseInt(payload.tenantId, 10);
@@ -78,16 +79,27 @@ async function processVendasCsv(payload) {
   };
 }
 
-async function processFinanceiroCsv(_payload, tenantId) {
-  const { clientesDevedores: capped, truncated } = await listarClientesDevedores(tenantId);
+async function processFinanceiroCsv(payload, tenantId) {
+  const tid = tenantId ?? parseInt(payload.tenantId, 10);
+  const { clientesDevedores: capped, truncated } = await listarClientesDevedores(tid, {
+    busca: payload?.busca ? String(payload.busca) : "",
+    vendedorId: payload?.vendedorId ? String(payload.vendedorId) : "",
+    ordenar: payload?.ordenar ? String(payload.ordenar) : "saldo",
+  });
   // Colunas = carteira de títulos (SSOT de cobrança), não conta corrente vendas−pagamentos.
   const csv =
     `${FINANCEIRO_CSV_HEADER}\n` +
     capped
-      .map(
-        (c) =>
-          `"${String(c.cliente.nomeFantasia || c.cliente.razaoSocial).replaceAll('"', '""')}",${c.debito.toFixed(2)},${c.credito.toFixed(2)},${c.saldo.toFixed(2)}`,
-      )
+      .map((c) => {
+        const nome = String(c.cliente.nomeFantasia || c.cliente.razaoSocial).replaceAll(
+          '"',
+          '""',
+        );
+        const part = Number(c.participacao || 0).toFixed(2);
+        const titulos = Number(c.titulosAbertos || 0);
+        const atraso = Number(c.maiorAtrasoDias || 0);
+        return `"${nome}",${c.debito.toFixed(2)},${c.credito.toFixed(2)},${c.saldo.toFixed(2)},${part},${titulos},${atraso}`;
+      })
       .join("\n");
 
   return {
@@ -108,8 +120,23 @@ async function processTitulosCsv(payload) {
     {
       where,
       include: {
-        cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
-        venda: { select: { id: true, numeroVenda: true, dataVenda: true, valorTotal: true } },
+        cliente: {
+          select: {
+            id: true,
+            razaoSocial: true,
+            nomeFantasia: true,
+            vendedor: { select: { nome: true } },
+          },
+        },
+        venda: {
+          select: {
+            id: true,
+            numeroVenda: true,
+            dataVenda: true,
+            valorTotal: true,
+            vendedor: { select: { nome: true } },
+          },
+        },
       },
       orderBy: [{ vencimento: "asc" }, { id: "desc" }],
     },
@@ -121,14 +148,19 @@ async function processTitulosCsv(payload) {
     const original = parseFloat(String(t.valorOriginal || 0));
     const pago = parseFloat(String(t.valorPago || 0));
     const aberto = Math.max(0, original - pago);
+    const venc = camposVencimentoTitulo(t);
+    const representante =
+      t.venda?.vendedor?.nome || t.cliente.vendedor?.nome || "—";
     const cols = [
       t.numero || `#${t.id}`,
       t.cliente.nomeFantasia || t.cliente.razaoSocial,
+      representante,
       t.venda ? `Venda #${t.venda.numeroVenda ?? t.venda.id}` : "-",
       new Date(t.vencimento).toLocaleDateString("pt-BR"),
       original.toFixed(2),
       pago.toFixed(2),
       aberto.toFixed(2),
+      String(venc.diasAtraso),
       t.status,
     ];
     bodyLines.push(cols.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","));

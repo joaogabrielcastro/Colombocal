@@ -20,6 +20,10 @@ const { getDateRange } = require("../utils/dateRangeQuery");
 const { montarEvolucaoPeriodo } = require("../utils/evolucaoVendas");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+const {
+  montarFaixasAging,
+  camposVencimentoTitulo,
+} = require("../domain/financeiro/agingTitulos");
 
 const VENDA_DETALHE_INCLUDE = {
   cliente: true,
@@ -552,7 +556,7 @@ router.post("/comissoes/ajustes-lote", async (req, res) => {
 router.get("/financeiro", async (req, res) => {
   try {
     const { take, skip } = parsePagination(req.query, {
-      defaultTake: 100,
+      defaultTake: 20,
       maxTake: 500,
     });
 
@@ -560,20 +564,33 @@ router.get("/financeiro", async (req, res) => {
       clientesDevedores: clientesDevedoresPage,
       clientesDevedoresCount,
       totalEmAberto,
+      totalOriginal,
+      totalPago,
+      totalVencido,
+      totalAVencer,
+      pctVencido,
+      faixas,
     } = await listarClientesDevedores(req.tenantId, {
       take,
       skip,
       busca: req.query.busca ? String(req.query.busca) : "",
+      vendedorId: req.query.vendedorId ? String(req.query.vendedorId) : "",
+      ordenar: req.query.ordenar ? String(req.query.ordenar) : "saldo",
     });
 
     setPaginationHeaders(res, { total: clientesDevedoresCount, take, skip });
 
     res.json({
-      // compat: antes vinha a lista completa; FE usa só a página de devedores
       contasClientes: clientesDevedoresPage,
       clientesDevedores: clientesDevedoresPage,
       clientesDevedoresCount,
       totalEmAberto,
+      totalOriginal,
+      totalPago,
+      totalVencido,
+      totalAVencer,
+      pctVencido,
+      faixas,
     });
   } catch (error) {
     handleRouteError(res, error);
@@ -584,8 +601,12 @@ router.get("/financeiro", async (req, res) => {
 router.post("/financeiro/export-async", async (req, res) => {
   try {
     const tenantSnap = req.tenantId;
+    const raw = req.body || {};
     const jobId = await enqueueExportJob("financeiro_csv", tenantSnap, {
       tenantId: String(tenantSnap),
+      busca: raw.busca ? String(raw.busca) : "",
+      vendedorId: raw.vendedorId ? String(raw.vendedorId) : "",
+      ordenar: raw.ordenar ? String(raw.ordenar) : "saldo",
     });
     res.status(202).json({ jobId, status: "pending" });
   } catch (error) {
@@ -597,17 +618,32 @@ router.post("/financeiro/export-async", async (req, res) => {
 router.get("/titulos", async (req, res) => {
   try {
     const { take, skip } = parsePagination(req.query, {
-      defaultTake: 100,
+      defaultTake: 20,
       maxTake: 500,
     });
     const where = buildTitulosWhere(req.query, req.tenantId);
 
-    const [titulos, totalTitulosCount, aggTotais] = await Promise.all([
+    const [titulos, totalTitulosCount, aggTotais, faixasAging] = await Promise.all([
       prisma.tituloReceber.findMany({
         where,
         include: {
-          cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
-          venda: { select: { id: true, numeroVenda: true, dataVenda: true, valorTotal: true } },
+          cliente: {
+            select: {
+              id: true,
+              razaoSocial: true,
+              nomeFantasia: true,
+              vendedor: { select: { id: true, nome: true } },
+            },
+          },
+          venda: {
+            select: {
+              id: true,
+              numeroVenda: true,
+              dataVenda: true,
+              valorTotal: true,
+              vendedor: { select: { id: true, nome: true } },
+            },
+          },
         },
         orderBy: [{ vencimento: "asc" }, { id: "desc" }],
         take,
@@ -618,36 +654,7 @@ router.get("/titulos", async (req, res) => {
         where,
         _sum: { valorOriginal: true, valorPago: true },
       }),
-    ]);
-
-    const hoje = new Date();
-    hoje.setHours(23, 59, 59, 999);
-    const addDays = (base, days) => {
-      const d = new Date(base);
-      d.setDate(d.getDate() + days);
-      return d;
-    };
-
-    const sumAberto = async (extraWhere = {}) => {
-      const agg = await prisma.tituloReceber.aggregate({
-        where: {
-          ...where,
-          ...extraWhere,
-          status: { in: ["aberto", "parcial"] },
-        },
-        _sum: { valorOriginal: true, valorPago: true },
-      });
-      const original = parseFloat(String(agg._sum.valorOriginal || 0));
-      const pago = parseFloat(String(agg._sum.valorPago || 0));
-      return Math.max(0, original - pago);
-    };
-
-    const [vencidos, ate30, de31a60, de61a90, acima90] = await Promise.all([
-      sumAberto({ vencimento: { lt: hoje } }),
-      sumAberto({ vencimento: { gte: hoje, lte: addDays(hoje, 30) } }),
-      sumAberto({ vencimento: { gt: addDays(hoje, 30), lte: addDays(hoje, 60) } }),
-      sumAberto({ vencimento: { gt: addDays(hoje, 60), lte: addDays(hoje, 90) } }),
-      sumAberto({ vencimento: { gt: addDays(hoje, 90) } }),
+      montarFaixasAging(prisma, where),
     ]);
 
     const resumo = {
@@ -660,16 +667,23 @@ router.get("/titulos", async (req, res) => {
           parseFloat(String(aggTotais._sum.valorPago || 0)),
       ),
       faixas: {
-        vencidos,
-        ate30,
-        de31a60,
-        de61a90,
-        acima90,
+        vencidos: faixasAging.vencidos,
+        ate30: faixasAging.ate30,
+        de31a60: faixasAging.de31a60,
+        de61a90: faixasAging.de61a90,
+        acima90: faixasAging.acima90,
       },
+      totalVencido: faixasAging.vencidos,
+      totalAVencer: faixasAging.totalAVencer,
     };
 
+    const titulosOut = titulos.map((t) => ({
+      ...t,
+      ...camposVencimentoTitulo(t),
+    }));
+
     setPaginationHeaders(res, { total: totalTitulosCount, take, skip });
-    res.json({ titulos, resumo });
+    res.json({ titulos: titulosOut, resumo });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -679,6 +693,8 @@ router.get("/titulos", async (req, res) => {
 router.post("/titulos/export-async", async (req, res) => {
   try {
     const raw = req.body || {};
+    const somenteEmAberto =
+      raw.somenteEmAberto === true || raw.somenteEmAberto === "true";
     const payload = {
       tenantId: String(req.tenantId),
       clienteId: raw.clienteId ? String(raw.clienteId) : "",
@@ -686,7 +702,9 @@ router.post("/titulos/export-async", async (req, res) => {
       status: raw.status ? String(raw.status) : "",
       dataVencInicio: raw.dataVencInicio ? String(raw.dataVencInicio) : "",
       dataVencFim: raw.dataVencFim ? String(raw.dataVencFim) : "",
-      somenteEmAberto: raw.somenteEmAberto ? "true" : "false",
+      somenteEmAberto: somenteEmAberto ? "true" : "false",
+      vendedorId: raw.vendedorId ? String(raw.vendedorId) : "",
+      situacao: raw.situacao ? String(raw.situacao) : "",
     };
 
     const jobId = await enqueueExportJob("titulos_csv", req.tenantId, payload);

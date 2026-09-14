@@ -60,3 +60,55 @@ test("buildTitulosWhere aceita # na ordem", () => {
     { venda: { numeroVenda: 11 } },
   ]);
 });
+
+test("buildTitulosWhere filtra por representante", () => {
+  const where = buildTitulosWhere({ vendedorId: "7" }, 1);
+  assert.equal(where.tenantId, 1);
+  assert.deepEqual(where.AND, [
+    {
+      OR: [
+        { venda: { vendedorId: 7 } },
+        { cliente: { vendedorId: 7 } },
+      ],
+    },
+  ]);
+});
+
+test("buildTitulosWhere ignora vendedor vazio", () => {
+  const where = buildTitulosWhere({ vendedorId: "" }, 1);
+  assert.equal(where.AND, undefined);
+});
+
+test("tituloFiltroVendedor retorna null para id inválido", () => {
+  const { tituloFiltroVendedor } = require("../src/utils/relatorioWhere");
+  assert.equal(tituloFiltroVendedor(""), null);
+  assert.equal(tituloFiltroVendedor("0"), null);
+  assert.equal(tituloFiltroVendedor("abc"), null);
+});
+
+test("buildTitulosWhere aplica situacao vencidos no mesmo corte do aging", () => {
+  const where = buildTitulosWhere({ situacao: "vencidos", vendedorId: "7" }, 1);
+  assert.equal(where.tenantId, 1);
+  assert.equal(where.AND.length, 2);
+  assert.ok(where.AND[1].vencimento.lt);
+});
+
+test("buildTitulosWhere aplica situacao a_vencer", () => {
+  const where = buildTitulosWhere({ situacao: "a_vencer" }, 1);
+  assert.ok(where.AND[0].vencimento.gte);
+});
+
+test("buildTitulosWhere ignora situacao inválida", () => {
+  const where = buildTitulosWhere({ situacao: "inventado" }, 1);
+  assert.equal(where.AND, undefined);
+});
+
+test("buildTitulosWhere combina somenteEmAberto com situacao", () => {
+  const where = buildTitulosWhere(
+    { somenteEmAberto: "true", situacao: "vencidos" },
+    2,
+  );
+  assert.equal(where.tenantId, 2);
+  assert.deepEqual(where.status, { in: ["aberto", "parcial"] });
+  assert.ok(where.AND[0].vencimento.lt);
+});

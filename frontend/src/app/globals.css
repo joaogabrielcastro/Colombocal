@@ -34,3 +34,38 @@
     @apply border-b border-gray-100 hover:bg-gray-50 transition-colors;
   }
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: #111827;
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr,
+  .card {
+    break-inside: avoid;
+  }
+
+  a[href] {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    display: none !important;
+  }
+}

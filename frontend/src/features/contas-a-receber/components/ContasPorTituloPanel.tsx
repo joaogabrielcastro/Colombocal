@@ -2,77 +2,66 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { formatDate, formatMoney, type Cliente } from "@/lib/utils";
+import { formatDate, formatMoney, type Cliente, type Vendedor } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
-import api from "@/lib/api";
-import { apiFetchWithMeta } from "@/lib/api";
-import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
+import api, { apiFetchWithMeta } from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import SearchableSelect from "@/components/SearchableSelect";
-
-interface TituloItem {
-  id: number;
-  numero?: string | null;
-  vencimento: string;
-  valorOriginal: number;
-  valorPago: number;
-  status: "aberto" | "parcial" | "quitado";
-  cliente: { id: number; razaoSocial: string; nomeFantasia?: string | null };
-  venda?: {
-    id: number;
-    numeroVenda?: number | null;
-    dataVenda: string;
-    valorTotal: number;
-  } | null;
-}
-
-interface TitulosResponse {
-  titulos: TituloItem[];
-  resumo: {
-    totalTitulos: number;
-    valorOriginal: number;
-    valorPago: number;
-    valorEmAberto: number;
-    faixas: {
-      vencidos: number;
-      ate30: number;
-      de31a60: number;
-      de61a90: number;
-      acima90: number;
-    };
-  };
-}
+import { ArrowDownTrayIcon, PrinterIcon } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
+import { reportApiError } from "@/lib/report-api-error";
+import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
+import { CONTAS_PAGE_SIZE } from "../constants";
+import { downloadXlsx, nomeArquivoExcel } from "../services/exportExcel";
+import { fetchTodasPaginas } from "../services/fetchPaginas";
+import {
+  atrasoDoTitulo,
+  classStatusTitulo,
+  diasAteVencerDoTitulo,
+  labelStatusTitulo,
+  saldoAbertoTitulo,
+  venceHojeDoTitulo,
+} from "../services/display";
+import { ContasAgingFaixas } from "./ContasAgingFaixas";
+import { ContasKpiCards } from "./ContasKpiCards";
+import { ContasPrintMeta } from "./ContasPrintMeta";
+import { FiltrosRapidosSituacao } from "./FiltrosRapidosSituacao";
+import { SituacaoVencimento } from "./SituacaoVencimento";
+import type { SituacaoFiltro, TituloItem, TitulosResponse } from "../types";
 
 type Props = {
   initialClienteId?: string;
 };
 
-/** Visão linha a linha: parcelas/títulos com aging. */
 export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
   const [dados, setDados] = useState<TitulosResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const pageSize = 100;
+  const pageSize = CONTAS_PAGE_SIZE;
 
   const [clienteId, setClienteId] = useState(initialClienteId);
+  const [vendedorId, setVendedorId] = useState("");
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [vendaIdFiltro, setVendaIdFiltro] = useState("");
   const [status, setStatus] = useState("");
   const [dataVencInicio, setDataVencInicio] = useState("");
   const [dataVencFim, setDataVencFim] = useState("");
   const [somenteEmAberto, setSomenteEmAberto] = useState(true);
+  const [situacao, setSituacao] = useState<SituacaoFiltro>("");
   const [ordenarMaiorAtraso, setOrdenarMaiorAtraso] = useState(true);
-  const {
-    isExporting: exportandoCsv,
-    error: erroExportacao,
-    exportCsv,
-  } = useExportCsvAsync({
-    startPath: "/relatorios/titulos/export-async",
-    maxAttempts: 60,
-    pollIntervalMs: 1000,
-  });
+  const [exportando, setExportando] = useState(false);
+  const csv = useExportCsvAsync({ startPath: "/relatorios/titulos/export-async" });
+
+  useEffect(() => {
+    api
+      .get<Vendedor[]>("/vendedores?take=500")
+      .then(setVendedores)
+      .catch(() => setVendedores([]));
+  }, []);
 
   useEffect(() => {
     if (initialClienteId) setClienteId(initialClienteId);
@@ -88,9 +77,12 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
       if (dataVencInicio) params.set("dataVencInicio", dataVencInicio);
       if (dataVencFim) params.set("dataVencFim", dataVencFim);
       if (somenteEmAberto) params.set("somenteEmAberto", "true");
+      if (vendedorId) params.set("vendedorId", vendedorId);
+      if (situacao) params.set("situacao", situacao);
       params.set("take", String(pageSize));
       params.set("skip", String((targetPage - 1) * pageSize));
       setLoading(true);
+      setErro("");
       try {
         const { data, meta } = await apiFetchWithMeta<TitulosResponse>(
           `/relatorios/titulos?${params.toString()}`,
@@ -98,11 +90,28 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
         );
         setDados(data);
         setTotal(meta.totalCount ?? data.resumo.totalTitulos);
+      } catch (e) {
+        setErro("Não foi possível carregar os títulos.");
+        reportApiError(e, {
+          title: "Erro ao carregar títulos",
+          onRetry: () => void carregar(targetPage),
+        });
       } finally {
         setLoading(false);
       }
     },
-    [clienteId, vendaIdFiltro, status, dataVencInicio, dataVencFim, somenteEmAberto],
+    [
+      clienteId,
+      vendedorId,
+      vendaIdFiltro,
+      status,
+      dataVencInicio,
+      dataVencFim,
+      somenteEmAberto,
+      situacao,
+      pageSize,
+      page,
+    ],
   );
 
   useEffect(() => {
@@ -124,107 +133,237 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
     return (c.nomeFantasia?.trim() || c.razaoSocial) ?? null;
   }, []);
 
-  const getDiasAtraso = (vencimento: string, valorAberto: number) => {
-    if (valorAberto <= 0.009) return 0;
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const venc = new Date(vencimento);
-    venc.setHours(0, 0, 0, 0);
-    const diffMs = hoje.getTime() - venc.getTime();
-    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-  };
+  const representanteDoTitulo = (t: TituloItem) =>
+    t.venda?.vendedor?.nome || t.cliente.vendedor?.nome || "—";
 
   const titulosOrdenados = [...(dados?.titulos || [])].sort((a, b) => {
     if (!ordenarMaiorAtraso) {
       return new Date(a.vencimento).getTime() - new Date(b.vencimento).getTime();
     }
-    const abertoA = Math.max(
-      0,
-      parseFloat(String(a.valorOriginal)) - parseFloat(String(a.valorPago)),
-    );
-    const abertoB = Math.max(
-      0,
-      parseFloat(String(b.valorOriginal)) - parseFloat(String(b.valorPago)),
-    );
-    const atrasoA = getDiasAtraso(a.vencimento, abertoA);
-    const atrasoB = getDiasAtraso(b.vencimento, abertoB);
+    const abertoA = saldoAbertoTitulo(a);
+    const abertoB = saldoAbertoTitulo(b);
+    const atrasoA = atrasoDoTitulo(a, abertoA);
+    const atrasoB = atrasoDoTitulo(b, abertoB);
     if (atrasoB !== atrasoA) return atrasoB - atrasoA;
     return abertoB - abertoA;
   });
 
-  const getExportRows = () =>
-    titulosOrdenados.map((t) => {
-      const aberto = Math.max(
-        0,
-        parseFloat(String(t.valorOriginal)) - parseFloat(String(t.valorPago)),
-      );
+  const linhasExcelDeTitulos = (lista: TituloItem[]) =>
+    lista.map((t) => {
+      const aberto = saldoAbertoTitulo(t);
       return {
-        titulo: t.numero || `#${t.id}`,
-        cliente: t.cliente.nomeFantasia || t.cliente.razaoSocial,
-        venda: t.venda ? `Venda ${vendaOrdemTexto(t.venda)}` : "-",
-        vencimento: formatDate(t.vencimento),
-        valorOriginal: parseFloat(String(t.valorOriginal)),
-        valorPago: parseFloat(String(t.valorPago)),
-        valorEmAberto: aberto,
-        diasAtraso: getDiasAtraso(t.vencimento, aberto),
-        status: t.status,
+        Título: t.numero || `#${t.id}`,
+        Cliente: t.cliente.nomeFantasia || t.cliente.razaoSocial,
+        Representante: representanteDoTitulo(t),
+        Venda: t.venda ? `Venda ${vendaOrdemTexto(t.venda)}` : "-",
+        Vencimento: formatDate(t.vencimento),
+        "Valor original": parseFloat(String(t.valorOriginal)),
+        "Valor pago": parseFloat(String(t.valorPago)),
+        "Valor em aberto": aberto,
+        "Dias atraso": atrasoDoTitulo(t, aberto),
+        Status: t.status,
       };
     });
 
-  const exportarCsvAsync = async () => {
-    await exportCsv({
-      clienteId,
-      vendaId: vendaIdFiltro,
-      status,
-      dataVencInicio,
-      dataVencFim,
-      somenteEmAberto,
-    });
+  const paramsFiltroTitulos = () => {
+    const params = new URLSearchParams();
+    if (clienteId) params.set("clienteId", clienteId);
+    const vid = vendaIdFiltro.replace(/^#/, "").trim();
+    if (vid) params.set("vendaId", vid);
+    if (status) params.set("status", status);
+    if (dataVencInicio) params.set("dataVencInicio", dataVencInicio);
+    if (dataVencFim) params.set("dataVencFim", dataVencFim);
+    if (somenteEmAberto) params.set("somenteEmAberto", "true");
+    if (vendedorId) params.set("vendedorId", vendedorId);
+    if (situacao) params.set("situacao", situacao);
+    return params;
   };
 
   const exportarExcel = async () => {
-    if (!dados) return;
-    const XLSX = await import("xlsx");
-    const rows = getExportRows();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Titulos");
-    XLSX.writeFile(wb, `titulos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    setExportando(true);
+    try {
+      const { items, truncated } = await fetchTodasPaginas<TitulosResponse>({
+        path: "/relatorios/titulos",
+        params: paramsFiltroTitulos(),
+        pick: (data) => data.titulos,
+        totalFrom: (data, metaTotal) => metaTotal ?? data.resumo.totalTitulos,
+      });
+      let lista = items as TituloItem[];
+      if (ordenarMaiorAtraso) {
+        lista = [...lista].sort((a, b) => {
+          const abertoA = saldoAbertoTitulo(a);
+          const abertoB = saldoAbertoTitulo(b);
+          const atrasoA = atrasoDoTitulo(a, abertoA);
+          const atrasoB = atrasoDoTitulo(b, abertoB);
+          if (atrasoB !== atrasoA) return atrasoB - atrasoA;
+          return abertoB - abertoA;
+        });
+      }
+      downloadXlsx(
+        nomeArquivoExcel("contas-receber-titulos"),
+        "Títulos",
+        linhasExcelDeTitulos(lista),
+      );
+      if (truncated) {
+        toast.message("Excel limitado aos primeiros 5.000 títulos do filtro.");
+      }
+    } catch {
+      toast.error("Não foi possível gerar o Excel.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const aplicarSituacaoRapida = (next: SituacaoFiltro) => {
+    setSituacao(next);
+    setSomenteEmAberto(true);
+    setPage(1);
+  };
+
+  const limparFiltros = () => {
+    setClienteId("");
+    setVendedorId("");
+    setVendaIdFiltro("");
+    setStatus("");
+    setDataVencInicio("");
+    setDataVencFim("");
+    setSomenteEmAberto(true);
+    setSituacao("");
+    setOrdenarMaiorAtraso(true);
+    setPage(1);
+  };
+
+  const imprimirRelatorio = () => {
+    const tituloAnterior = document.title;
+    document.title = "Contas a receber — por título";
+    window.print();
+    document.title = tituloAnterior;
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const nomeRepresentante =
+    vendedores.find((v) => String(v.id) === vendedorId)?.nome || "";
+  const filtrosAtivos = Boolean(
+    clienteId ||
+      vendedorId ||
+      vendaIdFiltro ||
+      status ||
+      dataVencInicio ||
+      dataVencFim ||
+      situacao ||
+      !somenteEmAberto,
+  );
+
+  const kpis = dados
+    ? [
+        { label: "Títulos", value: String(dados.resumo.totalTitulos) },
+        { label: "Original", value: formatMoney(dados.resumo.valorOriginal) },
+        { label: "Pago", value: formatMoney(dados.resumo.valorPago) },
+        {
+          label: "Em aberto",
+          value: formatMoney(dados.resumo.valorEmAberto),
+        },
+        {
+          label: "Vencido",
+          value: formatMoney(dados.resumo.totalVencido ?? dados.resumo.faixas.vencidos),
+          tone: "danger" as const,
+        },
+        {
+          label: "A vencer",
+          value: formatMoney(
+            dados.resumo.totalAVencer ??
+              dados.resumo.faixas.ate30 +
+                dados.resumo.faixas.de31a60 +
+                dados.resumo.faixas.de61a90 +
+                dados.resumo.faixas.acima90,
+          ),
+          tone: "muted" as const,
+        },
+      ]
+    : [];
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
+      <p className="text-sm text-gray-600 leading-relaxed max-w-3xl print:hidden">
         Parcelas em aberto por título (aging). O valor de uma linha pode diferir do
         saldo global da conta corrente do cliente.
       </p>
 
+      <ContasPrintMeta
+        visao="Por título"
+        linhas={[
+          clienteId ? `Cliente #${clienteId}` : "",
+          nomeRepresentante ? `Representante: ${nomeRepresentante}` : "",
+          vendaIdFiltro ? `Venda ${vendaIdFiltro}` : "",
+          status ? `Status: ${status}` : "",
+          dataVencInicio ? `Venc. de ${dataVencInicio}` : "",
+          dataVencFim ? `Venc. até ${dataVencFim}` : "",
+          somenteEmAberto ? "Somente em aberto" : "",
+          situacao === "vencidos"
+            ? "Situação: vencidos"
+            : situacao === "a_vencer"
+              ? "Situação: a vencer"
+              : "",
+        ]}
+      />
+
       {clienteId ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 print:hidden">
           <Link
             href={`/clientes/${clienteId}?aba=conta`}
             className="font-medium text-blue-700 underline hover:text-blue-900"
           >
-            Ver recebimentos deste cliente
+            Ver dados, vendas, títulos e pagamentos deste cliente
           </Link>
         </div>
       ) : null}
 
-      <FilterBar className="p-4 sm:p-5 mb-0">
+      <FilterBar className="p-4 sm:p-5 mb-0 print:hidden">
+        <div className="mb-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+            Filtro rápido
+          </p>
+          <FiltrosRapidosSituacao
+            value={situacao}
+            somenteEmAberto={somenteEmAberto}
+            onChange={aplicarSituacaoRapida}
+          />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-4">
           <div className="xl:col-span-3">
             <SearchableSelect
               label="Cliente"
               value={clienteId}
-              onChange={setClienteId}
+              onChange={(id) => {
+                setClienteId(id);
+                setPage(1);
+              }}
               loadOptions={loadClienteOptions}
               loadLabelById={loadClienteLabelById}
               minChars={0}
               placeholder="Todos os clientes"
               emptyHint="Digite para buscar ou deixe em branco para todos."
             />
+          </div>
+          <div className="xl:col-span-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Representante
+            </label>
+            <select
+              value={vendedorId}
+              onChange={(e) => {
+                setVendedorId(e.target.value);
+                setPage(1);
+              }}
+              className="input-field w-full"
+            >
+              <option value="">Todos</option>
+              {vendedores.map((v) => (
+                <option key={v.id} value={String(v.id)}>
+                  {v.nome}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="xl:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -245,7 +384,10 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             </label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
               className="input-field"
             >
               <option value="">Todos</option>
@@ -282,7 +424,10 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             <input
               type="checkbox"
               checked={somenteEmAberto}
-              onChange={(e) => setSomenteEmAberto(e.target.checked)}
+              onChange={(e) => {
+                setSomenteEmAberto(e.target.checked);
+                setPage(1);
+              }}
             />
             Somente em aberto (aberto/parcial)
           </label>
@@ -308,93 +453,95 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             >
               Filtrar
             </button>
+            {filtrosAtivos ? (
+              <button type="button" className="btn-secondary" onClick={limparFiltros}>
+                Limpar
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={() => void exportarCsvAsync()}
-              disabled={exportandoCsv}
-              className="btn-secondary"
+              onClick={imprimirRelatorio}
+              className="btn-secondary flex items-center gap-1.5"
             >
-              {exportandoCsv ? "Gerando CSV..." : "Exportar CSV"}
+              <PrinterIcon className="w-4 h-4" /> Imprimir
             </button>
-            <button type="button" onClick={() => void exportarExcel()} className="btn-secondary">
-              Exportar Excel
+            <button
+              type="button"
+              onClick={() => void exportarExcel()}
+              disabled={exportando}
+              className="btn-secondary flex items-center gap-1.5"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              {exportando ? "Gerando Excel..." : "Exportar Excel"}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void csv.exportCsv({
+                  clienteId,
+                  vendaId: vendaIdFiltro.replace(/^#/, "").trim(),
+                  status,
+                  dataVencInicio,
+                  dataVencFim,
+                  somenteEmAberto,
+                  vendedorId,
+                  situacao,
+                })
+              }
+              disabled={csv.isExporting}
+              className="btn-secondary flex items-center gap-1.5"
+            >
+              {csv.isExporting ? "Gerando CSV..." : "Exportar CSV"}
             </button>
           </div>
         </div>
+        {csv.error ? <p className="mt-2 text-sm text-red-600">{csv.error}</p> : null}
       </FilterBar>
 
-      {erroExportacao ? (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {erroExportacao}
+      {loading && !dados ? (
+        <div className="card p-5">
+          <TableListSkeleton rows={8} cols={9} />
         </div>
+      ) : null}
+
+      {erro && !dados ? (
+        <EmptyState
+          title="Não foi possível carregar os títulos"
+          description={erro}
+          action={
+            <button type="button" className="btn-primary" onClick={() => void carregar(page)}>
+              Tentar novamente
+            </button>
+          }
+        />
       ) : null}
 
       {dados ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-3 lg:gap-4 mb-5">
-          <div className="card p-4 text-center min-w-0">
-            <p className="text-xs text-gray-500 mb-1">Títulos</p>
-            <p className="text-lg font-bold tabular-nums">{dados.resumo.totalTitulos}</p>
-          </div>
-          <div className="card p-4 text-center min-w-0">
-            <p className="text-xs text-gray-500 mb-1">Em Aberto</p>
-            <p className="text-lg font-bold text-red-600 tabular-nums">
-              {formatMoney(dados.resumo.valorEmAberto)}
-            </p>
-          </div>
-          <div className="card p-4 text-center min-w-0">
-            <p className="text-xs text-gray-500 mb-1">Vencidos</p>
-            <p className="text-lg font-bold text-red-700 tabular-nums">
-              {formatMoney(dados.resumo.faixas.vencidos)}
-            </p>
-          </div>
-          <div className="card p-4 text-center min-w-0">
-            <p className="text-xs text-gray-500 mb-1">0-30 dias</p>
-            <p className="text-lg font-bold tabular-nums">
-              {formatMoney(dados.resumo.faixas.ate30)}
-            </p>
-          </div>
-          <div className="card p-4 text-center min-w-0">
-            <p className="text-xs text-gray-500 mb-1">31-60</p>
-            <p className="text-lg font-bold tabular-nums">
-              {formatMoney(dados.resumo.faixas.de31a60)}
-            </p>
-          </div>
-          <div className="card p-4 text-center min-w-0">
-            <p className="text-xs text-gray-500 mb-1">61-90</p>
-            <p className="text-lg font-bold tabular-nums">
-              {formatMoney(dados.resumo.faixas.de61a90)}
-            </p>
-          </div>
-          <div className="card p-4 text-center min-w-0">
-            <p className="text-xs text-gray-500 mb-1">90+</p>
-            <p className="text-lg font-bold tabular-nums">
-              {formatMoney(dados.resumo.faixas.acima90)}
-            </p>
-          </div>
-        </div>
-      ) : null}
+        <>
+          <ContasKpiCards items={kpis} />
+          <ContasAgingFaixas faixas={dados.resumo.faixas} />
 
-      <div className="card overflow-hidden">
-        {loading ? (
-          <div className="p-5">
-            <TableListSkeleton rows={12} cols={6} />
-          </div>
-        ) : !dados || dados.titulos.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              title="Nenhum título encontrado"
-              description="Ajuste os filtros ou remova restrições para visualizar títulos."
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px]">
+          <div className="card overflow-hidden">
+            {loading ? (
+              <div className="p-5">
+                <TableListSkeleton rows={8} cols={9} />
+              </div>
+            ) : dados.titulos.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="Nenhum título encontrado para os filtros selecionados."
+                  description="Ajuste cliente, venda, vencimento ou situação, ou limpe os filtros."
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1100px]">
               <thead>
                 <tr className="border-b border-gray-200 bg-slate-50/80">
                   <th className="table-header text-left px-4 py-3.5 whitespace-nowrap">
                     Título
                   </th>
-                  <th className="table-header text-left px-4 py-3.5 min-w-[220px] w-[28%]">
+                  <th className="table-header text-left px-4 py-3.5 min-w-[200px] w-[22%]">
                     Cliente
                   </th>
                   <th className="table-header text-left px-4 py-3.5 w-32 bg-slate-50">
@@ -405,17 +552,16 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
                   </th>
                   <th className="table-header text-right px-4 py-3.5">Original</th>
                   <th className="table-header text-right px-4 py-3.5">Pago</th>
-                  <th className="table-header text-right px-4 py-3.5">Aberto</th>
+                  <th className="table-header text-right px-4 py-3.5">Em aberto</th>
                   <th className="table-header text-left px-4 py-3.5">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {titulosOrdenados.map((t) => {
-                  const aberto = Math.max(
-                    0,
-                    parseFloat(String(t.valorOriginal)) - parseFloat(String(t.valorPago)),
-                  );
-                  const diasAtraso = getDiasAtraso(t.vencimento, aberto);
+                  const aberto = saldoAbertoTitulo(t);
+                  const diasAtraso = atrasoDoTitulo(t, aberto);
+                  const diasAte = diasAteVencerDoTitulo(t, aberto);
+                  const venceHoje = venceHojeDoTitulo(t, aberto);
                   return (
                     <tr key={t.id} className="table-row">
                       <td className="table-cell px-4 py-3.5 font-mono whitespace-nowrap">
@@ -423,13 +569,16 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
                       </td>
                       <td className="table-cell px-4 py-3.5">
                         <Link
-                          href={`/clientes/${t.cliente.id}`}
+                          href={`/clientes/${t.cliente.id}?aba=conta`}
                           className="text-blue-600 hover:underline font-medium"
                           title={t.cliente.nomeFantasia || t.cliente.razaoSocial}
                         >
                           {t.cliente.nomeFantasia || t.cliente.razaoSocial}
                         </Link>
-                        <div className="mt-0.5">
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {representanteDoTitulo(t)}
+                        </div>
+                        <div className="mt-0.5 print:hidden">
                           <Link
                             href={`/financeiro/novo?clienteId=${t.cliente.id}`}
                             className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
@@ -454,26 +603,27 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
                       <td className="table-cell text-right px-4 py-3.5 tabular-nums">
                         {formatMoney(t.valorPago)}
                       </td>
-                      <td className="table-cell text-right px-4 py-3.5 font-semibold text-red-600 tabular-nums">
-                        {formatMoney(aberto)}
-                        {diasAtraso > 0 ? (
-                          <div className="text-xs font-normal text-red-500">
-                            {diasAtraso} dias
-                          </div>
-                        ) : null}
+                      <td className="table-cell px-4 py-3.5">
+                        <SituacaoVencimento
+                          aberto={aberto}
+                          diasAtraso={diasAtraso}
+                          diasAteVencer={diasAte}
+                          venceHoje={venceHoje}
+                        />
                       </td>
                       <td className="table-cell px-4 py-3.5">
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
-                            t.status === "quitado"
-                              ? "bg-green-100 text-green-700"
-                              : t.status === "parcial"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {t.status}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${classStatusTitulo(t.status)}`}
+                          >
+                            {labelStatusTitulo(t.status)}
+                          </span>
+                          {diasAtraso > 0 && t.status !== "quitado" ? (
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700">
+                              Vencido
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -483,13 +633,15 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
           </div>
         )}
       </div>
-      <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600">
-        <p>Total de registros (filtro): {total}</p>
+      <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600 print:hidden">
+        <p>
+          Total de registros (filtro): {total} · {pageSize} por página
+        </p>
         <div className="flex items-center gap-2">
           <button
             type="button"
             className="btn-secondary"
-            disabled={page <= 1}
+            disabled={page <= 1 || loading}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
             Anterior
@@ -500,13 +652,15 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
           <button
             type="button"
             className="btn-secondary"
-            disabled={page >= totalPages}
+            disabled={page >= totalPages || loading}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
             Próxima
           </button>
         </div>
       </div>
+        </>
+      ) : null}
     </div>
   );
 }

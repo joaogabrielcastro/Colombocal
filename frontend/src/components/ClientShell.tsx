@@ -158,14 +158,16 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div key={sessionKey} className="flex flex-row h-screen bg-gray-50">
-      <Sidebar
-        mobileOpen={mobileNavOpen}
-        onOpenMobile={() => setMobileNavOpen(true)}
-        onCloseMobile={() => setMobileNavOpen(false)}
-      />
-      <div className="flex flex-col flex-1 min-w-0 min-h-0">
-        <main className="flex-1 overflow-y-auto min-h-0">{children}</main>
+    <div key={sessionKey} className="flex flex-row h-screen bg-gray-50 print:h-auto print:block">
+      <div className="print:hidden">
+        <Sidebar
+          mobileOpen={mobileNavOpen}
+          onOpenMobile={() => setMobileNavOpen(true)}
+          onCloseMobile={() => setMobileNavOpen(false)}
+        />
+      </div>
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 print:max-w-none">
+        <main className="flex-1 overflow-y-auto min-h-0 print:overflow-visible">{children}</main>
       </div>
     </div>
   );

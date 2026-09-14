@@ -38,12 +38,13 @@ function ContasAReceberHub() {
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
           Contas a receber
         </h1>
-        <p className="text-gray-500 text-sm mt-1.5 max-w-2xl">
-          Quem deve e quanto — por cliente ou por título (parcela).
+        <p className="text-gray-500 text-sm mt-1.5 max-w-2xl print:hidden">
+          Visão financeira da carteira: indicadores, aging, clientes devedores e
+          títulos. Cobrança oficial = valor original − pagos nos títulos.
         </p>
       </div>
 
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6 print:hidden">
         <button
           type="button"
           onClick={() => setVisao("clientes")}

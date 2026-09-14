@@ -114,7 +114,7 @@ test("GET /api/relatorios/vendas filtra por produtoBusca (nome parcial)", async 
   });
   const clienteDolo = await seedCliente(ctx.tenant.id, {
     vendedorId: ctx.vendedor.id,
-    cnpj: "11222333000181",
+    cnpj: "33444555000173",
     razaoSocial: "Cliente Dolomita LTDA",
     nomeFantasia: "Cliente Dolomita",
   });
@@ -406,6 +406,66 @@ test("GET /api/relatorios/financeiro lista devedores", async () => {
   assert.equal(res.body.totalEmAberto, 200);
   assert.equal(res.body.clientesDevedores.length, 1);
   assert.equal(res.body.clientesDevedoresCount, 1);
+  assert.equal(res.body.totalOriginal, 200);
+  assert.equal(res.body.totalPago, 0);
+  assert.ok(res.body.faixas);
+  assert.ok(Number.isFinite(res.body.totalVencido));
+  assert.ok(Number.isFinite(res.body.totalAVencer));
+  assert.ok(
+    Math.abs(res.body.totalVencido + res.body.totalAVencer - res.body.totalEmAberto) < 0.02,
+  );
+  const row = res.body.clientesDevedores[0];
+  assert.equal(row.titulosAbertos, 1);
+  assert.ok(Math.abs(row.participacao - 100) < 0.02);
+  assert.ok(Number.isFinite(row.maiorAtrasoDias));
+});
+
+test("GET /api/relatorios/financeiro ordena por titulos e atraso", async () => {
+  await criarVenda();
+  const porTitulos = await agent.get("/api/relatorios/financeiro").query({ ordenar: "titulos" });
+  assert.equal(porTitulos.status, 200);
+  assert.equal(porTitulos.body.clientesDevedores[0].titulosAbertos, 1);
+  const porAtraso = await agent.get("/api/relatorios/financeiro").query({ ordenar: "atraso" });
+  assert.equal(porAtraso.status, 200);
+  assert.equal(porAtraso.body.clientesDevedores.length, 1);
+});
+
+test("GET /api/relatorios/financeiro e titulos filtram por representante", async () => {
+  const outroVend = await seedVendedor(ctx.tenant.id, { nome: "Outro Rep" });
+  const outroCli = await seedCliente(ctx.tenant.id, {
+    vendedorId: outroVend.id,
+    cnpj: "22333444000181",
+    razaoSocial: "Cliente Outro LTDA",
+    nomeFantasia: "Cliente Outro",
+  });
+  await criarVenda();
+  await criarVenda({
+    clienteId: outroCli.id,
+    vendedorId: outroVend.id,
+  });
+
+  const titulos = await agent.get("/api/relatorios/titulos").query({
+    vendedorId: ctx.vendedor.id,
+    somenteEmAberto: "true",
+  });
+  assert.equal(titulos.status, 200);
+  assert.equal(titulos.body.titulos.length, 1);
+  assert.equal(titulos.body.titulos[0].cliente.id, ctx.cliente.id);
+
+  const fin = await agent.get("/api/relatorios/financeiro").query({
+    vendedorId: ctx.vendedor.id,
+  });
+  assert.equal(fin.status, 200);
+  assert.equal(fin.body.clientesDevedores.length, 1);
+  assert.equal(fin.body.clientesDevedores[0].cliente.id, ctx.cliente.id);
+  assert.equal(fin.body.totalEmAberto, 200);
+
+  const outro = await agent.get("/api/relatorios/financeiro").query({
+    vendedorId: outroVend.id,
+  });
+  assert.equal(outro.status, 200);
+  assert.equal(outro.body.clientesDevedores.length, 1);
+  assert.equal(outro.body.totalEmAberto, 200);
 });
 
 test("GET /api/relatorios/titulos com faixas de vencimento", async () => {
@@ -415,6 +475,18 @@ test("GET /api/relatorios/titulos com faixas de vencimento", async () => {
   assert.equal(res.body.titulos.length, 1);
   assert.ok(res.body.resumo.faixas);
   assert.equal(res.body.resumo.valorEmAberto, 200);
+  assert.ok(Number.isFinite(res.body.resumo.totalVencido));
+  assert.ok(Number.isFinite(res.body.resumo.totalAVencer));
+  assert.ok(Number.isFinite(res.body.titulos[0].diasAtraso));
+  assert.ok(Number.isFinite(res.body.titulos[0].diasAteVencer));
+  assert.equal(typeof res.body.titulos[0].venceHoje, "boolean");
+  assert.ok(
+    Math.abs(
+      res.body.resumo.totalVencido +
+        res.body.resumo.totalAVencer -
+        res.body.resumo.valorEmAberto,
+    ) < 0.02,
+  );
 
   const filtrado = await agent.get("/api/relatorios/titulos").query({
     clienteId: ctx.cliente.id,
@@ -426,6 +498,131 @@ test("GET /api/relatorios/titulos com faixas de vencimento", async () => {
 
   const porStatus = await agent.get("/api/relatorios/titulos").query({ status: "aberto", vendaId: "#1" });
   assert.equal(porStatus.status, 200);
+});
+
+test("GET /api/relatorios/titulos filtra situacao vencidos e a vencer", async () => {
+  const venda = await criarVenda();
+  const aVencer = await agent.get("/api/relatorios/titulos").query({
+    somenteEmAberto: "true",
+    situacao: "a_vencer",
+  });
+  assert.equal(aVencer.status, 200);
+  assert.equal(aVencer.body.titulos.length, 1);
+
+  const vencidosAntes = await agent.get("/api/relatorios/titulos").query({
+    somenteEmAberto: "true",
+    situacao: "vencidos",
+  });
+  assert.equal(vencidosAntes.status, 200);
+  assert.equal(vencidosAntes.body.titulos.length, 0);
+
+  await prisma.tituloReceber.updateMany({
+    where: { vendaId: venda.id, tenantId: ctx.tenant.id },
+    data: { vencimento: new Date("2020-01-01T12:00:00.000Z") },
+  });
+
+  const vencidos = await agent.get("/api/relatorios/titulos").query({
+    somenteEmAberto: "true",
+    situacao: "vencidos",
+  });
+  assert.equal(vencidos.status, 200);
+  assert.equal(vencidos.body.titulos.length, 1);
+  assert.ok(vencidos.body.titulos[0].diasAtraso > 0);
+  assert.equal(vencidos.body.resumo.valorEmAberto, 200);
+  assert.equal(vencidos.body.resumo.totalVencido, 200);
+  assert.equal(vencidos.body.resumo.totalAVencer, 0);
+});
+
+test("GET /api/relatorios/titulos pagamento parcial e título quitado", async () => {
+  const venda = await criarVenda();
+  const pg = await agent.post("/api/pagamentos").send({
+    clienteId: ctx.cliente.id,
+    vendaId: venda.id,
+    valor: 50,
+    tipo: "dinheiro",
+  });
+  assert.equal(pg.status, 201);
+
+  const parcial = await agent.get("/api/relatorios/titulos").query({
+    somenteEmAberto: "true",
+    vendaId: String(venda.numeroVenda || venda.id),
+  });
+  assert.equal(parcial.status, 200);
+  assert.equal(parcial.body.titulos.length, 1);
+  assert.equal(parcial.body.titulos[0].status, "parcial");
+  assert.equal(parcial.body.resumo.valorPago, 50);
+  assert.equal(parcial.body.resumo.valorEmAberto, 150);
+
+  const resto = await agent.post("/api/pagamentos").send({
+    clienteId: ctx.cliente.id,
+    vendaId: venda.id,
+    valor: 150,
+    tipo: "dinheiro",
+  });
+  assert.equal(resto.status, 201);
+
+  const abertos = await agent.get("/api/relatorios/titulos").query({ somenteEmAberto: "true" });
+  assert.equal(abertos.body.titulos.length, 0);
+  assert.equal(abertos.body.resumo.valorEmAberto, 0);
+
+  const todos = await agent.get("/api/relatorios/titulos").query({ status: "quitado" });
+  assert.equal(todos.status, 200);
+  assert.ok(todos.body.titulos.length >= 1);
+  assert.equal(todos.body.titulos[0].status, "quitado");
+
+  const fin = await agent.get("/api/relatorios/financeiro");
+  assert.equal(fin.status, 200);
+  assert.equal(fin.body.clientesDevedores.length, 0);
+  assert.equal(fin.body.totalEmAberto, 0);
+});
+
+test("GET /api/relatorios/titulos cheque abate o saldo uma vez", async () => {
+  const venda = await criarVenda();
+  const cheque = await agent.post("/api/cheques").send({
+    clienteId: ctx.cliente.id,
+    vendaId: venda.id,
+    valor: 80,
+    banco: "Sicredi",
+    numero: "1001",
+    emitenteNome: "Cliente Teste",
+  });
+  assert.equal(cheque.status, 201);
+
+  const tit = await agent.get("/api/relatorios/titulos").query({ somenteEmAberto: "true" });
+  assert.equal(tit.status, 200);
+  assert.equal(tit.body.resumo.valorPago, 80);
+  assert.equal(tit.body.resumo.valorEmAberto, 120);
+
+  const fin = await agent.get("/api/relatorios/financeiro");
+  assert.equal(fin.body.totalPago, 80);
+  assert.equal(fin.body.totalEmAberto, 120);
+});
+
+test("GET /api/relatorios/titulos vazio e não vaza cliente de outro tenant", async () => {
+  const vazio = await agent.get("/api/relatorios/titulos");
+  assert.equal(vazio.status, 200);
+  assert.equal(vazio.body.titulos.length, 0);
+  assert.equal(vazio.body.resumo.valorEmAberto, 0);
+
+  const outro = await seedTenant({ slug: "requinte", name: "Requinte" });
+  const outroVend = await seedVendedor(outro.id, { nome: "Rep Outro Tenant" });
+  const outroCli = await seedCliente(outro.id, {
+    vendedorId: outroVend.id,
+    cnpj: "99888777000166",
+    razaoSocial: "Outro Tenant LTDA",
+    nomeFantasia: "Outro Tenant",
+  });
+  await criarVenda();
+  const vazou = await agent.get("/api/relatorios/titulos").query({
+    clienteId: outroCli.id,
+    somenteEmAberto: "true",
+  });
+  assert.equal(vazou.status, 200);
+  assert.equal(vazou.body.titulos.length, 0);
+
+  const fin = await agent.get("/api/relatorios/financeiro").query({ busca: "Outro Tenant" });
+  assert.equal(fin.status, 200);
+  assert.equal(fin.body.clientesDevedores.length, 0);
 });
 
 test("export-async de vendas gera CSV para download", async () => {

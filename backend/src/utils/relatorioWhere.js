@@ -1,4 +1,5 @@
 const { getDateRange } = require("./dateRangeQuery");
+const { aplicarSituacaoNoWhere } = require("../domain/financeiro/agingTitulos");
 
 /**
  * Filtro de item por produto (id exato e/ou nome contendo texto).
@@ -21,6 +22,21 @@ function buildItemProdutoFilter(query) {
   return Object.keys(filter).length > 0 ? filter : null;
 }
 
+/**
+ * Títulos do representante: venda feita por ele ou cliente da carteira dele.
+ * @returns {object|null}
+ */
+function tituloFiltroVendedor(vendedorId) {
+  const vid = parseInt(String(vendedorId ?? "").trim(), 10);
+  if (!Number.isFinite(vid) || vid < 1) return null;
+  return {
+    OR: [
+      { venda: { vendedorId: vid } },
+      { cliente: { vendedorId: vid } },
+    ],
+  };
+}
+
 function buildTitulosWhere(query, tenantId) {
   const {
     clienteId,
@@ -29,6 +45,8 @@ function buildTitulosWhere(query, tenantId) {
     dataVencFim,
     somenteEmAberto,
     vendaId,
+    vendedorId,
+    situacao,
   } = query;
 
   const where = { tenantId };
@@ -45,6 +63,11 @@ function buildTitulosWhere(query, tenantId) {
   if (dataVencInicio || dataVencFim) {
     where.vencimento = getDateRange(dataVencInicio, dataVencFim);
   }
+  const vf = tituloFiltroVendedor(vendedorId);
+  if (vf) {
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : []), vf];
+  }
+  aplicarSituacaoNoWhere(where, situacao);
   return where;
 }
 
@@ -91,4 +114,5 @@ module.exports = {
   buildTitulosWhere,
   buildVendasWhere,
   buildItemProdutoFilter,
+  tituloFiltroVendedor,
 };

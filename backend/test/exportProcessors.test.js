@@ -32,10 +32,10 @@ test("formatFretePagoCsv: pago com data no movimento", () => {
 });
 
 test("headers CSV financeiro usam labels de títulos (SSOT)", () => {
-  assert.equal(
-    FINANCEIRO_CSV_HEADER,
-    "Cliente,Original (titulos),Pago (titulos),Em aberto (titulos)",
-  );
+  assert.match(FINANCEIRO_CSV_HEADER, /Original \(titulos\)/);
+  assert.match(FINANCEIRO_CSV_HEADER, /Pago \(titulos\)/);
+  assert.match(FINANCEIRO_CSV_HEADER, /Em aberto \(titulos\)/);
+  assert.match(FINANCEIRO_CSV_HEADER, /Participacao %/);
   assert.doesNotMatch(FINANCEIRO_CSV_HEADER, /Debitos|Pagamentos/);
 });
 
@@ -43,4 +43,5 @@ test("headers CSV títulos usam Original/Pago/Em Aberto", () => {
   assert.match(TITULOS_CSV_HEADER, /Valor Original/);
   assert.match(TITULOS_CSV_HEADER, /Valor Pago/);
   assert.match(TITULOS_CSV_HEADER, /Valor em Aberto/);
+  assert.match(TITULOS_CSV_HEADER, /Dias atraso/);
 });
