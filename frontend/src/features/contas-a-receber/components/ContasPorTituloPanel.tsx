@@ -12,7 +12,6 @@ import SearchableSelect from "@/components/SearchableSelect";
 import { ArrowDownTrayIcon, PrinterIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { reportApiError } from "@/lib/report-api-error";
-import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
 import { CONTAS_PAGE_SIZE } from "../constants";
 import { downloadXlsx, nomeArquivoExcel } from "../services/exportExcel";
 import { fetchTodasPaginas } from "../services/fetchPaginas";
@@ -54,7 +53,6 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
   const [situacao, setSituacao] = useState<SituacaoFiltro>("");
   const [ordenarMaiorAtraso, setOrdenarMaiorAtraso] = useState(true);
   const [exportando, setExportando] = useState(false);
-  const csv = useExportCsvAsync({ startPath: "/relatorios/titulos/export-async" });
 
   useEffect(() => {
     api
@@ -474,28 +472,8 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
               <ArrowDownTrayIcon className="w-4 h-4" />
               {exportando ? "Gerando Excel..." : "Exportar Excel"}
             </button>
-            <button
-              type="button"
-              onClick={() =>
-                void csv.exportCsv({
-                  clienteId,
-                  vendaId: vendaIdFiltro.replace(/^#/, "").trim(),
-                  status,
-                  dataVencInicio,
-                  dataVencFim,
-                  somenteEmAberto,
-                  vendedorId,
-                  situacao,
-                })
-              }
-              disabled={csv.isExporting}
-              className="btn-secondary flex items-center gap-1.5"
-            >
-              {csv.isExporting ? "Gerando CSV..." : "Exportar CSV"}
-            </button>
           </div>
         </div>
-        {csv.error ? <p className="mt-2 text-sm text-red-600">{csv.error}</p> : null}
       </FilterBar>
 
       {loading && !dados ? (

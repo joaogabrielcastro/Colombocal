@@ -15,7 +15,6 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { toast } from "sonner";
 import { reportApiError } from "@/lib/report-api-error";
-import { useExportCsvAsync } from "@/features/relatorios-shared/hooks/useExportCsvAsync";
 import { CONTAS_PAGE_SIZE } from "../constants";
 import { downloadXlsx, nomeArquivoExcel } from "../services/exportExcel";
 import { fetchTodasPaginas } from "../services/fetchPaginas";
@@ -37,7 +36,6 @@ export function ContasPorClientePanel() {
   const [ordenar, setOrdenar] = useState<OrdenarClientes>("saldo");
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [exportando, setExportando] = useState(false);
-  const csv = useExportCsvAsync({ startPath: "/relatorios/financeiro/export-async" });
   const pageSize = CONTAS_PAGE_SIZE;
   const filtrado = Boolean(busca || vendedorId);
 
@@ -125,14 +123,6 @@ export function ContasPorClientePanel() {
     } finally {
       setExportando(false);
     }
-  };
-
-  const exportarCsv = async () => {
-    await csv.exportCsv({
-      busca: busca.trim(),
-      vendedorId,
-      ordenar,
-    });
   };
 
   const imprimirRelatorio = () => {
@@ -282,19 +272,10 @@ export function ContasPorClientePanel() {
                   <ArrowDownTrayIcon className="w-4 h-4" />
                   {exportando ? "Gerando Excel..." : "Exportar Excel"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void exportarCsv()}
-                  disabled={csv.isExporting}
-                  className="btn-secondary flex items-center gap-1.5"
-                >
-                  {csv.isExporting ? "Gerando CSV..." : "Exportar CSV"}
-                </button>
               </>
             ) : null}
           </div>
         </div>
-        {csv.error ? <p className="mt-2 text-sm text-red-600">{csv.error}</p> : null}
       </FilterBar>
 
       {filtrado ? (
