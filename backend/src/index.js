@@ -173,6 +173,12 @@ app.use("/api/cheques", requireTenantUser, requireNavKey("financeiro"), require(
 app.use("/api/pagamentos", requireTenantUser, requireNavKey("financeiro"), require("./routes/pagamentos"));
 app.use("/api/recebimentos", requireTenantUser, requireNavKey("financeiro"), require("./routes/recebimentos"));
 app.use("/api/relatorios", requireTenantUser, require("./routes/relatorios"));
+app.use(
+  "/api/fiscal",
+  requireTenantUser,
+  requireNavKey("fiscal"),
+  require("./routes/fiscal"),
+);
 app.use("/api/dashboard", requireTenantUser, requireNavKey("dashboard"), require("./routes/dashboard"));
 app.use("/api/cnpj", requireTenantUser, require("./routes/cnpj"));
 

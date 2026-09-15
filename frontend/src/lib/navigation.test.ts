@@ -143,11 +143,16 @@ describe("NAV_PERMISSION_OPTIONS", () => {
     expect(grupos.has("Avançado")).toBe(true);
     expect(grupos.has("Sistema")).toBe(true);
   });
+  it("inclui chave fiscal", () => {
+    expect(NAV_PERMISSION_OPTIONS.some((o) => o.key === "fiscal")).toBe(true);
+  });
 });
 
 describe("canAccessPath / resolvePathNavAccess", () => {
   it("mapeia rotas principais e relatórios", () => {
     expect(resolvePathNavAccess("/clientes/12").navKey).toBe("clientes");
+    expect(resolvePathNavAccess("/fiscal/notas").navKey).toBe("fiscal");
+    expect(resolvePathNavAccess("/fiscal/fechamento").navKey).toBe("fiscal");
     expect(resolvePathNavAccess("/relatorios/comissoes").navKey).toBe("rel_comissoes");
     expect(resolvePathNavAccess("/relatorios/titulos").navKey).toBe("rel_financeiro");
     expect(resolvePathNavAccess("/usuarios").adminOnly).toBe(true);

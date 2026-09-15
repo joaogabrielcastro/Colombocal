@@ -75,6 +75,31 @@ Timeout, 502/503 ou erro de rede **mantêm** a nota local em `processando` e **r
 - Cancelar NF-e ≠ cancelar venda.
 - Um token/certificado por empresa (tenant). Não misture em variável global se houver mais de um CNPJ.
 
-## Fora deste módulo
+## 6. Fechamento Fiscal Mensal
 
-NFC-e, NFS-e, nota de entrada, devolução (CFOP 1202/2202), carta de correção, inutilização e SPED ficam para uma etapa posterior.
+O menu **Fiscal** (quando a feature NF-e está ligada e o usuário tem permissão `fiscal`) oferece:
+
+- **Notas fiscais** — histórico com filtros (período, status, número, série, cliente, documento, venda, chave), resumo do período e detalhe com XML/DANFE quando disponíveis.
+- **Fechamento fiscal** — resumo do mês/período, possíveis lacunas de numeração (apenas alerta para investigação, **não** classificação automática de erro), listagem de canceladas/rejeitadas, exportação Excel e **pacote contábil** (ZIP com `relatorio-nfe.xlsx`, XMLs disponíveis e `README.txt`).
+
+O fechamento reúne as NF-e do período e permite exportar os dados necessários para conferência e envio à contabilidade.
+
+**O relatório não substitui obrigações acessórias ou escrituração fiscal realizada pelo contador.**
+
+Data de referência do período: `autorizadaEm`, senão `emitidaEm`, senão `createdAt`.  
+Valor autorizado: soma de `venda.valorTotal` apenas de notas com status `autorizada` (canceladas/rejeitadas/processando ficam de fora).
+
+Dependência de empacotamento ZIP: `archiver@7.0.1` (exato; a API v8 não é compatível com o processor atual).
+
+Emissão incerta (`NFE_STATUS_INCERTO`) **não** é status persistido: a nota permanece em `processando` e não entra no valor autorizado.
+
+Em ambiente de **homologação**, a UI exibe o aviso de demonstração sem validade fiscal.
+
+## Fora deste módulo (backlog fiscal)
+
+- NFC-e, NFS-e, nota de entrada, devolução (CFOP 1202/2202)
+- Carta de correção (CC-e)
+- **Inutilização** de numeração (quando existir, o fechamento deve considerar as faixas inutilizadas ao avaliar lacunas)
+- SPED / obrigações acessórias
+- Persistência local do XML (hoje o XML é obtido via URL do provedor no momento do download)
+- Alíquotas/valores de ICMS, PIS e COFINS no cadastro (o sistema envia/exibe NCM, CFOP, CST/CSOSN)

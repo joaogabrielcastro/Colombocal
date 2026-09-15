@@ -3,6 +3,7 @@ const { findManyBatched, EXPORT_MAX_ROWS } = require("./exportBatch");
 const { buildVendasWhere, buildTitulosWhere } = require("../utils/relatorioWhere");
 const { listarClientesDevedores } = require("./financeiroDevedores");
 const { camposVencimentoTitulo } = require("../domain/financeiro/agingTitulos");
+const { processNfePacoteContabil } = require("./fiscal/nfePacoteContabil");
 
 /**
  * Paridade com frontend formatFreteReciboLinha (utils.ts).
@@ -201,6 +202,7 @@ const PROCESSORS = {
   vendas_csv: (payload, tenantId) => processVendasCsv(payload, tenantId),
   financeiro_csv: (payload, tenantId) => processFinanceiroCsv(payload, tenantId),
   titulos_csv: (payload, tenantId) => processTitulosCsv(payload, tenantId),
+  nfe_pacote_contabil: (payload, tenantId) => processNfePacoteContabil(payload, tenantId),
 };
 
 async function runExportProcessor(type, tenantId, payload = {}) {

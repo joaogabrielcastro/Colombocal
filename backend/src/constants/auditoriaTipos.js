@@ -24,6 +24,11 @@ const TIPO_LABEL = {
   PRODUTO_INATIVADO: "Produto inativado",
   NFE_EMITIDA: "NF-e emitida",
   NFE_CANCELADA: "NF-e cancelada",
+  NFE_VISUALIZADA: "NF-e visualizada",
+  NFE_XML_DOWNLOAD: "Download XML NF-e",
+  NFE_FECHAMENTO_GERADO: "Fechamento fiscal gerado",
+  NFE_EXPORT_EXCEL: "Exportação Excel fiscal",
+  NFE_PACOTE_CONTABIL: "Pacote contábil NF-e",
   COMISSAO_AJUSTE_LOTE: "Ajuste de comissão (lote)",
   USER_NAV_PERMISSOES: "Permissões de menu",
 };

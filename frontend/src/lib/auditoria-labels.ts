@@ -14,6 +14,13 @@ export const TIPO_AUDITORIA_LABEL: Record<string, string> = {
   FRETE_AVULSO_CRIADO: "Frete avulso criado",
   FRETE_VALE_AVULSO_CRIADO: "Vale de frete avulso criado",
   FRETE_VALE_CRIADO: "Vale de frete criado",
+  NFE_EMITIDA: "NF-e emitida",
+  NFE_CANCELADA: "NF-e cancelada",
+  NFE_VISUALIZADA: "NF-e visualizada",
+  NFE_XML_DOWNLOAD: "Download XML NF-e",
+  NFE_FECHAMENTO_GERADO: "Fechamento fiscal gerado",
+  NFE_EXPORT_EXCEL: "Exportação Excel fiscal",
+  NFE_PACOTE_CONTABIL: "Pacote contábil NF-e",
   USER_NAV_PERMISSOES: "Permissões de menu",
 };
 

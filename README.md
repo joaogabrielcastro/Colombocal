@@ -15,7 +15,7 @@ Sistema de gestão comercial para distribuidora de cal: vendas, financeiro, fret
 - **Dashboard** — KPIs do período
 - **Relatórios** — Vendas (KPIs, evolução, rankings, produtos por cliente, PDF/Excel), comissões, contas a receber, fretes, carregamento e motoristas
 - **Auditoria** — Trilha de operações relevantes
-- **NF-e** — Opcional, desligada por padrão. Ver [docs/nfe-homologacao-producao.md](docs/nfe-homologacao-producao.md)
+- **NF-e** — Opcional, desligada por padrão. Emissão, histórico, fechamento mensal e pacote para contabilidade: [docs/nfe-homologacao-producao.md](docs/nfe-homologacao-producao.md)
 
 ## Pré-requisitos
 

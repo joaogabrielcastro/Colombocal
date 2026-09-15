@@ -9,6 +9,7 @@ const NAV_PERMISSION_KEYS = [
   "carregamento",
   "motoristas",
   "vendedores",
+  "fiscal",
   "rel_vendas",
   "rel_financeiro",
   "rel_comissoes",

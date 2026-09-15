@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/hooks/useTenantFeatures", () => ({
-  useTenantFeatures: () => ({ freteEnabled: false }),
+  useTenantFeatures: () => ({ freteEnabled: false, nfeEnabled: false }),
 }));
 
 vi.mock("@/lib/auth-token", () => ({

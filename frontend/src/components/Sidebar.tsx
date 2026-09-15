@@ -24,9 +24,11 @@ import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 import {
   MAIN_NAV,
   REPORT_NAV,
+  FISCAL_NAV,
   CONFIG_NAV_HREF,
   filterMainNavForSidebar,
   filterReportsForSidebar,
+  filterFiscalForSidebar,
   canAccessNavKey,
 } from '@/lib/navigation';
 import { AUTH_SESSION_EVENT, clearAuthToken, getAuthToken } from '@/lib/auth-token';
@@ -108,17 +110,19 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const { me, tenant } = useMe();
-  const { freteEnabled } = useTenantFeatures();
+  const { freteEnabled, nfeEnabled } = useTenantFeatures();
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [fiscalOpen, setFiscalOpen] = useState(false);
 
   useEffect(() => {
     onCloseMobile?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  // Auto-expand reports section when on a report page
+  // Auto-expand reports / fiscal when on those pages
   useEffect(() => {
     if (pathname.startsWith('/relatorios')) setReportsOpen(true);
+    if (pathname.startsWith('/fiscal')) setFiscalOpen(true);
   }, [pathname]);
 
   const isAdmin = me?.role === 'admin';
@@ -127,6 +131,7 @@ export default function Sidebar({
   const allMain = filterMainNavForSidebar(MAIN_NAV, false, {
     ...navOpts,
     freteEnabled,
+    nfeEnabled,
   }).filter((i) => i.href !== '/usuarios');
 
   const has = (href: string) => allMain.some((i) => i.href === href);
@@ -149,6 +154,12 @@ export default function Sidebar({
   const reports = filterReportsForSidebar(REPORT_NAV, false, {
     ...navOpts,
     freteEnabled,
+    nfeEnabled,
+  });
+
+  const fiscalItems = filterFiscalForSidebar(FISCAL_NAV, {
+    ...navOpts,
+    nfeEnabled,
   });
 
   const mais: NavLink[] = [
@@ -217,6 +228,49 @@ export default function Sidebar({
             </Link>
           );
         })}
+
+        {fiscalItems.length > 0 && (
+          <div className="pt-3">
+            <button
+              type="button"
+              onClick={() => setFiscalOpen(!fiscalOpen)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors ${
+                pathname.startsWith('/fiscal')
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <DocumentTextIcon className="w-5 h-5 flex-shrink-0" />
+              <span className="flex-1 text-left">Fiscal</span>
+              <svg
+                className={`w-4 h-4 transition-transform ${fiscalOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {fiscalOpen && (
+              <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
+                {fiscalItems.map(({ href, label }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={closeMobile}
+                    className={`block px-3 py-2 rounded-md text-sm transition-colors ${
+                      pathname === href || pathname.startsWith(href + '/')
+                        ? 'bg-white/10 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {reports.length > 0 && (
           <div className="pt-3">

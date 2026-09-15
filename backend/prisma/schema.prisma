@@ -518,6 +518,9 @@ model NotaFiscal {
   @@index([tenantId, status])
   @@index([vendaId])
   @@index([tenantId, vendaId, createdAt])
+  @@index([tenantId, autorizadaEm])
+  @@index([tenantId, emitidaEm])
+  @@index([tenantId, serie, numero])
 }
 
 /// Eventos de auditoria (append-only). Ver política de retenção em `services/financeiroEventos.js`.

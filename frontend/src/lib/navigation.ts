@@ -26,6 +26,7 @@ export type NavPermissionKey =
   | 'carregamento'
   | 'motoristas'
   | 'vendedores'
+  | 'fiscal'
   | 'rel_vendas'
   | 'rel_financeiro'
   | 'rel_comissoes'
@@ -61,6 +62,14 @@ type ReportNavItem = {
   advancedOnly?: boolean;
   /** Só aparece quando o tenant tem frete/pátio. */
   requiresFrete?: boolean;
+  /** Só aparece quando o tenant tem NF-e. */
+  requiresNfe?: boolean;
+};
+
+type FiscalNavItem = {
+  href: string;
+  label: string;
+  navKey: NavPermissionKey;
 };
 
 /** Opções para o admin marcar por usuário (usuários = só admin, não listado). */
@@ -74,6 +83,7 @@ export const NAV_PERMISSION_OPTIONS: { key: NavPermissionKey; label: string; gro
   { key: 'carregamento', label: 'Carregamento', group: 'Avançado' },
   { key: 'motoristas', label: 'Motoristas', group: 'Avançado' },
   { key: 'vendedores', label: 'Vendedores', group: 'Avançado' },
+  { key: 'fiscal', label: 'Fiscal', group: 'Principal' },
   { key: 'rel_vendas', label: 'Relatório de Vendas', group: 'Relatórios' },
   { key: 'rel_financeiro', label: 'Contas a receber', group: 'Relatórios' },
   { key: 'rel_comissoes', label: 'Comissões', group: 'Relatórios' },
@@ -154,6 +164,12 @@ export const REPORT_NAV: ReportNavItem[] = [
   },
 ];
 
+/** Menu Fiscal — só com feature nfe + permissão fiscal. */
+export const FISCAL_NAV: FiscalNavItem[] = [
+  { href: '/fiscal/notas', label: 'Notas fiscais', navKey: 'fiscal' },
+  { href: '/fiscal/fechamento', label: 'Fechamento fiscal', navKey: 'fiscal' },
+];
+
 export const CONFIG_NAV_HREF = '/configuracoes';
 
 export function canAccessNavKey(
@@ -170,7 +186,12 @@ export function canAccessNavKey(
 export function filterMainNavForSidebar(
   items: MainNavItem[],
   hideAdvanced: boolean,
-  options?: { isAdmin?: boolean; navPermissions?: string[] | null; freteEnabled?: boolean },
+  options?: {
+    isAdmin?: boolean;
+    navPermissions?: string[] | null;
+    freteEnabled?: boolean;
+    nfeEnabled?: boolean;
+  },
 ): MainNavItem[] {
   let out = items;
   if (hideAdvanced) out = out.filter((i) => !i.advancedOnly);
@@ -194,12 +215,20 @@ export function advancedMainNavItems(items: MainNavItem[]): MainNavItem[] {
 export function filterReportsForSidebar(
   items: ReportNavItem[],
   hideAdvanced: boolean,
-  options?: { isAdmin?: boolean; navPermissions?: string[] | null; freteEnabled?: boolean },
+  options?: {
+    isAdmin?: boolean;
+    navPermissions?: string[] | null;
+    freteEnabled?: boolean;
+    nfeEnabled?: boolean;
+  },
 ): ReportNavItem[] {
   let out = items;
   if (hideAdvanced) out = out.filter((i) => !i.advancedOnly);
   if (options?.freteEnabled === false) {
     out = out.filter((i) => !i.requiresFrete);
+  }
+  if (options?.nfeEnabled === false) {
+    out = out.filter((i) => !i.requiresNfe);
   }
   out = out.filter((i) =>
     canAccessNavKey(i.navKey, {
@@ -208,6 +237,33 @@ export function filterReportsForSidebar(
     }),
   );
   return out;
+}
+
+export function filterFiscalForSidebar(
+  items: FiscalNavItem[],
+  options?: {
+    isAdmin?: boolean;
+    navPermissions?: string[] | null;
+    nfeEnabled?: boolean;
+  },
+): FiscalNavItem[] {
+  if (options?.nfeEnabled === false) return [];
+  return items.filter((i) =>
+    canAccessNavKey(i.navKey, {
+      isAdmin: options?.isAdmin,
+      navPermissions: options?.navPermissions,
+    }),
+  );
+}
+
+export function hasVisibleFiscal(
+  options?: {
+    isAdmin?: boolean;
+    navPermissions?: string[] | null;
+    nfeEnabled?: boolean;
+  },
+): boolean {
+  return filterFiscalForSidebar(FISCAL_NAV, options).length > 0;
 }
 
 export function advancedReportItems(items: ReportNavItem[]): ReportNavItem[] {
@@ -244,6 +300,7 @@ export function resolvePathNavAccess(pathname: string): PathNavAccess {
   if (p.startsWith("/motoristas")) return { navKey: "motoristas" };
   if (p.startsWith("/vendedores")) return { navKey: "vendedores" };
   if (p.startsWith("/auditoria")) return { navKey: "auditoria" };
+  if (p.startsWith("/fiscal")) return { navKey: "fiscal" };
   if (p.startsWith("/relatorios/vendas")) return { navKey: "rel_vendas" };
   if (p.startsWith("/relatorios/financeiro") || p.startsWith("/relatorios/titulos")) {
     return { navKey: "rel_financeiro" };

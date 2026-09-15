@@ -43,6 +43,7 @@ const EXPORT_TYPE_NAV = {
   vendas_csv: "rel_vendas",
   financeiro_csv: "rel_financeiro",
   titulos_csv: "rel_financeiro",
+  nfe_pacote_contabil: "fiscal",
 };
 
 function canAccessExportJob(user, job) {
@@ -1109,7 +1110,11 @@ router.get("/exports/:jobId/download", async (req, res) => {
       "content-disposition",
       `attachment; filename="${job.result.filename || "export.csv"}"`,
     );
-    res.send(job.result.content);
+    const body =
+      job.result.encoding === "base64" && typeof job.result.content === "string"
+        ? Buffer.from(job.result.content, "base64")
+        : job.result.content;
+    res.send(body);
   } catch (error) {
     handleRouteError(res, error);
   }
