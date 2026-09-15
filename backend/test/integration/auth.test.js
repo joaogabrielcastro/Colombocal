@@ -11,7 +11,7 @@ test("GET /api/auth/register-status (fechado por padrão)", async () => {
   const res = await agent.get("/api/auth/register-status");
   assert.equal(res.status, 200);
   assert.equal(res.body.registrationOpen, false);
-  assert.ok(Array.isArray(res.body.tenants));
+  assert.deepEqual(res.body.tenants, []);
 });
 
 test("POST /api/auth/register bloqueado quando fechado", async () => {
@@ -77,13 +77,11 @@ test("POST /api/auth/login valida credenciais", async () => {
   assert.ok(ok.body.token);
 });
 
-test("GET /api/auth/tenants lista todas as organizações", async () => {
+test("GET /api/auth/tenants não enumera organizações sem autenticação", async () => {
   await seedTenant({ slug: "requinte", name: "Requinte" });
   const res = await agent.get("/api/auth/tenants");
-  assert.equal(res.status, 200);
-  assert.equal(res.body.tenants.length, 2);
-  const slugs = res.body.tenants.map((t) => t.slug).sort();
-  assert.deepEqual(slugs, ["default", "requinte"]);
+  assert.equal(res.status, 404);
+  assert.equal(res.body.tenants, undefined);
 });
 
 test("POST /api/auth/login com mesmo e-mail em 2 tenants exige organização", async () => {

@@ -42,15 +42,33 @@ model User {
   passwordHash    String
   name            String?
   role            String   @default("member")
+  /// Incrementado em troca/reset de senha — invalida JWTs anteriores (claim `tv`).
+  tokenVersion    Int      @default(0)
   /// Chaves de menu permitidas (JSON array). null = todas as abas do papel.
   navPermissions  Json?
   createdAt       DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  passwordResetTokens PasswordResetToken[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([email])
+}
+
+/// Token de recuperação de senha — somente hash no banco; uso único + expiração.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId, createdAt])
 }
 
 model Cliente {
@@ -282,6 +300,7 @@ model Cheque {
   conta           String?
   dataRecebimento DateTime  @default(now())
   dataCompensacao DateTime?
+  // Novos cheques usam "registrado"; "ativo" é legado. Não há ciclo depositado/compensado nesta versão.
   status          String    @default("ativo")
   observacoes     String?
   createdAt       DateTime  @default(now())

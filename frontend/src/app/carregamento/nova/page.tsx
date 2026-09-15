@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeftIcon, MagnifyingGlassIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
-import { localDateInputValue } from "@/lib/utils";
+import { localDateInputValue, type Venda } from "@/lib/utils";
 import { quantidadeEmSacos } from "@/lib/frete";
 import { reportApiError } from "@/lib/report-api-error";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
+import { FormPageSkeleton } from "@/components/ui/skeletons";
 import {
   openOrdemCarregamentoPrint,
   type OrdemCarregamentoPrintData,
 } from "@/lib/ordem-carregamento-print";
+import { itensDaVendaParaForm, numeroPedidoDaVenda } from "../vendaParaOc";
 import { toast } from "sonner";
 
 type Cliente = {
@@ -51,20 +53,32 @@ function fmtSacos(n: number): string {
   });
 }
 
-export default function NovaOcPage() {
+function NovaOcForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preVendaId = searchParams.get("vendaId") || "";
+  const preOrdem = (searchParams.get("ordem") || searchParams.get("pedido") || "").replace(
+    /^#/,
+    "",
+  );
+
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [imprimindo, setImprimindo] = useState(false);
+  const [buscandoVenda, setBuscandoVenda] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
   const [motoristaId, setMotoristaId] = useState("");
-  const [pedido, setPedido] = useState("");
+  const [vendaId, setVendaId] = useState<number | null>(null);
+  const [pedido, setPedido] = useState(preOrdem);
   const [dataEmissao, setDataEmissao] = useState(localDateInputValue());
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<ItemForm[]>([emptyItem()]);
+  const buscaSeq = useRef(0);
+  const pedidoRef = useRef(pedido);
+  pedidoRef.current = pedido;
 
   useEffect(() => {
     let active = true;
@@ -117,6 +131,124 @@ export default function NovaOcPage() {
     [itens, produtos],
   );
   const totalSacos = linhas.reduce((acc, l) => acc + l.sacos, 0);
+
+  const aplicarVenda = useCallback((v: Venda) => {
+    setVendaId(v.id);
+    setClienteId(String(v.clienteId));
+    setMotoristaId(v.motoristaId ? String(v.motoristaId) : "");
+    setPedido(numeroPedidoDaVenda(v));
+    if (v.cliente) {
+      setClientes((prev) =>
+        prev.some((c) => c.id === v.clienteId) ? prev : [v.cliente as Cliente, ...prev],
+      );
+    }
+    if (v.motorista && v.motoristaId) {
+      const mid = v.motoristaId;
+      const mot = v.motorista;
+      setMotoristas((prev) =>
+        prev.some((m) => m.id === mid)
+          ? prev
+          : [{ id: mid, nome: mot.nome, placa: mot.placa }, ...prev],
+      );
+    }
+    const extras = (v.itens || [])
+      .map((it) => it.produto)
+      .filter((p): p is NonNullable<typeof p> => !!p && p.id != null)
+      .map(
+        (p): Produto => ({
+          id: p.id,
+          nome: p.nome,
+          unidade: p.unidade,
+          pesoKg: p.pesoKg ?? null,
+        }),
+      );
+    if (extras.length) {
+      setProdutos((prev) => {
+        const ids = new Set(prev.map((p) => p.id));
+        const missing = extras.filter((p) => !ids.has(p.id));
+        return missing.length ? [...prev, ...missing] : prev;
+      });
+    }
+    setItens(itensDaVendaParaForm(v));
+  }, []);
+
+  const buscarVendaPorOrdem = useCallback(
+    async (raw?: string) => {
+      const termo = (raw ?? pedido).trim().replace(/^#/, "");
+      if (!termo) {
+        toast.error("Digite o número da venda (ex.: 303)");
+        return;
+      }
+      const seq = ++buscaSeq.current;
+      setBuscandoVenda(true);
+      try {
+        const v = await api.get<Venda>(`/vendas/por-ordem/${encodeURIComponent(termo)}`);
+        if (seq !== buscaSeq.current) return;
+        aplicarVenda(v);
+        toast.success(`Venda #${numeroPedidoDaVenda(v)} carregada`);
+      } catch (e) {
+        if (seq !== buscaSeq.current) return;
+        reportApiError(e, { title: "Venda não encontrada para este número" });
+      } finally {
+        if (seq === buscaSeq.current) setBuscandoVenda(false);
+      }
+    },
+    [aplicarVenda, pedido],
+  );
+
+  const puxarUltimaVendaDoCliente = useCallback(
+    async (cid: string) => {
+      if (!cid) return;
+      const seq = ++buscaSeq.current;
+      try {
+        const lista = await api.get<Venda[]>(`/vendas?clienteId=${cid}&take=1`);
+        if (seq !== buscaSeq.current) return;
+        if (pedidoRef.current.trim()) return;
+        const v = Array.isArray(lista) ? lista[0] : null;
+        if (!v) {
+          setVendaId(null);
+          return;
+        }
+        aplicarVenda(v);
+      } catch {
+        /* cliente sem vendas: deixa o formulário em branco */
+      }
+    },
+    [aplicarVenda],
+  );
+
+  useEffect(() => {
+    if (preOrdem) {
+      void buscarVendaPorOrdem(preOrdem);
+      return;
+    }
+    if (!preVendaId) return;
+    const seq = ++buscaSeq.current;
+    api
+      .get<Venda>(`/vendas/${preVendaId}`)
+      .then((v) => {
+        if (seq !== buscaSeq.current) return;
+        aplicarVenda(v);
+      })
+      .catch((e) => {
+        if (seq !== buscaSeq.current) return;
+        reportApiError(e, { title: "Não foi possível carregar a venda" });
+      });
+    // Só na entrada da tela (query string).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preOrdem, preVendaId]);
+
+  const onChangeCliente = (id: string) => {
+    setClienteId(id);
+    setVendaId(null);
+    if (!id) return;
+    const termo = pedidoRef.current.trim().replace(/^#/, "");
+    if (termo) {
+      void buscarVendaPorOrdem(termo);
+      return;
+    }
+    void puxarUltimaVendaDoCliente(id);
+  };
 
   const loadClienteOptions = useCallback(
     async (q: string) =>
@@ -217,6 +349,7 @@ export default function NovaOcPage() {
           motoristaNome: motorista?.nome || null,
           motoristaPlaca: motorista?.placa || null,
           pedido: pedido.trim() || null,
+          vendaId: vendaId || null,
           dataEmissao,
           observacoes: observacoes.trim() || null,
           itens: itensValidos,
@@ -239,7 +372,7 @@ export default function NovaOcPage() {
         .join(" — ")
     : "";
 
-  const busy = salvando || imprimindo;
+  const busy = salvando || imprimindo || buscandoVenda;
 
   return (
     <FreteFeatureGuard>
@@ -264,7 +397,7 @@ export default function NovaOcPage() {
             <SearchableSelect
               label="Cliente"
               value={clienteId}
-              onChange={setClienteId}
+              onChange={onChangeCliente}
               loadOptions={loadClienteOptions}
               loadLabelById={loadClienteLabelById}
               minChars={0}
@@ -283,12 +416,44 @@ export default function NovaOcPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Pedido / nº venda
               </label>
-              <input
-                className="input-field"
-                value={pedido}
-                onChange={(e) => setPedido(e.target.value)}
-                placeholder="Opcional"
-              />
+              <div className="flex gap-2">
+                <input
+                  className="input-field font-mono"
+                  value={pedido}
+                  onChange={(e) => {
+                    setPedido(e.target.value.replace(/^#/, ""));
+                    setVendaId(null);
+                  }}
+                  onBlur={() => {
+                    const termo = pedido.trim().replace(/^#/, "");
+                    if (/^\d+$/.test(termo) && !vendaId) {
+                      void buscarVendaPorOrdem(termo);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void buscarVendaPorOrdem();
+                    }
+                  }}
+                  placeholder="Ex.: 303"
+                />
+                <button
+                  type="button"
+                  className="btn-secondary shrink-0"
+                  disabled={buscandoVenda || !pedido.trim()}
+                  onClick={() => void buscarVendaPorOrdem()}
+                  title="Buscar venda e preencher a ordem"
+                >
+                  <MagnifyingGlassIcon className="w-4 h-4" />
+                  {buscandoVenda ? "…" : "Buscar"}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {vendaId
+                  ? `Vinculada à venda #${pedido.trim() || vendaId}`
+                  : "Enter ou Buscar puxa cliente, motorista e produtos da venda."}
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -447,5 +612,13 @@ export default function NovaOcPage() {
         </div>
       </div>
     </FreteFeatureGuard>
+  );
+}
+
+export default function NovaOcPage() {
+  return (
+    <Suspense fallback={<FormPageSkeleton />}>
+      <NovaOcForm />
+    </Suspense>
   );
 }

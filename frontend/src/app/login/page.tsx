@@ -174,8 +174,11 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-500">
-            <Link href="/cadastro" className="text-blue-600 hover:underline">
+          <p className="mt-6 text-center text-sm text-gray-500 space-y-2">
+            <Link href="/esqueci-senha" className="text-blue-600 hover:underline block">
+              Esqueci a senha
+            </Link>
+            <Link href="/cadastro" className="text-blue-600 hover:underline block">
               Criar conta para usar o sistema
             </Link>
           </p>

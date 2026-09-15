@@ -11,6 +11,7 @@ const {
 const { requireTenantUser, requireAdmin } = require("./middleware/auth");
 const { requireNavKey } = require("./middleware/navPermission");
 const { runPrismaMigrateOnStart } = require("./startup/migrateOnStart");
+const { assertProductionConfig } = require("./startup/assertProductionConfig");
 const { startExportWorker, useRedisQueue } = require("./services/exportJobs");
 
 // Garante uso do engine local no ambiente de desenvolvimento
@@ -228,6 +229,13 @@ function shouldRunStartupDbCompat() {
 
 async function startServer() {
   try {
+    try {
+      assertProductionConfig();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("❌ Configuração inválida para produção:", msg);
+      process.exit(1);
+    }
     try {
       runPrismaMigrateOnStart();
     } catch (e) {

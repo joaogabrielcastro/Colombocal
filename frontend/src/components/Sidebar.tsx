@@ -18,6 +18,7 @@ import {
   DocumentTextIcon,
   MagnifyingGlassIcon,
   UserIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 import {
@@ -177,22 +178,40 @@ export default function Sidebar({
     window.location.href = '/login';
   };
 
+  const closeMobile = () => onCloseMobile?.();
+
   const getIcon = (href: string) => iconMap[href] || DocumentTextIcon;
 
   const renderPanel = () => (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2.5 px-4 h-16 flex-shrink-0 border-b border-white/10">
-        <Link href="/" className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5" onClick={closeMobile}>
           <BrandMark className="h-9 w-9" />
           <BrandWordmark light className="text-base" />
         </Link>
+        {mobileOpen ? (
+          <button
+            type="button"
+            className="ml-auto p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 md:hidden"
+            aria-label="Fechar menu"
+            data-testid="mobile-nav-close"
+            onClick={closeMobile}
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        ) : null}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {primary.map(({ href, label }) => {
           const Icon = getIcon(href);
           return (
-            <Link key={href} href={href} className={linkClass(isActive(href))}>
+            <Link
+              key={href}
+              href={href}
+              className={linkClass(isActive(href))}
+              onClick={closeMobile}
+            >
               <Icon className="w-5 h-5 flex-shrink-0" />
               {label}
             </Link>
@@ -227,6 +246,7 @@ export default function Sidebar({
                   <Link
                     key={href}
                     href={href}
+                    onClick={closeMobile}
                     className={`block px-3 py-2 rounded-md text-sm transition-colors ${
                       pathname === href
                         ? 'bg-white/10 text-white'
@@ -249,7 +269,12 @@ export default function Sidebar({
             {mais.map(({ href, label }) => {
               const Icon = getIcon(href);
               return (
-                <Link key={href} href={href} className={linkClass(isActive(href))}>
+                <Link
+                  key={href}
+                  href={href}
+                  className={linkClass(isActive(href))}
+                  onClick={closeMobile}
+                >
                   <Icon className="w-5 h-5 flex-shrink-0" />
                   {label}
                 </Link>
@@ -263,12 +288,20 @@ export default function Sidebar({
             <p className="px-3 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
               Administração
             </p>
-            <Link href={CONFIG_NAV_HREF} className={linkClass(pathname.startsWith(CONFIG_NAV_HREF))}>
+            <Link
+              href={CONFIG_NAV_HREF}
+              className={linkClass(pathname.startsWith(CONFIG_NAV_HREF))}
+              onClick={closeMobile}
+            >
               <Cog6ToothIcon className="w-5 h-5 flex-shrink-0" />
               Configurações
             </Link>
             {showUsuarios && (
-              <Link href="/usuarios" className={linkClass(pathname.startsWith('/usuarios'))}>
+              <Link
+                href="/usuarios"
+                className={linkClass(pathname.startsWith('/usuarios'))}
+                onClick={closeMobile}
+              >
                 <UsersIcon className="w-5 h-5 flex-shrink-0" />
                 Usuários
               </Link>
@@ -279,13 +312,20 @@ export default function Sidebar({
 
       <div className="flex-shrink-0 border-t border-white/10 px-3 py-3">
         {tenant && (
-          <p className="text-xs text-gray-500 truncate px-3 mb-2" title={tenant.name}>
+          <p
+            className="text-xs text-gray-500 truncate px-3 mb-2"
+            title={tenant.name}
+            data-testid="sidebar-tenant-name"
+          >
             {tenant.name}
           </p>
         )}
         <button
           type="button"
-          onClick={logout}
+          onClick={() => {
+            closeMobile();
+            logout();
+          }}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 w-full transition-colors"
         >
           <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
@@ -295,9 +335,43 @@ export default function Sidebar({
     </div>
   );
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseMobile?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen, onCloseMobile]);
+
   return (
-    <aside className="flex flex-col w-60 flex-shrink-0 bg-[#1a1f2e] text-white h-full overflow-hidden">
-      {renderPanel()}
-    </aside>
+    <>
+      <aside
+        className="hidden md:flex flex-col w-60 flex-shrink-0 bg-[#1a1f2e] text-white h-full overflow-hidden"
+        data-testid="sidebar-desktop"
+      >
+        {renderPanel()}
+      </aside>
+
+      {mobileOpen ? (
+        <button
+          type="button"
+          data-testid="mobile-nav-overlay"
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          aria-label="Fechar menu"
+          onClick={() => onCloseMobile?.()}
+        />
+      ) : null}
+
+      <aside
+        data-testid="sidebar-mobile"
+        aria-hidden={!mobileOpen}
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col w-60 bg-[#1a1f2e] text-white overflow-hidden md:hidden transform transition-transform duration-200 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"
+        }`}
+      >
+        {renderPanel()}
+      </aside>
+    </>
   );
 }

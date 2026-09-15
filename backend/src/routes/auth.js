@@ -12,6 +12,40 @@ const {
   loadRegistrationTenants,
   resolveRegistrationTenantSlug,
 } = require("../utils/registrationTenants");
+const { parseBody } = require("../utils/zodParse");
+const { forgotPasswordSchema, resetPasswordSchema } = require("../schemas/auth");
+const { sendEmail, getMemoryOutbox, resetMemoryOutbox, resolveTransport } = require("../infra/email/emailService");
+const { passwordResetEnabled } = require("../startup/assertProductionConfig");
+
+const RESET_TTL_MS = 60 * 60 * 1000;
+const GENERIC_RESET_MSG =
+  "Se os dados forem válidos, enviaremos instruções para o e-mail informado.";
+
+function publicAppBaseUrl() {
+  return String(process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://127.0.0.1:3010")
+    .trim()
+    .replace(/\/$/, "");
+}
+
+function hashResetToken(raw) {
+  return crypto.createHash("sha256").update(String(raw), "utf8").digest("hex");
+}
+
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_FORGOT_PASSWORD_PER_WINDOW ?? 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Muitas tentativas. Tente novamente em alguns minutos." },
+});
+
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_RESET_PASSWORD_PER_WINDOW ?? 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Muitas tentativas. Tente novamente em alguns minutos." },
+});
 
 function timingSafeEqualString(a, b) {
   const ba = Buffer.from(a, "utf8");
@@ -45,30 +79,24 @@ const loginLimiter = rateLimit({
   message: { error: "Muitas tentativas de login. Tente novamente em alguns minutos." },
 });
 
-// GET /api/auth/tenants — lista organizações para a tela de login (slug + nome)
-router.get("/tenants", async (req, res) => {
-  try {
-    const tenants = await prisma.tenant.findMany({
-      select: { slug: true, name: true },
-      orderBy: { name: "asc" },
-    });
-    res.json({ tenants });
-  } catch (e) {
-    handleRouteError(res, e);
-  }
+// GET /api/auth/tenants — não é público (evita enumeração de empresas).
+// O login usa POST /auth/login; se o e-mail existir em mais de um tenant, a API
+// responde 409 TENANT_REQUIRED só com as organizações daquele usuário.
+router.get("/tenants", (_req, res) => {
+  res.status(404).json({ error: "Não encontrado" });
 });
 
 // GET /api/auth/register-status — saber se o cadastro público está ligado
 router.get("/register-status", async (req, res) => {
   try {
-    const tenants = await loadRegistrationTenants(prisma);
     if (!isOpenRegistration()) {
       return res.json({
         registrationOpen: false,
         registrationRequiresKey: false,
-        tenants: tenants.map((t) => ({ slug: t.slug, name: t.name })),
+        tenants: [],
       });
     }
+    const tenants = await loadRegistrationTenants(prisma);
     res.json({
       registrationOpen: tenants.length > 0,
       registrationRequiresKey: getRegistrationKey() != null,
@@ -283,6 +311,165 @@ router.get("/me", requireTenantUser, async (req, res) => {
   } catch (e) {
     handleRouteError(res, e);
   }
+});
+
+// POST /api/auth/forgot-password — anti-enumeração (mesma resposta sempre)
+router.post("/forgot-password", forgotLimiter, async (req, res) => {
+  try {
+    if (!passwordResetEnabled()) {
+      return res.status(503).json({
+        error: "Recuperação de senha desabilitada neste servidor",
+      });
+    }
+    console.info("[auth] Password reset email requested");
+    const body = parseBody(forgotPasswordSchema, req.body);
+    const email = body.email.trim().toLowerCase();
+    const tenantSlug =
+      body.tenantSlug != null && String(body.tenantSlug).trim()
+        ? String(body.tenantSlug).trim().toLowerCase()
+        : "";
+
+    let users = [];
+    if (tenantSlug) {
+      const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+      if (tenant) {
+        const u = await prisma.user.findUnique({
+          where: { tenantId_email: { tenantId: tenant.id, email } },
+          include: { tenant: true },
+        });
+        if (u) users = [u];
+      }
+    } else {
+      users = await prisma.user.findMany({
+        where: { email },
+        include: { tenant: true },
+        take: 10,
+      });
+    }
+
+    const expiresAt = new Date(Date.now() + RESET_TTL_MS);
+    for (const user of users) {
+      const raw = crypto.randomBytes(32).toString("base64url");
+      const tokenHash = hashResetToken(raw);
+      await prisma.passwordResetToken.create({
+        data: { userId: user.id, tokenHash, expiresAt },
+      });
+      const link = `${publicAppBaseUrl()}/redefinir-senha?token=${encodeURIComponent(raw)}`;
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "Redefinição de senha — Colombocal",
+          text: [
+            "Recebemos um pedido para redefinir sua senha.",
+            `Organização: ${user.tenant?.name || "sua empresa"}.`,
+            "",
+            "Abra o link abaixo (válido por 60 minutos):",
+            link,
+            "",
+            "Se você não solicitou, ignore este e-mail.",
+          ].join("\n"),
+        });
+        console.info("[auth] Password reset email sent");
+      } catch (mailErr) {
+        console.error("[auth] Password reset email failed");
+        throw mailErr;
+      }
+    }
+
+    // Atraso constante leve para reduzir timing side-channel óbvio.
+    await new Promise((r) => setTimeout(r, 40 + Math.floor(Math.random() * 40)));
+    return res.json({ ok: true, message: GENERIC_RESET_MSG });
+  } catch (e) {
+    if (e && e.statusCode === 400) {
+      return res.status(400).json({ error: e.message || "Dados inválidos" });
+    }
+    handleRouteError(res, e);
+  }
+});
+
+// POST /api/auth/reset-password
+router.post("/reset-password", resetLimiter, async (req, res) => {
+  try {
+    if (!passwordResetEnabled()) {
+      return res.status(503).json({
+        error: "Recuperação de senha desabilitada neste servidor",
+      });
+    }
+    const body = parseBody(resetPasswordSchema, req.body);
+    const tokenHash = hashResetToken(body.token);
+    const row = await prisma.passwordResetToken.findFirst({
+      where: { tokenHash },
+      include: { user: true },
+    });
+    if (!row || row.usedAt || row.expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ error: "Link inválido ou expirado" });
+    }
+
+    const passwordHash = await bcrypt.hash(body.password, 12);
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: row.userId },
+        data: {
+          passwordHash,
+          tokenVersion: { increment: 1 },
+        },
+      });
+      await tx.passwordResetToken.update({
+        where: { id: row.id },
+        data: { usedAt: new Date() },
+      });
+      // Invalidar outros tokens pendentes do mesmo usuário
+      await tx.passwordResetToken.updateMany({
+        where: {
+          userId: row.userId,
+          usedAt: null,
+          id: { not: row.id },
+        },
+        data: { usedAt: new Date() },
+      });
+    });
+
+    return res.json({ ok: true, message: "Senha alterada. Faça login com a nova senha." });
+  } catch (e) {
+    if (e && e.statusCode === 400) {
+      return res.status(400).json({ error: e.message || "Dados inválidos" });
+    }
+    handleRouteError(res, e);
+  }
+});
+
+/**
+ * Outbox de e-mail só para testes E2E (EMAIL_TRANSPORT=memory).
+ * Nunca disponível em produção.
+ */
+function allowEmailOutboxInspect() {
+  if (process.env.NODE_ENV === "production") return false;
+  if (resolveTransport() !== "memory") return false;
+  return (
+    process.env.NODE_ENV === "test" ||
+    process.env.ALLOW_EMAIL_OUTBOX_INSPECT === "true"
+  );
+}
+
+router.get("/__test__/email-outbox", (req, res) => {
+  if (!allowEmailOutboxInspect()) {
+    return res.status(404).json({ error: "Não encontrado" });
+  }
+  const items = getMemoryOutbox().map((m) => ({
+    to: m.to,
+    subject: m.subject,
+    text: m.text,
+    at: m.at,
+  }));
+  return res.json({ items });
+});
+
+router.post("/__test__/email-outbox/clear", (req, res) => {
+  if (!allowEmailOutboxInspect()) {
+    return res.status(404).json({ error: "Não encontrado" });
+  }
+  resetMemoryOutbox();
+  return res.json({ ok: true });
 });
 
 module.exports = router;

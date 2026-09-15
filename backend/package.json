@@ -8,7 +8,7 @@
     "test": "node --test --test-concurrency=1 test/**/*.test.js",
     "test:coverage": "c8 node --test --test-concurrency=1 test/**/*.test.js",
     "test:coverage:check": "c8 --check-coverage node --test --test-concurrency=1 test/**/*.test.js",
-    "test:db:up": "docker run -d --name colombocal-test-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=colombocal_dev -e POSTGRES_DB=colombocal_test -p 5433:5432 postgres:15-alpine",
+    "test:db:up": "docker compose -f ../docker-compose.yml up -d db-test && docker compose -f ../docker-compose.yml exec -T db-test pg_isready -U postgres -d colombocal_test",
     "test:db:migrate": "node scripts/test-db-migrate.js",
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
@@ -24,6 +24,8 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "node scripts/seed.js",
+    "fiscal:encrypt-existing-tokens": "node scripts/encrypt-existing-fiscal-tokens.js",
+    "go-live:backup-restore-check": "node scripts/go-live-backup-restore-check.js",
     "tenant:create": "node scripts/create-tenant.js",
     "tenant:diagnose": "node scripts/diagnose-tenants.js",
     "seed:deploy": "prisma migrate deploy && node scripts/seed.js",
@@ -34,9 +36,12 @@
     "legacy:import:dry": "python scripts/import_legacy_apply.py --csv-dir scripts/legacy_exports --min-date 2020-01-01",
     "legacy:import:apply": "python scripts/import_legacy_apply.py --csv-dir scripts/legacy_exports --apply --limit-sales 1000 --limit-cheques 2000 --min-date 2020-01-01"
   },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "dependencies": {
     "@prisma/client": "^5.10.0",
-    "axios": "^1.6.7",
+    "axios": "^1.20.0",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.80.5",
     "cors": "^2.8.5",
@@ -46,6 +51,7 @@
     "helmet": "^8.1.0",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.10.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

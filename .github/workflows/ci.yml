@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: colombocal_dev
+          POSTGRES_DB: colombocal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d colombocal_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      JWT_SECRET: ci-jwt-secret-not-for-prod
+      FISCAL_TOKEN_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      EMAIL_TRANSPORT: memory
+      APP_PUBLIC_URL: http://127.0.0.1:3010
+      TEST_DATABASE_URL: postgresql://postgres:colombocal_dev@localhost:5432/colombocal_test?schema=public
+      DATABASE_URL: postgresql://postgres:colombocal_dev@localhost:5432/colombocal_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_REQUIRE_LOGIN: "true"
+          NEXT_PUBLIC_API_ORIGIN: http://127.0.0.1:3011
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: colombocal_dev
+          POSTGRES_DB: colombocal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d colombocal_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NODE_VERSION: "20"
+      DATABASE_URL: postgresql://postgres:colombocal_dev@localhost:5432/colombocal_test?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:colombocal_dev@localhost:5432/colombocal_test?schema=public
+      JWT_SECRET: ci-jwt-secret-not-for-prod
+      AUTH_DISABLED: "false"
+      NODE_ENV: test
+      PORT: "3011"
+      NFE_PROVIDER: mock
+      NFE_WEBHOOK_SECRET: e2e-hook
+      EXPORT_QUEUE_MODE: memory
+      EMAIL_TRANSPORT: memory
+      ALLOW_EMAIL_OUTBOX_INSPECT: "true"
+      FISCAL_TOKEN_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      APP_PUBLIC_URL: http://127.0.0.1:3010
+      SEED_ADMIN_PASSWORD: admin123
+      SEED_DEMO_PASSWORD: admin123
+      SEED_MEMBER_PASSWORD: admin123
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: Install backend + migrate + seed
+        working-directory: backend
+        run: npm ci && npx prisma generate && npx prisma migrate deploy && npm run db:seed
+      - name: Install frontend + build
+        working-directory: frontend
+        run: npm ci && npm run build
+        env:
+          NEXT_PUBLIC_REQUIRE_LOGIN: "true"
+          NEXT_PUBLIC_API_ORIGIN: http://127.0.0.1:3011
+      - name: Install E2E
+        working-directory: e2e
+        run: npm ci
+      - name: Install Playwright Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright
+        working-directory: e2e
+        run: npx playwright test
+        env:
+          DATABASE_URL: postgresql://postgres:colombocal_dev@localhost:5432/colombocal_test?schema=public
+          E2E_API_URL: http://127.0.0.1:3011
+          E2E_BASE_URL: http://127.0.0.1:3010
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7

@@ -20,6 +20,7 @@ type SearchableSelectProps = {
   className?: string;
   /** Em tabelas, omitir o &lt;label&gt; visual */
   hideLabel?: boolean;
+  'data-testid'?: string;
 };
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -44,6 +45,7 @@ export default function SearchableSelect({
   selectedLabel: selectedLabelProp,
   className = '',
   hideLabel = false,
+  'data-testid': dataTestId,
 }: SearchableSelectProps) {
   const listId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -122,7 +124,7 @@ export default function SearchableSelect({
   const inputDisplay = open ? query : value && selectedLabel ? selectedLabel : query;
 
   return (
-    <div ref={wrapRef} className={`relative ${className}`}>
+    <div ref={wrapRef} className={`relative ${className}`} data-testid={dataTestId}>
       {!hideLabel && (
         <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       )}
@@ -140,6 +142,7 @@ export default function SearchableSelect({
           placeholder={placeholder}
           className="input-field pl-9"
           value={inputDisplay}
+          data-testid={dataTestId ? `${dataTestId}-input` : undefined}
           onChange={(e) => {
             const v = e.target.value;
             setQuery(v);

@@ -1,6 +1,50 @@
 const axios = require("axios");
 const { mapStatusFocus } = require("../../domain/nfe/montarPayload");
 const { AppError } = require("../../shared/errors/appError");
+const { INCONCLUSIVE_HTTP } = require("../../domain/nfe/refNfe");
+
+function mensagemFocus(data, fallback) {
+  return (
+    data?.mensagem ||
+    data?.erro ||
+    data?.mensagem_sefaz ||
+    data?.codigo ||
+    fallback
+  );
+}
+
+function throwFromFocusHttp(res, fallbackMsg) {
+  const status = res.status;
+  const msg = String(mensagemFocus(res.data, fallbackMsg));
+  if (status === 404) {
+    throw new AppError("Nota não encontrada no provedor.", {
+      code: "NFE_NAO_ENCONTRADA",
+      httpStatus: 404,
+    });
+  }
+  if (INCONCLUSIVE_HTTP.has(status)) {
+    throw new AppError(msg, {
+      code: "NFE_PROVEDOR_INDISPONIVEL",
+      httpStatus: status,
+      details: { ...(res.data && typeof res.data === "object" ? res.data : {}), cause: `HTTP_${status}` },
+    });
+  }
+  throw new AppError(msg, {
+    code: "NFE_PROVEDOR_ERRO",
+    httpStatus: status === 401 ? 401 : 400,
+    details: res.data,
+  });
+}
+
+function throwFromNetwork(err, fallbackMsg) {
+  if (err instanceof AppError) throw err;
+  const cause = err.code || err.cause?.code || "NETWORK";
+  throw new AppError(err.response?.data?.mensagem || err.message || fallbackMsg, {
+    code: "NFE_PROVEDOR_INDISPONIVEL",
+    httpStatus: 502,
+    details: { cause },
+  });
+}
 
 function focusBaseUrl(ambiente) {
   if (String(ambiente).toLowerCase() === "producao") {
@@ -50,24 +94,14 @@ function createFocusNfeProvider({ token, ambiente }) {
           validateStatus: () => true,
         });
         if (res.status >= 400 && res.status !== 422) {
-          const msg =
-            res.data?.mensagem ||
-            res.data?.erro ||
-            res.data?.codigo ||
-            `Focus NFe recusou a emissão (HTTP ${res.status}).`;
-          throw new AppError(String(msg), {
-            code: "NFE_PROVEDOR_ERRO",
-            httpStatus: res.status === 401 ? 401 : 400,
-            details: res.data,
-          });
+          throwFromFocusHttp(
+            res,
+            `Focus NFe recusou a emissão (HTTP ${res.status}).`,
+          );
         }
         return normalizeFocusResponse(res.data);
       } catch (err) {
-        if (err instanceof AppError) throw err;
-        throw new AppError(
-          err.response?.data?.mensagem || err.message || "Falha ao falar com o provedor NF-e.",
-          { code: "NFE_PROVEDOR_ERRO", httpStatus: 502 },
-        );
+        throwFromNetwork(err, "Falha ao falar com o provedor NF-e.");
       }
     },
     async consultar({ ref }) {
@@ -77,25 +111,12 @@ function createFocusNfeProvider({ token, ambiente }) {
           timeout: 20000,
           validateStatus: () => true,
         });
-        if (res.status === 404) {
-          throw new AppError("Nota não encontrada no provedor.", {
-            code: "NFE_NAO_ENCONTRADA",
-            httpStatus: 404,
-          });
-        }
         if (res.status >= 400) {
-          throw new AppError(
-            res.data?.mensagem || `Consulta NF-e falhou (HTTP ${res.status}).`,
-            { code: "NFE_PROVEDOR_ERRO", httpStatus: 400, details: res.data },
-          );
+          throwFromFocusHttp(res, `Consulta NF-e falhou (HTTP ${res.status}).`);
         }
         return normalizeFocusResponse(res.data);
       } catch (err) {
-        if (err instanceof AppError) throw err;
-        throw new AppError(err.message || "Falha ao consultar o provedor NF-e.", {
-          code: "NFE_PROVEDOR_ERRO",
-          httpStatus: 502,
-        });
+        throwFromNetwork(err, "Falha ao consultar o provedor NF-e.");
       }
     },
     async cancelar({ ref, justificativa }) {
@@ -107,20 +128,21 @@ function createFocusNfeProvider({ token, ambiente }) {
           validateStatus: () => true,
         });
         if (res.status >= 400) {
+          if (INCONCLUSIVE_HTTP.has(res.status)) {
+            throwFromFocusHttp(res, `Cancelamento recusado (HTTP ${res.status}).`);
+          }
           throw new AppError(
-            res.data?.mensagem_sefaz ||
-              res.data?.mensagem ||
-              `Cancelamento recusado (HTTP ${res.status}).`,
+            String(
+              res.data?.mensagem_sefaz ||
+                res.data?.mensagem ||
+                `Cancelamento recusado (HTTP ${res.status}).`,
+            ),
             { code: "NFE_CANCELAMENTO_ERRO", httpStatus: 400, details: res.data },
           );
         }
         return normalizeFocusResponse({ ...res.data, status: res.data?.status || "cancelado" });
       } catch (err) {
-        if (err instanceof AppError) throw err;
-        throw new AppError(err.message || "Falha ao cancelar NF-e no provedor.", {
-          code: "NFE_PROVEDOR_ERRO",
-          httpStatus: 502,
-        });
+        throwFromNetwork(err, "Falha ao cancelar NF-e no provedor.");
       }
     },
     async baixarArquivo(caminhoRelativo) {

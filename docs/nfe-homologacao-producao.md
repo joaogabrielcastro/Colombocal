@@ -42,6 +42,15 @@ Webhook do provedor: `POST https://<api>/api/webhooks/nfe` com header `x-webhook
 
 Em testes automatizados o provedor é `mock` (`NFE_PROVIDER=mock` ou `NODE_ENV=test`).
 
+### Idempotência da `ref`
+
+A referência enviada ao Focus **não** usa relógio. Formato:
+
+- primeira emissão da venda: `venda-{tenantId}-{vendaId}`
+- reemissão após cancelar/rejeitar confirmados: `venda-{tenantId}-{vendaId}-t2`, `-t3`, …
+
+Timeout, 502/503 ou erro de rede **mantêm** a nota local em `processando` e **reutilizam** a mesma `ref`. Antes de um novo POST, o sistema consulta essa `ref` no provedor. Se a NF-e já existir, o status local é sincronizado e não há segunda emissão.
+
 ## 3. Homologação SEFAZ
 
 1. Preencher emitente, produtos (NCM/CFOP/CSOSN) e um cliente com endereço/IE/CEP/IBGE.

@@ -229,6 +229,9 @@ test("GET /api/vendas/por-ordem/:numero", async () => {
   const ok = await agent.get(`/api/vendas/por-ordem/${v.body.numeroVenda}`);
   assert.equal(ok.status, 200);
   assert.equal(ok.body.id, v.body.id);
+  assert.ok(Array.isArray(ok.body.itens));
+  assert.ok(ok.body.itens.length > 0);
+  assert.equal(ok.body.itens[0].produtoId, ctx.produtoTon.id);
 
   const bad = await agent.get("/api/vendas/por-ordem/abc");
   assert.equal(bad.status, 400);

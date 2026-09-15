@@ -264,7 +264,9 @@ export default function DashboardPage() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900" data-testid="dashboard-title">
+            Dashboard
+          </h1>
           <p className="text-gray-500 text-sm mt-1 capitalize">{dataFormatada}</p>
         </div>
         <div className="flex items-center gap-2">

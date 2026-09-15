@@ -109,6 +109,7 @@ test("emissão NF-e via mock + bloqueio de edição/cancelamento da venda", asyn
   assert.equal(emit.status, 201);
   assert.equal(emit.body.status, "autorizada");
   assert.ok(emit.body.chaveAcesso);
+  assert.equal(emit.body.refProvedor, `venda-${cliente.tenantId}-${vendaId}`);
 
   const detalhe = await agent.get(`/api/vendas/${vendaId}`);
   assert.equal(detalhe.status, 200);

@@ -12,6 +12,8 @@ const {
   normalizeNavPermissions,
 } = require("../constants/navPermissions");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+const { parseBody } = require("../utils/zodParse");
+const { createUserSchema, changePasswordSchema } = require("../schemas/user");
 
 const ROLES = new Set(["admin", "member"]);
 
@@ -55,19 +57,12 @@ router.get("/", async (req, res) => {
 // POST /api/users — cria usuário no mesmo tenant (admin)
 router.post("/", async (req, res) => {
   try {
-    const email = String(req.body?.email || "")
-      .trim()
-      .toLowerCase();
-    const password = String(req.body?.password || "");
-    const name = req.body?.name != null ? String(req.body.name).trim() || null : null;
-    const role = String(req.body?.role || "member").toLowerCase();
+    const body = parseBody(createUserSchema, req.body);
+    const email = body.email.trim().toLowerCase();
+    const password = body.password;
+    const name = body.name != null ? String(body.name).trim() || null : null;
+    const role = String(body.role || "member").toLowerCase();
 
-    if (!email || !password) {
-      return res.status(400).json({ error: "Informe e-mail e senha" });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres" });
-    }
     if (!ROLES.has(role)) {
       return res.status(400).json({ error: "Papel inválido (use admin ou member)" });
     }
@@ -139,13 +134,7 @@ router.patch("/:id/password", async (req, res) => {
     if (!Number.isFinite(id) || id < 1) {
       return res.status(400).json({ error: "ID inválido" });
     }
-    const password = String(req.body?.password || "");
-    if (!password) {
-      return res.status(400).json({ error: "Informe a nova senha" });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres" });
-    }
+    const { password } = parseBody(changePasswordSchema, req.body);
 
     const user = await prisma.user.findFirst({
       where: { id, tenantId: req.tenantId },
@@ -158,7 +147,7 @@ router.patch("/:id/password", async (req, res) => {
     await prisma.$transaction(async (tx) => {
       await tx.user.updateMany({
         where: { id, tenantId: req.tenantId },
-        data: { passwordHash },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
       });
       await registrarAuditoria(tx, req, {
         tenantId: req.tenantId,

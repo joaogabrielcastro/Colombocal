@@ -16,14 +16,21 @@ process.env.EXPORT_QUEUE_MODE = "memory";
 process.env.DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || "1";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-jwt-secret";
 process.env.SETUP_SECRET = process.env.SETUP_SECRET || "test-setup-secret-abc";
+process.env.FISCAL_TOKEN_ENCRYPTION_KEY =
+  process.env.FISCAL_TOKEN_ENCRYPTION_KEY ||
+  Buffer.from("0123456789abcdef0123456789abcdef").toString("base64");
+process.env.EMAIL_TRANSPORT = process.env.EMAIL_TRANSPORT || "memory";
+process.env.APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || "http://127.0.0.1:3010";
 process.env.RATE_LIMIT_MAX_PER_WINDOW = "1000000";
 process.env.RATE_LIMIT_CNPJ_PER_MIN = "1000000";
 process.env.RATE_LIMIT_SETUP_PER_HOUR = "1000000";
 process.env.RATE_LIMIT_REGISTER_PER_HOUR = "1000000";
 process.env.RATE_LIMIT_LOGIN_PER_WINDOW = "1000000";
+process.env.RATE_LIMIT_FORGOT_PASSWORD_PER_WINDOW = "1000000";
+process.env.RATE_LIMIT_RESET_PASSWORD_PER_WINDOW = "1000000";
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ||
-  "postgresql://postgres:colombocal_dev@localhost:5433/colombocal_test?schema=public";
+  "postgresql://postgres:colombocal_dev@localhost:5436/colombocal_test?schema=public";
 
 const request = require("supertest");
 const app = require("../../src/index");
@@ -34,6 +41,7 @@ const TABLES = [
   "FinanceiroEvento",
   "NotaFiscal",
   "EmitenteFiscal",
+  "PasswordResetToken",
   "ComissaoAjusteVenda",
   "ConfigSistema",
   "FreteMovimento",

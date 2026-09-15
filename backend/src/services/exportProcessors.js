@@ -27,9 +27,20 @@ const FINANCEIRO_CSV_HEADER =
 const TITULOS_CSV_HEADER =
   "Título,Cliente,Representante,Venda,Vencimento,Valor Original,Valor Pago,Valor em Aberto,Dias atraso,Status";
 
-async function processVendasCsv(payload) {
-  const tenantId = parseInt(payload.tenantId, 10);
-  const where = buildVendasWhere(payload, tenantId);
+async function processVendasCsv(payload, jobTenantId) {
+  const fromJob = Number(jobTenantId);
+  const fromPayload = parseInt(payload.tenantId, 10);
+  const tenantId =
+    Number.isFinite(fromJob) && fromJob > 0
+      ? fromJob
+      : Number.isFinite(fromPayload) && fromPayload > 0
+        ? fromPayload
+        : NaN;
+  if (!Number.isFinite(tenantId) || tenantId < 1) {
+    throw new Error("tenantId inválido no export de vendas");
+  }
+  // Sempre usar tenant do job; ignorar tentativa de override no payload.
+  const where = buildVendasWhere({ ...payload, tenantId: String(tenantId) }, tenantId);
   const { rows: vendas, truncated } = await findManyBatched(
     (args) => prisma.venda.findMany(args),
     {
@@ -112,9 +123,19 @@ async function processFinanceiroCsv(payload, tenantId) {
   };
 }
 
-async function processTitulosCsv(payload) {
-  const tenantId = parseInt(payload.tenantId, 10);
-  const where = buildTitulosWhere(payload, tenantId);
+async function processTitulosCsv(payload, jobTenantId) {
+  const fromJob = Number(jobTenantId);
+  const fromPayload = parseInt(payload.tenantId, 10);
+  const tenantId =
+    Number.isFinite(fromJob) && fromJob > 0
+      ? fromJob
+      : Number.isFinite(fromPayload) && fromPayload > 0
+        ? fromPayload
+        : NaN;
+  if (!Number.isFinite(tenantId) || tenantId < 1) {
+    throw new Error("tenantId inválido no export de títulos");
+  }
+  const where = buildTitulosWhere({ ...payload, tenantId: String(tenantId) }, tenantId);
   const { rows: titulos, truncated } = await findManyBatched(
     (args) => prisma.tituloReceber.findMany(args),
     {

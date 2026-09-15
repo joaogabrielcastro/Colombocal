@@ -15,10 +15,9 @@ const { registrarAuditoria } = require("../services/financeiroEventos");
 const { recalcularTodosTitulosCliente } = require("../services/recebiveis");
 const { requestAllowsFrete, getTenantSlug } = require("../utils/tenantRequest");
 const { tenantFretePagoDefault } = require("../constants/tenantFeatures");
-const {
-  freteLinha,
-  roundMoney,
-} = require("../domain/frete/calcularFrete");
+const { freteLinha, roundMoney } = require("../domain/frete/calcularFrete");
+const { parseBody } = require("../utils/zodParse");
+const { freteAvulsoSchema } = require("../schemas/freteExport");
 
 /** Avulso não gera título/pagamento (igual frete da venda). Limpa legado se existir. */
 async function limparFinanceiroFreteAvulso(tx, tenantId, freteId) {
@@ -147,42 +146,43 @@ async function buscarPayloadAvulso(prismaClient, tenantId, freteId) {
 // POST /api/fretes/avulso — cadastro avulso completo (cliente/motorista/produto)
 router.post("/avulso", async (req, res) => {
   try {
-    const clienteId = parseIntField(req.body?.clienteId, "clienteId", { min: 1 });
-    const motoristaId = parseIntField(req.body?.motoristaId, "motoristaId", { min: 1 });
-    const precoSaco = parseNumberField(req.body?.precoSaco, "precoSaco", { required: false, min: 0 }) ?? 0;
+    const body = parseBody(freteAvulsoSchema, req.body);
+    const clienteId = parseIntField(body.clienteId, "clienteId", { min: 1 });
+    const motoristaId = parseIntField(body.motoristaId, "motoristaId", { min: 1 });
+    const precoSaco = parseNumberField(body.precoSaco, "precoSaco", { required: false, min: 0 }) ?? 0;
     const precoTonelada =
-      parseNumberField(req.body?.precoTonelada, "precoTonelada", { required: false, min: 0 }) ?? 0;
+      parseNumberField(body.precoTonelada, "precoTonelada", { required: false, min: 0 }) ?? 0;
     const valorTotalInformado =
-      parseNumberField(req.body?.valorTotal, "valorTotal", { required: false, min: 0.01 }) ?? null;
+      parseNumberField(body.valorTotal, "valorTotal", { required: false, min: 0.01 }) ?? null;
     const dataMovimento =
-      req.body?.dataMovimento != null && String(req.body.dataMovimento).trim() !== ""
-        ? parseDateField(req.body.dataMovimento, "dataMovimento", { required: true })
+      body.dataMovimento != null && String(body.dataMovimento).trim() !== ""
+        ? parseDateField(body.dataMovimento, "dataMovimento", { required: true })
         : new Date();
     const vencimento =
-      req.body?.vencimento != null && String(req.body.vencimento).trim() !== ""
-        ? parseDateField(req.body.vencimento, "vencimento", { required: true })
+      body.vencimento != null && String(body.vencimento).trim() !== ""
+        ? parseDateField(body.vencimento, "vencimento", { required: true })
         : (() => {
             const d = new Date();
             d.setUTCDate(d.getUTCDate() + 30);
             return d;
           })();
-    const observacaoLivre = String(req.body?.observacao || "").trim();
-    const itensEntrada = Array.isArray(req.body?.itens) ? req.body.itens : null;
+    const observacaoLivre = String(body.observacao || "").trim();
+    const itensEntrada = Array.isArray(body.itens) ? body.itens : null;
     const reciboNumero =
-      req.body?.reciboNumero != null && String(req.body.reciboNumero).trim() !== ""
-        ? String(req.body.reciboNumero).trim()
+      body.reciboNumero != null && String(body.reciboNumero).trim() !== ""
+        ? String(body.reciboNumero).trim()
         : null;
 
     const tenantId = req.tenantId;
     const fretePagoDefault = tenantFretePagoDefault(await getTenantSlug(tenantId));
     const pagamentoData =
-      req.body?.pagamentoData != null && String(req.body.pagamentoData).trim() !== ""
-        ? parseDateField(req.body.pagamentoData, "pagamentoData", { required: true })
-        : req.body?.reciboData != null && String(req.body.reciboData).trim() !== ""
-          ? parseDateField(req.body.reciboData, "reciboData", { required: true })
+      body.pagamentoData != null && String(body.pagamentoData).trim() !== ""
+        ? parseDateField(body.pagamentoData, "pagamentoData", { required: true })
+        : body.reciboData != null && String(body.reciboData).trim() !== ""
+          ? parseDateField(body.reciboData, "reciboData", { required: true })
           : dataMovimento;
     // Operacional só: sem título/pagamento. Colombocal: sempre pago (como frete da venda).
-    const pagoNoAto = fretePagoDefault ? true : !!req.body?.pagoNoAto;
+    const pagoNoAto = fretePagoDefault ? true : !!body.pagoNoAto;
 
     const result = await prisma.$transaction(async (tx) => {
       const [cliente, motorista] = await Promise.all([
@@ -214,8 +214,8 @@ router.post("/avulso", async (req, res) => {
           itens.push({ produto, quantidade });
         }
       } else {
-        const produtoId = parseIntField(req.body?.produtoId, "produtoId", { min: 1 });
-        const quantidade = parseNumberField(req.body?.quantidade, "quantidade", { min: 0.001 });
+        const produtoId = parseIntField(body.produtoId, "produtoId", { min: 1 });
+        const quantidade = parseNumberField(body.quantidade, "quantidade", { min: 0.001 });
         const produto = await tx.produto.findFirst({ where: { id: produtoId, tenantId } });
         if (!produto) {
           const err = new Error("Produto não encontrado");
@@ -734,8 +734,8 @@ router.patch("/:id", async (req, res) => {
         const primeiro = primeiros[0];
         const mesmoPrimeiro = primeiro && primeiro.id === f.id;
         if (mesmoPrimeiro || primeiros.length === 1) {
-          await tx.venda.update({
-            where: { id: f.vendaId },
+          await tx.venda.updateMany({
+            where: { id: f.vendaId, tenantId },
             data: {
               freteRecibo: !!f.reciboEmitido,
               freteReciboNum: f.reciboNumero || null,

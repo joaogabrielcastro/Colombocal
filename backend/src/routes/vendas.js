@@ -239,6 +239,8 @@ router.get("/por-ordem/:numero", async (req, res) => {
       include: {
         cliente: true,
         vendedor: true,
+        motorista: true,
+        itens: { include: { produto: true } },
         titulos: true,
         pagamentos: { select: { valor: true } },
       },
@@ -786,8 +788,8 @@ router.put("/:id", async (req, res) => {
               "Título com pagamento parcial impede edição da venda",
             );
           }
-          await tx.tituloReceber.update({
-            where: { id: titulo.id },
+          await tx.tituloReceber.updateMany({
+            where: { id: titulo.id, tenantId: req.tenantId },
             data: {
               clienteId: clienteIdNum,
               valorOriginal: valorTotal,

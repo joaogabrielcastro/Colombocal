@@ -616,7 +616,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" data-testid="nova-venda-form">
         <div className="card p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Dados da Venda</h2>
           {cli != null && com != null && (
@@ -639,6 +639,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
               loadLabelById={loadClienteLabel}
               minChars={2}
               placeholder="Nome, fantasia, CNPJ ou cidade…"
+              data-testid="nova-venda-cliente"
             />
 
             {formBloqueadoPorObs && precisaAckObs ? (
@@ -869,6 +870,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                         loadLabelById={loadProdutoLabelById}
                         minChars={2}
                         placeholder="Buscar produto…"
+                        data-testid={idx === 0 ? "nova-venda-produto" : undefined}
                       />
                     </td>
                     <td className="py-2 pr-3">
@@ -878,6 +880,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                         min="0"
                         placeholder="0"
                         value={item.quantidade}
+                        data-testid={idx === 0 ? "nova-venda-quantidade" : undefined}
                         onChange={(e) =>
                           setItens((prev) =>
                             prev.map((it, i) =>
@@ -941,7 +944,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             <div className="w-72 space-y-2">
               <div className="flex justify-between font-bold text-gray-900 border-b pb-2 mb-1">
                 <span>Total Produtos:</span>
-                <span className="text-green-700 text-lg">
+                <span className="text-green-700 text-lg" data-testid="nova-venda-total">
                   {formatMoney(subtotal)}
                 </span>
               </div>
@@ -1016,6 +1019,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             type="submit"
             disabled={salvando || formBloqueadoPorObs}
             className="btn-primary"
+            data-testid="nova-venda-submit"
           >
             {salvando
               ? isEdit

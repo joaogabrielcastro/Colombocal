@@ -10,6 +10,7 @@
     "dev:clean": "node -e \"try { require('fs').rmSync('.next', { recursive: true, force: true }) } catch (e) {}\" && next dev -p 3010",
     "build": "next build",
     "start": "next start",
+    "start:e2e": "node scripts/start-standalone-e2e.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

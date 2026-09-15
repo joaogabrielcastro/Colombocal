@@ -1,5 +1,6 @@
 const { createFocusNfeProvider } = require("./focusNfeProvider");
 const { createMockNfeProvider } = require("./mockNfeProvider");
+const { resolveProvedorTokenPlain } = require("../crypto/fiscalTokenCrypto");
 
 function resolveProviderName() {
   const raw = String(process.env.NFE_PROVIDER || "").trim().toLowerCase();
@@ -11,8 +12,14 @@ function resolveProviderName() {
 function createNfeProvider({ emitente } = {}) {
   const name = resolveProviderName();
   if (name === "mock") return createMockNfeProvider();
+  let tokenFromDb = null;
+  try {
+    tokenFromDb = resolveProvedorTokenPlain(emitente?.provedorToken);
+  } catch {
+    tokenFromDb = null;
+  }
   const token =
-    (emitente?.provedorToken && String(emitente.provedorToken).trim()) ||
+    (tokenFromDb && String(tokenFromDb).trim()) ||
     String(process.env.FOCUS_NFE_TOKEN || "").trim() ||
     null;
   const ambiente =

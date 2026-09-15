@@ -20,6 +20,8 @@ const { getDateRange } = require("../utils/dateRangeQuery");
 const { montarEvolucaoPeriodo } = require("../utils/evolucaoVendas");
 const { requestAllowsFrete } = require("../utils/tenantRequest");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+const { parseBody } = require("../utils/zodParse");
+const { exportAsyncSchema } = require("../schemas/freteExport");
 const {
   montarFaixasAging,
   camposVencimentoTitulo,
@@ -288,16 +290,17 @@ router.get("/vendas", async (req, res) => {
 // POST /api/relatorios/vendas/export-async
 router.post("/vendas/export-async", async (req, res) => {
   try {
+    const body = parseBody(exportAsyncSchema, req.body || {});
     const payload = {
       tenantId: String(req.tenantId),
-      dataInicio: req.body?.dataInicio ? String(req.body.dataInicio) : "",
-      dataFim: req.body?.dataFim ? String(req.body.dataFim) : "",
-      busca: req.body?.busca ? String(req.body.busca) : "",
-      vendedorId: req.body?.vendedorId ? String(req.body.vendedorId) : "",
-      motoristaId: req.body?.motoristaId ? String(req.body.motoristaId) : "",
-      clienteId: req.body?.clienteId ? String(req.body.clienteId) : "",
-      produtoId: req.body?.produtoId ? String(req.body.produtoId) : "",
-      produtoBusca: req.body?.produtoBusca ? String(req.body.produtoBusca) : "",
+      dataInicio: body.dataInicio ? String(body.dataInicio) : "",
+      dataFim: body.dataFim ? String(body.dataFim) : "",
+      busca: body.busca ? String(body.busca) : "",
+      vendedorId: body.vendedorId != null && body.vendedorId !== "" ? String(body.vendedorId) : "",
+      motoristaId: body.motoristaId != null && body.motoristaId !== "" ? String(body.motoristaId) : "",
+      clienteId: body.clienteId != null && body.clienteId !== "" ? String(body.clienteId) : "",
+      produtoId: body.produtoId != null && body.produtoId !== "" ? String(body.produtoId) : "",
+      produtoBusca: body.produtoBusca ? String(body.produtoBusca) : "",
     };
     const jobId = await enqueueExportJob("vendas_csv", req.tenantId, payload);
     res.status(202).json({ jobId, status: "pending" });

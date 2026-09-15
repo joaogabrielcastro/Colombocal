@@ -17,6 +17,7 @@ function signAuthToken(user) {
       tid: user.tenantId,
       email: user.email,
       role: user.role || "member",
+      tv: Number(user.tokenVersion) || 0,
     },
     getJwtSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
@@ -74,10 +75,22 @@ async function requireTenantUser(req, res, next) {
         name: true,
         role: true,
         navPermissions: true,
+        tokenVersion: true,
       },
     });
     if (!user) {
       return res.status(401).json({ error: "Usuário não encontrado" });
+    }
+
+    const tokenTv = Number(payload.tv);
+    const currentTv = Number(user.tokenVersion) || 0;
+    // Tokens sem `tv` (emitidos antes da Fase 3) só valem se tokenVersion ainda for 0.
+    if (Number.isFinite(tokenTv)) {
+      if (tokenTv !== currentTv) {
+        return res.status(401).json({ error: "Sessão inválida ou expirada" });
+      }
+    } else if (currentTv !== 0) {
+      return res.status(401).json({ error: "Sessão inválida ou expirada" });
     }
 
     req.tenantId = tid;

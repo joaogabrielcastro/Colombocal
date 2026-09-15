@@ -40,6 +40,24 @@ services:
       retries: 20
       start_period: 10s
 
+  # Banco só para `npm test` no backend (porta 5436). Ephemeral: testes fazem TRUNCATE.
+  # 5433 no host costuma estar ocupada por outros stacks locais (ex.: sites-postgres).
+  db-test:
+    image: postgres:15-alpine
+    container_name: colombocal-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: colombocal_dev
+      POSTGRES_DB: colombocal_test
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d colombocal_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
   redis:
     image: redis:7-alpine
     container_name: colombocal-redis-dev
@@ -114,6 +132,8 @@ services:
       NODE_ENV: development
       NEXT_PUBLIC_API_ORIGIN: http://backend:3011
       NEXT_PUBLIC_UI_HIDE_ADVANCED: "true"
+      # Dev local: UI sem tela de login. Em produção NÃO defina false — o frontend
+      # ignora isso quando NODE_ENV=production, e a API sempre exige JWT.
       NEXT_PUBLIC_REQUIRE_LOGIN: "false"
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"

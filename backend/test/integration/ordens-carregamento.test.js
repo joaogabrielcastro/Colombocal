@@ -99,6 +99,7 @@ test("POST a partir da venda: produto em saco permanece 160 SAC", async () => {
     .send({ vendaId: venda.body.id });
   assert.equal(oc.status, 201);
   assert.equal(oc.body.vendaId, venda.body.id);
+  assert.equal(oc.body.pedido, String(venda.body.numeroVenda).padStart(6, "0"));
   assert.equal(qtd(oc.body.itens[0]), 160);
   assert.equal(oc.body.itens[0].unidade, "SAC");
 });

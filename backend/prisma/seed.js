@@ -23,8 +23,10 @@ async function seedOneTenant(db, cfg) {
 
   const passwordHash = await bcrypt.hash(cfg.passwordPlain, 12);
   await db.user.upsert({
-    where: { email: cfg.adminEmail },
-    update: { passwordHash, tenantId: tenant.id, name: cfg.adminName, role: "admin" },
+    where: {
+      tenantId_email: { tenantId: tenant.id, email: cfg.adminEmail },
+    },
+    update: { passwordHash, name: cfg.adminName, role: "admin" },
     create: {
       tenantId: tenant.id,
       email: cfg.adminEmail,
@@ -33,6 +35,42 @@ async function seedOneTenant(db, cfg) {
       role: "admin",
     },
   });
+
+  // Membro com menu limitado (E2E / testes de permissão). Sem acesso a Usuários (só admin).
+  if (cfg.memberEmail) {
+    const memberHash = await bcrypt.hash(cfg.memberPassword || cfg.passwordPlain, 12);
+    await db.user.upsert({
+      where: {
+        tenantId_email: { tenantId: tenant.id, email: cfg.memberEmail },
+      },
+      update: {
+        passwordHash: memberHash,
+        name: cfg.memberName || "Membro",
+        role: "member",
+        navPermissions: cfg.memberNavPermissions || [
+          "dashboard",
+          "clientes",
+          "produtos",
+          "vendas",
+          "financeiro",
+        ],
+      },
+      create: {
+        tenantId: tenant.id,
+        email: cfg.memberEmail,
+        passwordHash: memberHash,
+        name: cfg.memberName || "Membro",
+        role: "member",
+        navPermissions: cfg.memberNavPermissions || [
+          "dashboard",
+          "clientes",
+          "produtos",
+          "vendas",
+          "financeiro",
+        ],
+      },
+    });
+  }
 
   const produtos = await Promise.all([
     db.produto.upsert({
@@ -123,16 +161,26 @@ async function main() {
   const adminEmail = (process.env.SEED_ADMIN_EMAIL || "admin@local").trim().toLowerCase();
   const adminName = (process.env.SEED_ADMIN_NAME || "Administrador").trim() || "Administrador";
 
+  const memberEmail = (process.env.SEED_MEMBER_EMAIL || "membro@local")
+    .trim()
+    .toLowerCase();
+  const memberPassword =
+    process.env.SEED_MEMBER_PASSWORD || defaultPassword;
+
   const r1 = await seedOneTenant(prisma, {
     slug: "default",
     name: "Colombocal",
     adminEmail,
     adminName,
     passwordPlain: defaultPassword,
+    memberEmail,
+    memberName: "Atendente",
+    memberPassword,
   });
   console.log(
     `✅ Tenant #${r1.tenant.id} (default): ${adminEmail} (${adminName}) — use SEED_ADMIN_PASSWORD em produção`,
   );
+  console.log(`   membro: ${memberEmail} (papel member, menu limitado)`);
   console.log(`   ${r1.produtosCount} produtos, vendedor interno id=${r1.vendedorId}`);
 
   const r2 = await seedOneTenant(prisma, {

@@ -134,23 +134,44 @@ router.put("/", requireAdmin, async (req, res) => {
   }
 });
 
+const {
+  prepareProvedorTokenForStorage,
+  hasFiscalTokenConfigured,
+  isEncryptedFiscalToken,
+  encryptFiscalToken,
+  getFiscalTokenKeyBytes,
+} = require("../infra/crypto/fiscalTokenCrypto");
+
 function publicEmitente(row) {
   if (!row) return null;
   const { provedorToken, ...rest } = row;
   return {
     ...rest,
     provedorTokenConfigurado: !!(
-      (provedorToken && String(provedorToken).trim()) ||
+      hasFiscalTokenConfigured(provedorToken) ||
       String(process.env.FOCUS_NFE_TOKEN || "").trim()
     ),
   };
 }
 
+/** Lazy migration: se ainda estiver em texto puro e houver chave, regrava cifrado. */
+async function maybeReencryptLegacyToken(row) {
+  if (!row?.provedorToken || isEncryptedFiscalToken(row.provedorToken)) return row;
+  const key = getFiscalTokenKeyBytes({ required: false });
+  if (!key) return row;
+  const cipher = encryptFiscalToken(String(row.provedorToken).trim(), key);
+  return prisma.emitenteFiscal.update({
+    where: { id: row.id },
+    data: { provedorToken: cipher },
+  });
+}
+
 router.get("/emitente-fiscal", requireAdmin, async (req, res) => {
   try {
-    const row = await prisma.emitenteFiscal.findUnique({
+    let row = await prisma.emitenteFiscal.findUnique({
       where: { tenantId: req.tenantId },
     });
+    if (row) row = await maybeReencryptLegacyToken(row);
     res.json(publicEmitente(row));
   } catch (e) {
     handleRouteError(res, e);
@@ -165,7 +186,7 @@ router.put("/emitente-fiscal", requireAdmin, async (req, res) => {
     });
     const tokenNovo =
       b.provedorToken != null && String(b.provedorToken).trim()
-        ? String(b.provedorToken).trim()
+        ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
         : undefined;
     const data = {
       cnpj: onlyDigits(b.cnpj),

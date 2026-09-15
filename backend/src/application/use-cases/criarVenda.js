@@ -21,6 +21,19 @@ function addDays(date, days) {
   return addDaysCalendar(date, days);
 }
 
+/** Classe de advisory lock só para numeração de venda (não colide com outros locks da app). */
+const LOCK_NUMERO_VENDA = 872351;
+const MAX_NUMERO_TENTATIVAS = 8;
+
+function isNumeroVendaConflict(error) {
+  if (error?.code !== "P2002") return false;
+  const target = error.meta?.target;
+  if (target === "numeroVenda") return true;
+  if (Array.isArray(target) && target.includes("numeroVenda")) return true;
+  if (typeof target === "string" && target.includes("numeroVenda")) return true;
+  return false;
+}
+
 /**
  * Cria venda completa: itens, comissão, título, frete, estoque, auditoria e sync de cliente.
  */
@@ -82,7 +95,16 @@ async function criarVenda(prisma, payload) {
     ? parseDateField(dataVenda, "dataVenda")
     : null;
 
-  const venda = await prisma.$transaction(async (tx) => {
+  let venda;
+  for (let attempt = 0; attempt < MAX_NUMERO_TENTATIVAS; attempt++) {
+    try {
+      venda = await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(
+            "SELECT pg_advisory_xact_lock($1::int, $2::int)",
+            LOCK_NUMERO_VENDA,
+            Number(tenantId),
+          );
     const cliente = await tx.cliente.findFirst({
       where: { id: clienteId, tenantId },
     });
@@ -274,7 +296,17 @@ async function criarVenda(prisma, payload) {
     }
 
     return novaVenda;
-  });
+        },
+        { timeout: 20000, maxWait: 20000 },
+      );
+      break;
+    } catch (error) {
+      if (isNumeroVendaConflict(error) && attempt < MAX_NUMERO_TENTATIVAS - 1) {
+        continue;
+      }
+      throw error;
+    }
+  }
 
   return prisma.venda.findFirst({
     where: { id: venda.id, tenantId },
@@ -294,4 +326,5 @@ module.exports = {
   criarVenda,
   calcularFreteAutomatico,
   addDays,
+  isNumeroVendaConflict,
 };

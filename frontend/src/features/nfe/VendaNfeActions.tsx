@@ -91,7 +91,21 @@ export function VendaNfeActions({ venda, onUpdated }: Props) {
           ? ((e.body as { details: string[] }).details)
           : [];
       if (details.length) setErros(details);
-      reportApiError(e, { title: "Não foi possível emitir a NF-e" });
+      const code =
+        e instanceof ApiError &&
+        e.body &&
+        typeof e.body === "object" &&
+        "code" in e.body
+          ? String((e.body as { code?: unknown }).code || "")
+          : "";
+      if (code === "NFE_STATUS_INCERTO") {
+        onUpdated();
+        reportApiError(e, {
+          title: "NF-e em verificação",
+        });
+      } else {
+        reportApiError(e, { title: "Não foi possível emitir a NF-e" });
+      }
     } finally {
       setBusy(false);
     }

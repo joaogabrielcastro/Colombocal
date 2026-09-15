@@ -57,8 +57,8 @@ async function syncClienteFromVenda(
   }
 
   if (Object.keys(clienteData).length > 0) {
-    await tx.cliente.update({
-      where: { id: clienteId },
+    await tx.cliente.updateMany({
+      where: { id: clienteId, tenantId },
       data: clienteData,
     });
   }

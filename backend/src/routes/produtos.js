@@ -7,33 +7,14 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { registrarAuditoria } = require("../services/financeiroEventos");
+const { parseBody } = require("../utils/zodParse");
 const {
-  parseRequiredString,
-  parseOptionalString,
-  parseNumberField,
-} = require("../utils/validation");
-const { z } = require("zod");
-const { produtoFiscalPatch } = require("../schemas/produtoFiscal");
-
-const produtoFiscalSchema = z.object(produtoFiscalPatch).partial();
+  produtoCreateSchema,
+  produtoUpdateSchema,
+} = require("../schemas/produto");
 
 function tw(req) {
   return { tenantId: req.tenantId };
-}
-
-function pickProdutoFiscal(body) {
-  const parsed = produtoFiscalSchema.safeParse(body || {});
-  if (!parsed.success) {
-    const msg = parsed.error.issues?.[0]?.message || "Dados fiscais do produto inválidos";
-    const err = new Error(msg);
-    err.httpStatus = 400;
-    throw err;
-  }
-  const out = {};
-  for (const [k, v] of Object.entries(parsed.data)) {
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
 }
 
 // GET /api/produtos
@@ -92,36 +73,25 @@ router.get("/:id", async (req, res) => {
 // POST /api/produtos
 router.post("/", async (req, res) => {
   try {
-    const nome = parseRequiredString(req.body?.nome, "nome", { maxLength: 160 });
-    const codigo = parseOptionalString(req.body?.codigo, "codigo", { maxLength: 80 });
-    const precoPadrao = parseNumberField(req.body?.precoPadrao, "precoPadrao", {
-      min: 0,
-    });
-    const unidade =
-      parseOptionalString(req.body?.unidade, "unidade", { maxLength: 20 }) || "ton";
+    const b = parseBody(produtoCreateSchema, req.body);
     const codigoFinal =
-      codigo ||
+      b.codigo ||
       `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    const pesoKg = parseNumberField(
-      req.body?.pesoKg == null || req.body?.pesoKg === ""
-        ? req.body?.pesoKg
-        : String(req.body.pesoKg).replace(",", "."),
-      "pesoKg",
-      {
-        required: false,
-        min: 0,
-      },
-    );
     const produto = await prisma.$transaction(async (tx) => {
       const p = await tx.produto.create({
         data: {
           ...tw(req),
-          nome,
+          nome: b.nome,
           codigo: codigoFinal,
-          precoPadrao,
-          unidade,
-          pesoKg: pesoKg != null && pesoKg > 0 ? pesoKg : null,
-          ...pickProdutoFiscal(req.body),
+          precoPadrao: b.precoPadrao,
+          unidade: b.unidade || "ton",
+          pesoKg: b.pesoKg != null && b.pesoKg > 0 ? b.pesoKg : null,
+          ncm: b.ncm ?? undefined,
+          cfopPadraoDentro: b.cfopPadraoDentro ?? undefined,
+          cfopPadraoFora: b.cfopPadraoFora ?? undefined,
+          origem: b.origem ?? undefined,
+          cst: b.cst ?? undefined,
+          csosn: b.csosn ?? undefined,
         },
       });
       await registrarAuditoria(tx, req, {
@@ -148,41 +118,23 @@ router.put("/:id", async (req, res) => {
     const exists = await prisma.produto.count({ where: { id, ...tw(req) } });
     if (!exists) return res.status(404).json({ error: "Produto não encontrado" });
 
+    const b = parseBody(produtoUpdateSchema, req.body);
     const data = {};
-    if (req.body?.nome !== undefined) {
-      data.nome = parseRequiredString(req.body.nome, "nome", { maxLength: 160 });
+    if (b.nome !== undefined) data.nome = b.nome;
+    if (b.codigo !== undefined) data.codigo = b.codigo;
+    if (b.precoPadrao !== undefined) data.precoPadrao = b.precoPadrao;
+    if (b.unidade !== undefined) data.unidade = b.unidade;
+    if (b.ativo !== undefined) data.ativo = b.ativo;
+    if (b.pesoKg !== undefined) {
+      data.pesoKg = b.pesoKg != null && b.pesoKg > 0 ? b.pesoKg : null;
     }
-    if (req.body?.codigo !== undefined) {
-      data.codigo = parseOptionalString(req.body.codigo, "codigo", { maxLength: 80 });
-    }
-    if (req.body?.precoPadrao !== undefined) {
-      data.precoPadrao = parseNumberField(req.body.precoPadrao, "precoPadrao", {
-        min: 0,
-      });
-    }
-    if (req.body?.unidade !== undefined) {
-      data.unidade =
-        parseOptionalString(req.body.unidade, "unidade", { maxLength: 20 }) || "ton";
-    }
-    if (req.body?.ativo !== undefined) {
-      if (typeof req.body.ativo !== "boolean") {
-        return res.status(400).json({ error: "ativo inválido" });
-      }
-      data.ativo = req.body.ativo;
-    }
-    if (req.body?.pesoKg !== undefined) {
-      if (req.body.pesoKg === null || String(req.body.pesoKg).trim() === "") {
-        data.pesoKg = null;
-      } else {
-        const peso = parseNumberField(
-          String(req.body.pesoKg).replace(",", "."),
-          "pesoKg",
-          { min: 0 },
-        );
-        data.pesoKg = peso > 0 ? peso : null;
-      }
-    }
-    Object.assign(data, pickProdutoFiscal(req.body));
+    if (b.ncm !== undefined) data.ncm = b.ncm;
+    if (b.cfopPadraoDentro !== undefined) data.cfopPadraoDentro = b.cfopPadraoDentro;
+    if (b.cfopPadraoFora !== undefined) data.cfopPadraoFora = b.cfopPadraoFora;
+    if (b.origem !== undefined) data.origem = b.origem;
+    if (b.cst !== undefined) data.cst = b.cst;
+    if (b.csosn !== undefined) data.csosn = b.csosn;
+
     const produto = await prisma.$transaction(async (tx) => {
       const updated = await tx.produto.updateMany({
         where: { id, ...tw(req) },

@@ -9,7 +9,7 @@ Sistema de gestão comercial para distribuidora de cal: vendas, financeiro, fret
 - **Produtos** — Cadastro com unidade, preço padrão e dados fiscais (NCM/CFOP)
 - **Vendedores** — Comissão percentual (e regras específicas por cliente/produto)
 - **Vendas** — Itens, preço da venda, motorista, observações e baixa de estoque
-- **Financeiro** — Títulos a receber, pagamentos (dinheiro/transferência) e cheques (Recebido → Depositado → Compensado / Devolvido)
+- **Financeiro** — Títulos a receber, pagamentos (dinheiro/transferência/PIX) e cheques **registrados** (abatem o saldo na hora). Não há fluxo de depósito/compensação nesta versão.
 - **Fretes e carregamento** — Frete da venda, movimentos avulsos e ordens de pátio (podem ficar ocultos em tenants sem frete)
 - **Motoristas** — Cadastro para vincular a vendas e relatórios
 - **Dashboard** — KPIs do período
@@ -124,7 +124,7 @@ Colombocal/
 
 ## Variáveis de ambiente (resumo)
 
-Não commite `.env`. No Compose, os valores de desenvolvimento já estão no `docker-compose.yml`.
+Não commite `.env`. Modelos sem valores: `backend/.env.example` e `frontend/.env.example`. No Compose, os valores de desenvolvimento já estão no `docker-compose.yml`.
 
 **Backend (principais)**
 
@@ -153,12 +153,31 @@ cd frontend
 npm test
 
 # Backend (unitários + integração)
-# Integração precisa do Postgres de teste na 5433:
+# Integração precisa do Postgres de teste na 5436:
 cd backend
-npm run test:db:up          # uma vez
+npm run test:db:up          # sobe serviço db-test do docker-compose
 npm run test:db:migrate
 npm test
+
+# E2E (Playwright) — ver e2e/README.md
+cd frontend && npm run build
+cd ../backend && npm run db:seed   # admin@local / membro@local / demo@local
+cd ../e2e && npm ci && npx playwright install chromium && npm test
 ```
+
+### Frontend: scripts de execução
+
+| Script | Uso |
+|--------|-----|
+| `npm run dev` | Desenvolvimento (hot reload) |
+| `npm run build` | Gera `.next` + `output: 'standalone'` |
+| `npm run start` | `next start` — **não** use com standalone no Coolify/E2E |
+| `npm run start:e2e` | Sobe `.next/standalone/server.js` (copia static/public). Usado pelo Playwright e alinhado ao deploy standalone |
+
+Produção/Coolify: preferir o artefato standalone (`node server.js` dentro de `.next/standalone`) com as mesmas variáveis `NEXT_PUBLIC_*` usadas no build.
+
+O Compose já inclui `db` (5435), `db-test` (5436), Redis, backend e frontend com healthchecks.
+Para só o banco de testes: `docker compose up -d db-test`.
 
 ## Comandos úteis
 
@@ -168,6 +187,7 @@ npm run db:studio     # Prisma Studio
 npm run db:migrate     # migrações em desenvolvimento
 npm run db:deploy     # migrate deploy (CI / produção)
 npm run db:seed       # tenants + admin + produtos de exemplo
+npm run fiscal:encrypt-existing-tokens  # cifra tokens fiscais legados
 npm run tenant:create
 npm run db:reset       # APAGA TODOS OS DADOS do banco apontado
 
@@ -180,6 +200,9 @@ docker compose down     # remove containers; volumes persistentes ficam
 
 - [NF-e — homologação e produção](docs/nfe-homologacao-producao.md)
 - [Backup e restore](docs/operacao-backup-restore.md)
+- [Hardening de produção / Coolify](docs/producao-hardening.md)
+- [Cheques — comportamento real](docs/cheques.md)
 - [Migração de legado](docs/migracao-legado.md)
 - [Arquitetura (evolução)](docs/arquitetura-single-tenant-evolucao.md)
 - [Scripts de legado](backend/scripts/README.md)
+- [E2E](e2e/README.md)

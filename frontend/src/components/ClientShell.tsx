@@ -8,12 +8,14 @@ import { AUTH_SESSION_EVENT, getAuthTenantId, getAuthToken } from '@/lib/auth-to
 import { canAccessPath } from '@/lib/navigation';
 import api, { ApiError } from '@/lib/api';
 import { nextPathFromSearch } from '@/lib/safe-next-path';
+import { REQUIRE_LOGIN } from '@/lib/features';
+import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 
 /**
  * Por omissão exige JWT: rotas internas redirecionam para /login sem token.
- * Para desligar (ex.: dev com backend em AUTH_DISABLED): NEXT_PUBLIC_REQUIRE_LOGIN=false
+ * Produção sempre exige login. Em dev: NEXT_PUBLIC_REQUIRE_LOGIN=false (backend continua protegendo a API).
  */
-const requireLogin = process.env.NEXT_PUBLIC_REQUIRE_LOGIN !== 'false';
+const requireLogin = REQUIRE_LOGIN;
 
 type MeUser = {
   role?: string;
@@ -24,6 +26,8 @@ function isPublicPath(pathname: string): boolean {
   return (
     pathname === '/login' ||
     pathname === '/cadastro' ||
+    pathname === '/esqueci-senha' ||
+    pathname === '/redefinir-senha' ||
     pathname === '/setup' ||
     pathname.startsWith('/setup/')
   );
@@ -97,6 +101,19 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   }, [isLogin, isSetupRoot, isCadastro, isPublicShell, pathname, router]);
 
   useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
     if (isPublicShell || !requireLogin || !getAuthToken()) return;
 
     let cancelled = false;
@@ -159,7 +176,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
   return (
     <div key={sessionKey} className="flex flex-row h-screen bg-gray-50 print:h-auto print:block">
-      <div className="print:hidden">
+      <div className="print:hidden h-full self-stretch">
         <Sidebar
           mobileOpen={mobileNavOpen}
           onOpenMobile={() => setMobileNavOpen(true)}
@@ -167,6 +184,23 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         />
       </div>
       <div className="flex flex-col flex-1 min-w-0 min-h-0 print:max-w-none">
+        <header className="md:hidden print:hidden flex items-center gap-3 h-12 px-3 border-b border-gray-200 bg-white flex-shrink-0">
+          <button
+            type="button"
+            data-testid="mobile-menu-button"
+            className="p-2 -ml-1 rounded-lg text-gray-700 hover:bg-gray-100"
+            aria-label={mobileNavOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            {mobileNavOpen ? (
+              <XMarkIcon className="w-6 h-6" />
+            ) : (
+              <Bars3Icon className="w-6 h-6" />
+            )}
+          </button>
+          <BrandLogo variant="compact" className="h-8 w-8" />
+        </header>
         <main className="flex-1 overflow-y-auto min-h-0 print:overflow-visible">{children}</main>
       </div>
     </div>

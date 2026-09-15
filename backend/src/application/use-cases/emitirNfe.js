@@ -10,6 +10,12 @@ const {
   ultimaNotaDaVenda,
 } = require("../../domain/nfe/notaDaVenda");
 const { createNfeProvider } = require("../../infra/nfe/provider");
+const {
+  refNfeTentativa,
+  isErroInconclusivoNfe,
+  statusPermiteReutilizarRef,
+} = require("../../domain/nfe/refNfe");
+const { sincronizarNotaSeProcessando } = require("./gerirNfe");
 
 function produtosMap(produtos) {
   return new Map(produtos.map((p) => [p.id, p]));
@@ -50,20 +56,60 @@ async function validarEmissaoNfe(prisma, { tenantId, vendaId }) {
   });
 }
 
+async function proximaRefNfe(prisma, { tenantId, vendaId }) {
+  const count = await prisma.notaFiscal.count({ where: { tenantId, vendaId } });
+  return refNfeTentativa(tenantId, vendaId, count + 1);
+}
+
 async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
   const ctx = await carregarContextoEmissao(prisma, { tenantId, vendaId });
+  const nfeProvider = provider || createNfeProvider({ emitente: ctx.emitente });
+
   const bloqueante = await notaBloqueanteDaVenda(prisma, { tenantId, vendaId });
-  if (bloqueante) {
-    throw new AppError(
-      bloqueante.status === STATUS.AUTORIZADA
-        ? "Esta venda já possui NF-e autorizada."
-        : "Há uma NF-e em processamento para esta venda. Aguarde ou consulte o status.",
-      { code: "NFE_JA_EXISTE", httpStatus: 409 },
-    );
+  if (bloqueante?.status === STATUS.AUTORIZADA) {
+    throw new AppError("Esta venda já possui NF-e autorizada.", {
+      code: "NFE_JA_EXISTE",
+      httpStatus: 409,
+    });
+  }
+
+  let notaReuso = null;
+  if (bloqueante?.status === STATUS.PROCESSANDO) {
+    const sync = await sincronizarNotaSeProcessando(prisma, {
+      nota: bloqueante,
+      provider: nfeProvider,
+      emitente: ctx.emitente,
+    });
+    if (sync.kind === "ok") {
+      if (
+        sync.nota.status === STATUS.AUTORIZADA ||
+        sync.nota.status === STATUS.PROCESSANDO
+      ) {
+        return sync.nota;
+      }
+      if (!statusPermiteReemissao(sync.nota.status)) {
+        throw new AppError("Esta venda já possui uma NF-e em andamento.", {
+          code: "NFE_JA_EXISTE",
+          httpStatus: 409,
+        });
+      }
+    } else if (sync.kind === "incerto") {
+      throw new AppError(
+        "A emissão anterior pode ter sido aceita pelo provedor. Consulte o status antes de emitir de novo.",
+        { code: "NFE_STATUS_INCERTO", httpStatus: 503 },
+      );
+    } else if (sync.kind === "ausente") {
+      notaReuso = sync.nota;
+    }
   }
 
   const ultima = await ultimaNotaDaVenda(prisma, { tenantId, vendaId });
-  if (ultima && !statusPermiteReemissao(ultima.status) && ultima.status !== STATUS.RASCUNHO) {
+  if (
+    !notaReuso &&
+    ultima &&
+    !statusPermiteReemissao(ultima.status) &&
+    !statusPermiteReutilizarRef(ultima.status)
+  ) {
     throw new AppError("Esta venda já possui uma NF-e em andamento.", {
       code: "NFE_JA_EXISTE",
       httpStatus: 409,
@@ -87,28 +133,56 @@ async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
   const payload = montarPayloadFocus({
     emitente: ctx.emitente,
     cliente: ctx.venda.cliente,
-    venda: ctx.venda,
     itens: ctx.venda.itens,
     produtosPorId: ctx.produtosPorId,
     motorista: ctx.venda.motorista,
+    venda: ctx.venda,
   });
 
-  const ref = `venda-${tenantId}-${vendaId}-${Date.now()}`;
-  const nfeProvider = provider || createNfeProvider({ emitente: ctx.emitente });
+  let nota = notaReuso;
+  if (!nota && ultima && ultima.status === STATUS.RASCUNHO) {
+    nota = ultima;
+  }
 
-  const nota = await prisma.notaFiscal.create({
-    data: {
-      tenantId,
-      vendaId,
-      status: STATUS.PROCESSANDO,
-      refProvedor: ref,
-      payloadEnviado: payload,
-      emitidaEm: new Date(),
-    },
-  });
+  const ref = nota
+    ? nota.refProvedor
+    : await proximaRefNfe(prisma, { tenantId, vendaId });
+
+  if (nota) {
+    nota = await prisma.notaFiscal.update({
+      where: { id: nota.id },
+      data: {
+        status: STATUS.PROCESSANDO,
+        payloadEnviado: payload,
+        emitidaEm: new Date(),
+        motivoRejeicao: null,
+      },
+    });
+  } else {
+    try {
+      nota = await prisma.notaFiscal.create({
+        data: {
+          tenantId,
+          vendaId,
+          status: STATUS.PROCESSANDO,
+          refProvedor: ref,
+          payloadEnviado: payload,
+          emitidaEm: new Date(),
+        },
+      });
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+      const existing = await prisma.notaFiscal.findFirst({
+        where: { tenantId, vendaId, refProvedor: ref },
+      });
+      if (!existing) throw error;
+      if (existing.status === STATUS.AUTORIZADA) return existing;
+      nota = existing;
+    }
+  }
 
   try {
-    const resposta = await nfeProvider.emitir({ ref, payload });
+    const resposta = await nfeProvider.emitir({ ref: nota.refProvedor, payload });
     const patch = aplicarRespostaProvedor(resposta);
     const atualizada = await prisma.notaFiscal.update({
       where: { id: nota.id },
@@ -131,11 +205,30 @@ async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
         entidade: "NotaFiscal",
         entidadeId: atualizada.id,
         vendaId,
-        payload: { status: atualizada.status, refProvedor: ref },
+        payload: { status: atualizada.status, refProvedor: nota.refProvedor },
       });
     }
     return atualizada;
   } catch (err) {
+    if (isErroInconclusivoNfe(err)) {
+      await prisma.notaFiscal.update({
+        where: { id: nota.id },
+        data: {
+          status: STATUS.PROCESSANDO,
+          motivoRejeicao:
+            "Resposta inconclusiva do provedor. Consulte o status antes de emitir novamente.",
+          payloadResposta: {
+            error: err.message,
+            details: err.details || null,
+            inconclusivo: true,
+          },
+        },
+      });
+      throw new AppError(
+        "A NF-e pode ter sido aceita pelo provedor. Consulte o status antes de tentar emitir de novo.",
+        { code: "NFE_STATUS_INCERTO", httpStatus: 503, details: err.details },
+      );
+    }
     await prisma.notaFiscal.update({
       where: { id: nota.id },
       data: {
@@ -152,4 +245,5 @@ module.exports = {
   validarEmissaoNfe,
   emitirNfe,
   carregarContextoEmissao,
+  proximaRefNfe,
 };
