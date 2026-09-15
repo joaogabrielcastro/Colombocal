@@ -24,6 +24,7 @@ export default function ConfiguracoesPage() {
   const [features, setFeatures] = useState<TenantFeaturesConfig | null>(null);
   const [salvandoFeatures, setSalvandoFeatures] = useState(false);
   const [erroFeatures, setErroFeatures] = useState('');
+  const [okFeatures, setOkFeatures] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +71,7 @@ export default function ConfiguracoesPage() {
     if (!features) return;
     setSalvandoFeatures(true);
     setErroFeatures('');
+    setOkFeatures('');
     try {
       // Envia só flags editáveis (evita fretePagoDefault e campos extras do GET).
       const next = await api.put<TenantFeaturesConfig>('/config/tenant-features', {
@@ -84,6 +86,7 @@ export default function ConfiguracoesPage() {
       });
       clearTenantFeaturesCache();
       await fetchTenantFeatures(true);
+      setOkFeatures('Alterações salvas com sucesso.');
     } catch (e: unknown) {
       setErroFeatures(e instanceof Error ? e.message : 'Erro ao salvar módulos');
     } finally {
@@ -107,15 +110,19 @@ export default function ConfiguracoesPage() {
           {erroFeatures ? (
             <p className="text-sm text-red-600 mb-3">{erroFeatures}</p>
           ) : null}
+          {okFeatures ? (
+            <p className="text-sm text-green-700 mb-3">{okFeatures}</p>
+          ) : null}
           {features ? (
             <div className="space-y-3">
               <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={features.clienteCpf}
-                  onChange={(e) =>
-                    setFeatures((f) => (f ? { ...f, clienteCpf: e.target.checked } : f))
-                  }
+                  onChange={(e) => {
+                    setOkFeatures('');
+                    setFeatures((f) => (f ? { ...f, clienteCpf: e.target.checked } : f));
+                  }}
                   className="w-4 h-4 rounded"
                 />
                 Permitir cadastro de clientes pessoa física (CPF)
@@ -124,9 +131,10 @@ export default function ConfiguracoesPage() {
                 <input
                   type="checkbox"
                   checked={features.frete}
-                  onChange={(e) =>
-                    setFeatures((f) => (f ? { ...f, frete: e.target.checked } : f))
-                  }
+                  onChange={(e) => {
+                    setOkFeatures('');
+                    setFeatures((f) => (f ? { ...f, frete: e.target.checked } : f));
+                  }}
                   className="w-4 h-4 rounded"
                 />
                 Habilitar módulo de frete nas vendas
@@ -135,9 +143,10 @@ export default function ConfiguracoesPage() {
                 <input
                   type="checkbox"
                   checked={!!features.nfe}
-                  onChange={(e) =>
-                    setFeatures((f) => (f ? { ...f, nfe: e.target.checked } : f))
-                  }
+                  onChange={(e) => {
+                    setOkFeatures('');
+                    setFeatures((f) => (f ? { ...f, nfe: e.target.checked } : f));
+                  }}
                   className="w-4 h-4 rounded mt-0.5"
                 />
                 <span>
