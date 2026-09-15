@@ -145,10 +145,10 @@ export default function FiscalFechamentoPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold text-slate-900">Fechamento fiscal</h1>
-        <p className="text-sm text-slate-600 mt-1">
+        <p className="text-sm text-slate-600 mt-1 max-w-3xl">
           Relatório para conferência e envio à contabilidade. Não substitui obrigações
           acessórias ou escrituração fiscal do contador.
         </p>
@@ -156,7 +156,7 @@ export default function FiscalFechamentoPage() {
 
       <HomologacaoBanner ambiente={fechamento?.ambiente} />
 
-      <div className="card mb-4 p-4 flex flex-wrap items-end gap-3">
+      <div className="card mb-4 p-4 flex flex-wrap items-end gap-3 lg:gap-4">
         <label className="text-sm">
           <span className="text-slate-600">Mês</span>
           <input
@@ -315,27 +315,27 @@ export default function FiscalFechamentoPage() {
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500 text-left">
                 <tr>
-                  <th className="px-3 py-2">Nº</th>
-                  <th className="px-3 py-2">Série</th>
-                  <th className="px-3 py-2">Data</th>
-                  <th className="px-3 py-2">Cliente</th>
-                  <th className="px-3 py-2">CNPJ/CPF</th>
-                  <th className="px-3 py-2 text-right">Valor</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Chave</th>
+                  <th className="px-4 py-3">Nº</th>
+                  <th className="px-4 py-3">Série</th>
+                  <th className="px-4 py-3">Data</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">CNPJ/CPF</th>
+                  <th className="px-4 py-3 text-right">Valor</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Chave</th>
                 </tr>
               </thead>
               <tbody>
                 {fechamento.documentos.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                       Nenhuma NF-e no período selecionado.
                     </td>
                   </tr>
                 ) : (
                   fechamento.documentos.map((n) => (
                   <tr key={n.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       <Link
                         href={`/fiscal/notas/${n.id}`}
                         className="text-sky-700 hover:underline"
@@ -343,21 +343,21 @@ export default function FiscalFechamentoPage() {
                         {n.numero ?? "—"}
                       </Link>
                     </td>
-                    <td className="px-3 py-2">{n.serie ?? "—"}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">{n.serie ?? "—"}</td>
+                    <td className="px-4 py-2.5">
                       {n.dataReferencia ? formatDate(n.dataReferencia) : "—"}
                     </td>
-                    <td className="px-3 py-2">{n.cliente?.nome || "—"}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">{n.cliente?.nome || "—"}</td>
+                    <td className="px-4 py-2.5">
                       {n.cliente?.cnpj || n.cliente?.cpf || "—"}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <td className="px-4 py-2.5 text-right tabular-nums">
                       {formatMoney(n.valor)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       <NfeStatusBadge status={n.status} />
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs max-w-[180px] truncate">
+                    <td className="px-4 py-2.5 font-mono text-xs max-w-[280px] truncate" title={n.chaveAcesso || ""}>
                       {n.chaveAcesso ? formatChave(n.chaveAcesso) : "—"}
                     </td>
                   </tr>

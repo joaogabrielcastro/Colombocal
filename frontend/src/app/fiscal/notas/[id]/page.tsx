@@ -89,7 +89,7 @@ export default function FiscalNotaDetalhePage() {
   const doc = venda?.cliente?.cnpj || venda?.cliente?.cpf || "—";
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <Link href="/fiscal/notas" className="text-sm text-sky-700 hover:underline">
@@ -142,66 +142,69 @@ export default function FiscalNotaDetalhePage() {
 
       <HomologacaoBanner ambiente={ambiente} />
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-2 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-slate-500">Status:</span>
-          <NfeStatusBadge status={nota.status} />
-        </div>
-        <p>
-          <span className="text-slate-500">Número:</span> {nota.numero ?? "—"}
-        </p>
-        <p>
-          <span className="text-slate-500">Série:</span> {nota.serie ?? "—"}
-        </p>
-        <p>
-          <span className="text-slate-500">Data de emissão:</span>{" "}
-          {nota.dataReferencia ? formatDate(nota.dataReferencia) : "—"}
-        </p>
-        <p className="break-all">
-          <span className="text-slate-500">Chave:</span>{" "}
-          {nota.chaveAcesso ? formatChave(nota.chaveAcesso) : "—"}
-        </p>
-        <p>
-          <span className="text-slate-500">Cliente:</span> {clienteNome}
-        </p>
-        <p>
-          <span className="text-slate-500">CNPJ/CPF:</span> {doc}
-        </p>
-        <p>
-          <span className="text-slate-500">Valor:</span> {formatMoney(nota.valor)}
-        </p>
-        {nota.status === "rejeitada" && nota.motivoRejeicao ? (
-          <p className="text-red-700">
-            <span className="text-slate-500">Motivo:</span> {nota.motivoRejeicao}
-          </p>
-        ) : null}
-        {nota.status === "cancelada" ? (
-          <>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-2 text-sm">
+          <h2 className="text-base font-semibold text-slate-900 mb-3">Identificação</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500">Status:</span>
+            <NfeStatusBadge status={nota.status} />
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <p>
-              <span className="text-slate-500">Cancelada em:</span>{" "}
-              {nota.canceladaEm ? formatDate(nota.canceladaEm) : "—"}
+              <span className="text-slate-500">Número:</span> {nota.numero ?? "—"}
             </p>
-            {nota.motivoCancelamento ? (
+            <p>
+              <span className="text-slate-500">Série:</span> {nota.serie ?? "—"}
+            </p>
+            <p className="col-span-2">
+              <span className="text-slate-500">Data de emissão:</span>{" "}
+              {nota.dataReferencia ? formatDate(nota.dataReferencia) : "—"}
+            </p>
+            <p className="col-span-2 break-all">
+              <span className="text-slate-500">Chave:</span>{" "}
+              {nota.chaveAcesso ? formatChave(nota.chaveAcesso) : "—"}
+            </p>
+            <p className="col-span-2">
+              <span className="text-slate-500">Cliente:</span> {clienteNome}
+            </p>
+            <p>
+              <span className="text-slate-500">CNPJ/CPF:</span> {doc}
+            </p>
+            <p>
+              <span className="text-slate-500">Valor:</span> {formatMoney(nota.valor)}
+            </p>
+          </div>
+          {nota.status === "rejeitada" && nota.motivoRejeicao ? (
+            <p className="text-red-700 pt-1">
+              <span className="text-slate-500">Motivo:</span> {nota.motivoRejeicao}
+            </p>
+          ) : null}
+          {nota.status === "cancelada" ? (
+            <div className="pt-1 space-y-1">
               <p>
-                <span className="text-slate-500">Motivo:</span> {nota.motivoCancelamento}
+                <span className="text-slate-500">Cancelada em:</span>{" "}
+                {nota.canceladaEm ? formatDate(nota.canceladaEm) : "—"}
               </p>
-            ) : null}
-            {nota.protocolo ? (
-              <p>
-                <span className="text-slate-500">Protocolo:</span> {nota.protocolo}
-              </p>
-            ) : null}
-          </>
-        ) : null}
-        {!nota.temXml && nota.status !== "autorizada" && nota.status !== "cancelada" ? (
-          <p className="text-amber-800 text-xs">XML ainda não disponível.</p>
-        ) : null}
-      </div>
+              {nota.motivoCancelamento ? (
+                <p>
+                  <span className="text-slate-500">Motivo:</span> {nota.motivoCancelamento}
+                </p>
+              ) : null}
+              {nota.protocolo ? (
+                <p>
+                  <span className="text-slate-500">Protocolo:</span> {nota.protocolo}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {!nota.temXml && nota.status !== "autorizada" && nota.status !== "cancelada" ? (
+            <p className="text-amber-800 text-xs">XML ainda não disponível.</p>
+          ) : null}
+        </div>
 
-      {venda ? (
-        <section>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">Venda relacionada</h2>
-          <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm space-y-2">
+        {venda ? (
+          <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm space-y-2">
+            <h2 className="text-base font-semibold text-slate-900 mb-3">Venda relacionada</h2>
             <p>
               Venda{" "}
               <Link
@@ -217,9 +220,9 @@ export default function FiscalNotaDetalhePage() {
               <table className="min-w-full text-sm">
                 <thead className="text-xs uppercase text-slate-500 border-b">
                   <tr>
-                    <th className="py-1 text-left">Produto</th>
-                    <th className="py-1 text-right">Qtd</th>
-                    <th className="py-1 text-right">Valor</th>
+                    <th className="py-1.5 text-left">Produto</th>
+                    <th className="py-1.5 text-right">Qtd</th>
+                    <th className="py-1.5 text-right">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -237,9 +240,13 @@ export default function FiscalNotaDetalhePage() {
                 </tbody>
               </table>
             </div>
+          </section>
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+            Sem venda relacionada.
           </div>
-        </section>
-      ) : null}
+        )}
+      </div>
 
       {fiscalItens.length > 0 ? (
         <section>
@@ -248,21 +255,21 @@ export default function FiscalNotaDetalhePage() {
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-3 py-2 text-left">Item</th>
-                  <th className="px-3 py-2 text-left">CFOP</th>
-                  <th className="px-3 py-2 text-left">NCM</th>
-                  <th className="px-3 py-2 text-left">CST/CSOSN</th>
+                  <th className="px-4 py-2.5 text-left">Item</th>
+                  <th className="px-4 py-2.5 text-left">CFOP</th>
+                  <th className="px-4 py-2.5 text-left">NCM</th>
+                  <th className="px-4 py-2.5 text-left">CST/CSOSN</th>
                 </tr>
               </thead>
               <tbody>
                 {fiscalItens.map((it) => (
                   <tr key={it.numeroItem} className="border-t border-slate-100">
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       {it.codigoProduto} {it.descricao}
                     </td>
-                    <td className="px-3 py-2">{it.cfop || "—"}</td>
-                    <td className="px-3 py-2">{it.ncm || "—"}</td>
-                    <td className="px-3 py-2">{it.csosn || it.cst || "—"}</td>
+                    <td className="px-4 py-2.5">{it.cfop || "—"}</td>
+                    <td className="px-4 py-2.5">{it.ncm || "—"}</td>
+                    <td className="px-4 py-2.5">{it.csosn || it.cst || "—"}</td>
                   </tr>
                 ))}
               </tbody>

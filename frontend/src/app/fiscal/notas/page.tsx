@@ -97,10 +97,10 @@ export default function FiscalNotasPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold text-slate-900">Notas fiscais</h1>
-        <p className="text-sm text-slate-600 mt-1">
+        <p className="text-sm text-slate-600 mt-1 max-w-3xl">
           Histórico de NF-e do período para conferência. Relatório para envio à contabilidade —
           não substitui o trabalho do contador.
         </p>
@@ -123,7 +123,7 @@ export default function FiscalNotasPage() {
       />
 
       <div className="card mb-4 p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
           <label className="text-sm">
             <span className="text-slate-600">Início</span>
             <input
@@ -223,26 +223,26 @@ export default function FiscalNotasPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-3 py-2">Nº</th>
-                <th className="px-3 py-2">Série</th>
-                <th className="px-3 py-2">Data</th>
-                <th className="px-3 py-2">Cliente</th>
-                <th className="px-3 py-2 text-right">Valor</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Chave</th>
+                <th className="px-4 py-3">Nº</th>
+                <th className="px-4 py-3">Série</th>
+                <th className="px-4 py-3">Data</th>
+                <th className="px-4 py-3">Cliente</th>
+                <th className="px-4 py-3 text-right">Valor</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Chave</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                     Nenhuma NF-e no período.
                   </td>
                 </tr>
               ) : (
                 items.map((n) => (
                   <tr key={n.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       <Link
                         href={`/fiscal/notas/${n.id}`}
                         className="font-medium text-sky-700 hover:underline"
@@ -252,18 +252,18 @@ export default function FiscalNotasPage() {
                           : "—"}
                       </Link>
                     </td>
-                    <td className="px-3 py-2">{n.serie ?? "—"}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">{n.serie ?? "—"}</td>
+                    <td className="px-4 py-2.5">
                       {n.dataReferencia ? formatDate(n.dataReferencia) : "—"}
                     </td>
-                    <td className="px-3 py-2">{n.cliente?.nome || "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <td className="px-4 py-2.5">{n.cliente?.nome || "—"}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
                       {formatMoney(n.valor)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       <NfeStatusBadge status={n.status} />
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs max-w-[220px] truncate" title={n.chaveAcesso || ""}>
+                    <td className="px-4 py-2.5 font-mono text-xs max-w-[280px] truncate" title={n.chaveAcesso || ""}>
                       {n.chaveAcesso ? formatChave(n.chaveAcesso) : "—"}
                     </td>
                   </tr>

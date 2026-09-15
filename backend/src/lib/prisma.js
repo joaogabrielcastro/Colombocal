@@ -125,6 +125,29 @@ async function ensureDatabaseCompat() {
     ADD COLUMN IF NOT EXISTS "csosn" TEXT
   `);
 
+  // Parâmetros por tenant — upsert exige índice único; bases legadas às vezes não o têm.
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ConfigSistema" (
+      "id" SERIAL PRIMARY KEY,
+      "tenantId" INTEGER NOT NULL,
+      "chave" TEXT NOT NULL,
+      "valor" TEXT NOT NULL,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  // Remove duplicatas (mantém o id mais alto) antes de criar o índice único.
+  await prisma.$executeRawUnsafe(`
+    DELETE FROM "ConfigSistema" a
+    USING "ConfigSistema" b
+    WHERE a."tenantId" = b."tenantId"
+      AND a."chave" = b."chave"
+      AND a."id" < b."id"
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "ConfigSistema_tenantId_chave_key"
+      ON "ConfigSistema"("tenantId", "chave")
+  `);
+
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "EmitenteFiscal" (
       "id" SERIAL PRIMARY KEY,

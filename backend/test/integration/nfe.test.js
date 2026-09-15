@@ -72,6 +72,31 @@ test("NF-e desligada por padrão no tenant Colombocal", async () => {
   assert.equal(res.body.nfe, false);
 });
 
+test("PUT tenant-features liga e desliga NF-e", async () => {
+  await seedBase();
+
+  const on = await agent
+    .put("/api/config/tenant-features")
+    .send({ clienteCpf: false, frete: true, nfe: true });
+  assert.equal(on.status, 200);
+  assert.equal(on.body.nfe, true);
+
+  const off = await agent
+    .put("/api/config/tenant-features")
+    .send({ clienteCpf: false, frete: true, nfe: false });
+  assert.equal(off.status, 200);
+  assert.equal(off.body.nfe, false);
+
+  const get = await agent.get("/api/config/tenant-features");
+  assert.equal(get.status, 200);
+  assert.equal(get.body.nfe, false);
+
+  const row = await prisma.configSistema.findFirst({
+    where: { chave: "NFE_ENABLED" },
+  });
+  assert.equal(row?.valor, "false");
+});
+
 test("módulo nfe desligado no tenant Requinte", async () => {
   await seedBase({ tenant: { slug: "requinte", name: "Requinte" } });
   const res = await agent.get("/api/config/tenant-features");

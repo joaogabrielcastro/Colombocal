@@ -9,15 +9,24 @@ const CARDS: Array<{
   money?: boolean;
   /** Campo sem status persistido — mostra — em vez de inventar contagem. */
   placeholderDash?: boolean;
+  accent?: "green" | "red" | "amber" | "slate" | "sky";
 }> = [
-  { key: "total", label: "Total de NF-e" },
-  { key: "autorizadas", label: "Autorizadas" },
-  { key: "canceladas", label: "Canceladas" },
-  { key: "rejeitadas", label: "Rejeitadas" },
-  { key: "processando", label: "Processando" },
-  { key: "emissaoIncerta", label: "Emissão incerta", placeholderDash: true },
-  { key: "valorAutorizado", label: "Valor autorizado", money: true },
+  { key: "total", label: "Total de NF-e", accent: "slate" },
+  { key: "autorizadas", label: "Autorizadas", accent: "green" },
+  { key: "canceladas", label: "Canceladas", accent: "slate" },
+  { key: "rejeitadas", label: "Rejeitadas", accent: "red" },
+  { key: "processando", label: "Processando", accent: "amber" },
+  { key: "emissaoIncerta", label: "Emissão incerta", placeholderDash: true, accent: "amber" },
+  { key: "valorAutorizado", label: "Valor autorizado", money: true, accent: "sky" },
 ];
+
+const accentBorder: Record<string, string> = {
+  green: "border-l-green-500",
+  red: "border-l-red-400",
+  amber: "border-l-amber-400",
+  slate: "border-l-slate-300",
+  sky: "border-l-sky-500",
+};
 
 export function FiscalKpiCards({
   resumo,
@@ -28,9 +37,9 @@ export function FiscalKpiCards({
 }) {
   if (!resumo) return null;
   return (
-    <div className="mb-4 space-y-2">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        {CARDS.map(({ key, label, money, placeholderDash }) => {
+    <div className="mb-5 space-y-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 lg:gap-4">
+        {CARDS.map(({ key, label, money, placeholderDash, accent }) => {
           const raw = resumo[key];
           let value: string;
           if (placeholderDash) {
@@ -43,15 +52,21 @@ export function FiscalKpiCards({
           return (
             <div
               key={key}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm"
+              className={`rounded-lg border border-slate-200 border-l-4 bg-white px-4 py-4 shadow-sm min-h-[5.5rem] flex flex-col justify-between ${accentBorder[accent || "slate"]}`}
               title={
                 placeholderDash
                   ? "Não é status persistido; casos inconclusivos permanecem em Processando."
                   : undefined
               }
             >
-              <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500 font-medium">
+                {label}
+              </p>
+              <p
+                className={`mt-2 font-semibold text-slate-900 tabular-nums ${
+                  money ? "text-xl lg:text-2xl" : "text-2xl lg:text-3xl"
+                }`}
+              >
                 {value}
               </p>
             </div>

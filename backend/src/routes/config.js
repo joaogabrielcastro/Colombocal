@@ -96,6 +96,7 @@ router.put("/tenant-features", requireAdmin, async (req, res) => {
     });
     res.json(features);
   } catch (e) {
+    console.error("[config/tenant-features] falha ao gravar:", e?.code || e?.name, e?.message);
     handleRouteError(res, e);
   }
 });

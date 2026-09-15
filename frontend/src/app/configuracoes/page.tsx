@@ -71,8 +71,17 @@ export default function ConfiguracoesPage() {
     setSalvandoFeatures(true);
     setErroFeatures('');
     try {
-      const next = await api.put<TenantFeaturesConfig>('/config/tenant-features', features);
-      setFeatures(next);
+      // Envia só flags editáveis (evita fretePagoDefault e campos extras do GET).
+      const next = await api.put<TenantFeaturesConfig>('/config/tenant-features', {
+        clienteCpf: !!features.clienteCpf,
+        frete: !!features.frete,
+        nfe: !!features.nfe,
+      });
+      setFeatures({
+        clienteCpf: !!next.clienteCpf,
+        frete: !!next.frete,
+        nfe: !!next.nfe,
+      });
       clearTenantFeaturesCache();
       await fetchTenantFeatures(true);
     } catch (e: unknown) {
