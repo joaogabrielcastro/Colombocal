@@ -264,8 +264,8 @@ export default function NovoFretePage() {
             </button>
           </div>
           <p className="text-xs text-gray-500 mb-3">
-            Cálculo: saco normal = qtd × preço/saco · com pesoKg = qtd × preço/saco × (peso/20) ·
-            ton = qtd × preço/ton · (se preço/saco = 0 e há pesoKg, usa ton).
+            Cálculo: ton = qtd × preço/ton · saco = qtd × preço/saco · saco com pesoKg =
+            qtd × preço/saco × (peso/20) (ou qtd × peso × preço/ton se preço/saco = 0).
           </p>
           <div className="space-y-2">
             {itens.map((item, index) => (

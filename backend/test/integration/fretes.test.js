@@ -110,6 +110,27 @@ test("POST /api/fretes/avulso pagoNoAto também sem financeiro", async () => {
   assert.equal(pags.length, 0);
 });
 
+test("POST /api/fretes/avulso ton com pesoKg de saco: 36 t × R$100 = R$3600", async () => {
+  // Regressão: pesoKg no cadastro (saco 25 kg / OC) não pode ratear frete em ton.
+  const produto = await seedProduto(ctx.tenant.id, {
+    unidade: "ton",
+    pesoKg: 25,
+    precoPadrao: 100,
+    codigo: "DOL-M325",
+  });
+  const res = await agent.post("/api/fretes/avulso").send({
+    clienteId: ctx.cliente.id,
+    motoristaId: ctx.motorista.id,
+    precoSaco: 0,
+    precoTonelada: 100,
+    produtoId: produto.id,
+    quantidade: 36,
+  });
+  assert.equal(res.status, 201);
+  assert.equal(Number(res.body.frete.valor), 3600);
+  assert.equal(res.body.resumoImpressao.valorFinal, 3600);
+});
+
 test("POST /api/fretes/avulso aceita itens em lote e valorTotal informado", async () => {
   const p2 = await seedProduto(ctx.tenant.id, { unidade: "saco", precoPadrao: 10, codigo: "S2" });
   const res = await agent.post("/api/fretes/avulso").send({
