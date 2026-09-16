@@ -47,7 +47,10 @@ export function quantidadeEmSacos(params: {
   return qtd;
 }
 
-/** Unitário por peso: prioriza frete/saco (× peso/20); frete/ton só se saco = 0. */
+/**
+ * Unitário por peso (saco/unidade contada): prioriza frete/saco (× peso/20);
+ * frete/ton só se saco = 0. Não usar em produtos já em ton/kg.
+ */
 export function freteUnitarioPorPeso(
   pesoKg: number,
   fretePorSaco: number,
@@ -60,6 +63,12 @@ export function freteUnitarioPorPeso(
   return 0;
 }
 
+/**
+ * Frete de uma linha (espelha backend):
+ * - ton / kg: qtd × tarifa/ton (pesoKg do cadastro não altera o frete)
+ * - saco com pesoKg: rateio por peso
+ * - saco sem pesoKg: qtd × tarifa/saco
+ */
 export function freteLinha(params: {
   unidade?: string | null;
   pesoKg?: number | string | null;
@@ -71,15 +80,17 @@ export function freteLinha(params: {
   if (qtd <= 0) return 0;
   const tarifaSaco = toNum(params.fretePorSaco);
   const tarifaTon = toNum(params.fretePorTonelada);
+  const unidade = normalizarUnidade(params.unidade);
   const pesoKg = toNum(params.pesoKg);
   let bruto = 0;
-  if (pesoKg > 0) {
+  if (unidade === "ton") {
+    bruto = qtd * tarifaTon;
+  } else if (unidade === "kg") {
+    bruto = qtd * (tarifaTon / 1000);
+  } else if (pesoKg > 0) {
     bruto = qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
-  } else {
-    const unidade = normalizarUnidade(params.unidade);
-    if (unidade === "saco") bruto = qtd * tarifaSaco;
-    else if (unidade === "ton") bruto = qtd * tarifaTon;
-    else if (unidade === "kg") bruto = qtd * (tarifaTon / 1000);
+  } else if (unidade === "saco") {
+    bruto = qtd * tarifaSaco;
   }
   return roundMoney(bruto);
 }

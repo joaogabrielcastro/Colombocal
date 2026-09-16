@@ -27,9 +27,10 @@ function normalizarUnidade(unidadeRaw) {
 }
 
 /**
- * Frete unitário quando o produto tem pesoKg.
+ * Frete unitário quando o produto é contado por unidade (ex.: saco) e tem pesoKg.
  * Prioriza frete/saco (uso típico Colombocal): tarifaSaco × (pesoKg / 20).
  * Só usa frete/ton se frete/saco estiver zerado: pesoKg × (tarifaTon / 1000).
+ * Não aplicar em produtos já vendidos por ton/kg — aí a quantidade já é massa.
  */
 function freteUnitarioPorPeso(pesoKg, fretePorSaco, fretePorTonelada) {
   const tarifaTon = toNum(fretePorTonelada);
@@ -40,23 +41,28 @@ function freteUnitarioPorPeso(pesoKg, fretePorSaco, fretePorTonelada) {
 }
 
 /**
- * Frete de uma linha: se o produto tem pesoKg > 0, usa peso;
- * senão cai na unidade (saco/ton/kg).
+ * Frete de uma linha:
+ * - ton / kg: qtd já é massa → qtd × tarifa/ton (ou /1000 para kg).
+ *   pesoKg do cadastro serve só para converter ton→sacos na OC, não no frete.
+ * - saco (ou outra unidade contada) com pesoKg: rateia pelo peso.
+ * - saco sem pesoKg: qtd × tarifa/saco.
  */
 function freteLinha({ produto, quantidade, fretePorSaco, fretePorTonelada }) {
   const qtd = toNum(quantidade);
   if (qtd <= 0) return 0;
   const tarifaSaco = toNum(fretePorSaco);
   const tarifaTon = toNum(fretePorTonelada);
+  const unidade = normalizarUnidade(produto?.unidade);
   const pesoKg = pesoKgProduto(produto);
   let bruto = 0;
-  if (pesoKg > 0) {
+  if (unidade === "ton") {
+    bruto = qtd * tarifaTon;
+  } else if (unidade === "kg") {
+    bruto = qtd * (tarifaTon / 1000);
+  } else if (pesoKg > 0) {
     bruto = qtd * freteUnitarioPorPeso(pesoKg, tarifaSaco, tarifaTon);
-  } else {
-    const unidade = normalizarUnidade(produto?.unidade);
-    if (unidade === "saco") bruto = qtd * tarifaSaco;
-    else if (unidade === "ton") bruto = qtd * tarifaTon;
-    else if (unidade === "kg") bruto = qtd * (tarifaTon / 1000);
+  } else if (unidade === "saco") {
+    bruto = qtd * tarifaSaco;
   }
   return roundMoney(bruto);
 }

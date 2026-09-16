@@ -127,7 +127,7 @@ model Produto {
   codigo      String
   precoPadrao Decimal  @db.Decimal(10, 2)
   unidade     String   @default("ton")
-  /// Peso de 1 unidade em kg. Se preenchido, frete = qtd × pesoKg × (tarifaTon/1000).
+  /// Peso de 1 saco/unidade em kg. OC: converte ton→sacos. Frete: só rateia se unidade for saco (não ton/kg).
   pesoKg      Decimal? @db.Decimal(10, 3)
   /// NCM sem pontuação (8 dígitos). Contador define.
   ncm         String?

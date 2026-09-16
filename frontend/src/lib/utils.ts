@@ -137,7 +137,7 @@ export interface Produto {
   codigo: string;
   precoPadrao: number;
   unidade: string;
-  /** Peso de 1 unidade em kg; se setado, frete usa qtd × pesoKg × (tarifaTon/1000). */
+  /** Peso de 1 saco/unidade em kg (OC e frete em saco; ignorado no frete se unidade for ton/kg). */
   pesoKg?: number | null;
   ncm?: string | null;
   cfopPadraoDentro?: string | null;

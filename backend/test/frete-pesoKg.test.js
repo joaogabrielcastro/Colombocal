@@ -29,6 +29,27 @@ test("freteLinha com pesoKg e frete/saco=0 usa frete/ton", () => {
   assert.equal(v, 8); // 10 × 8 × 0.1
 });
 
+test("freteLinha em ton ignora pesoKg do cadastro (bug 36t × R$100 ≠ R$90)", () => {
+  // pesoKg=25 é peso do saco para OC (40 sacos/t); não pode ratear frete em ton.
+  const v = freteLinha({
+    produto: { unidade: "ton", pesoKg: 25 },
+    quantidade: 36,
+    fretePorSaco: 0,
+    fretePorTonelada: 100,
+  });
+  assert.equal(v, 3600); // 36 × 100 — não 36 × 25 × 0.1 = 90
+});
+
+test("freteLinha em kg ignora pesoKg do cadastro", () => {
+  const v = freteLinha({
+    produto: { unidade: "kg", pesoKg: 25 },
+    quantidade: 2000,
+    fretePorSaco: 0,
+    fretePorTonelada: 100,
+  });
+  assert.equal(v, 200); // 2000 × (100/1000)
+});
+
 test("freteLinha sem pesoKg usa tarifa saco", () => {
   const v = freteLinha({
     produto: { unidade: "saco" },

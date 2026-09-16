@@ -1,5 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { quantidadeEmSacos } from "./frete";
+import { freteLinha, quantidadeEmSacos } from "./frete";
+
+describe("freteLinha", () => {
+  it("produto em ton com pesoKg de saco: 36 t × R$100 = R$3600 (não R$90)", () => {
+    expect(
+      freteLinha({
+        unidade: "ton",
+        pesoKg: 25,
+        quantidade: 36,
+        fretePorSaco: 0,
+        fretePorTonelada: 100,
+      }),
+    ).toBe(3600);
+  });
+
+  it("produto em saco com pesoKg ainda rateia pelo peso", () => {
+    expect(
+      freteLinha({
+        unidade: "saco",
+        pesoKg: 8,
+        quantidade: 10,
+        fretePorSaco: 0,
+        fretePorTonelada: 100,
+      }),
+    ).toBe(8);
+  });
+
+  it("produto em kg ignora pesoKg do cadastro", () => {
+    expect(
+      freteLinha({
+        unidade: "kg",
+        pesoKg: 25,
+        quantidade: 2000,
+        fretePorSaco: 0,
+        fretePorTonelada: 100,
+      }),
+    ).toBe(200);
+  });
+});
 
 /**
  * Mesma regra da nova OC: a quantidade digitada está na unidade do cadastro

@@ -359,8 +359,8 @@ function ProdutosPageContent() {
                     placeholder="Ex.: 8 (cal de pintura)"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Se preenchido, o frete usa quantidade × peso × tarifa/ton.
-                    Deixe vazio para frete normal (saco/ton/kg).
+                    Peso de 1 saco/unidade: usado na ordem de carregamento (ton→sacos) e no
+                    frete só quando a unidade é saco. Em ton/kg o frete ignora este campo.
                   </p>
                 </div>
                 <div>
