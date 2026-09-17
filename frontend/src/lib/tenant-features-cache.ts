@@ -6,21 +6,40 @@ export type TenantFeatures = {
   fretePagoDefault: boolean;
   /** Emissão de NF-e (modelo 55) via provedor. */
   nfe: boolean;
+  cte: boolean;
+  mdfe: boolean;
+  ciot: boolean;
 };
 
 type StoredFeatures = TenantFeatures & { tenantId: number };
 
-const STORAGE_KEY = "colombocal_tenant_features_v4";
+const STORAGE_KEY = "colombocal_tenant_features_v5";
 
-/** Fallback só se /auth/me falhar — conservador (sem frete / sem NF-e). */
+/** Fallback só se /auth/me falhar — conservador. */
 export const TENANT_FEATURES_DEFAULTS: TenantFeatures = {
   clienteCpf: false,
   frete: false,
   fretePagoDefault: false,
   nfe: false,
+  cte: false,
+  mdfe: false,
+  ciot: false,
 };
 
 let cache: StoredFeatures | null = null;
+
+function normalize(parsed: Partial<StoredFeatures>, tenantId: number): StoredFeatures {
+  return {
+    tenantId,
+    clienteCpf: !!parsed.clienteCpf,
+    frete: !!parsed.frete,
+    fretePagoDefault: !!parsed.fretePagoDefault,
+    nfe: !!parsed.nfe,
+    cte: !!parsed.cte,
+    mdfe: !!parsed.mdfe,
+    ciot: !!parsed.ciot,
+  };
+}
 
 function readStorage(): StoredFeatures | null {
   if (typeof window === "undefined") return null;
@@ -30,13 +49,7 @@ function readStorage(): StoredFeatures | null {
     const parsed = JSON.parse(raw) as Partial<StoredFeatures>;
     const tenantId = Number(parsed.tenantId);
     if (!Number.isFinite(tenantId) || tenantId < 1) return null;
-    return {
-      tenantId,
-      clienteCpf: !!parsed.clienteCpf,
-      frete: !!parsed.frete,
-      fretePagoDefault: !!parsed.fretePagoDefault,
-      nfe: !!parsed.nfe,
-    };
+    return normalize(parsed, tenantId);
   } catch {
     return null;
   }
@@ -47,6 +60,7 @@ function writeStorage(value: StoredFeatures | null) {
   try {
     if (value == null) {
       sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem("colombocal_tenant_features_v4");
       sessionStorage.removeItem("colombocal_tenant_features_v3");
       sessionStorage.removeItem("colombocal_tenant_features_v2");
       sessionStorage.removeItem("colombocal_tenant_features");
@@ -67,12 +81,8 @@ export function getTenantFeaturesCache(tenantId?: number | null): TenantFeatures
     return null;
   }
   if (!cache) cache = current;
-  return {
-    clienteCpf: current.clienteCpf,
-    frete: current.frete,
-    fretePagoDefault: current.fretePagoDefault,
-    nfe: current.nfe,
-  };
+  const { tenantId: _t, ...rest } = current;
+  return rest;
 }
 
 export function setTenantFeaturesCache(
@@ -85,13 +95,7 @@ export function setTenantFeaturesCache(
     writeStorage(null);
     return;
   }
-  cache = {
-    tenantId: tid,
-    clienteCpf: !!value.clienteCpf,
-    frete: !!value.frete,
-    fretePagoDefault: !!value.fretePagoDefault,
-    nfe: !!value.nfe,
-  };
+  cache = normalize(value, tid);
   writeStorage(cache);
 }
 

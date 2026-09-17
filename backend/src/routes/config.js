@@ -79,7 +79,7 @@ router.get("/tenant-features", requireAdmin, async (req, res) => {
 // PUT /api/config/tenant-features — { clienteCpf?: boolean, frete?: boolean }
 router.put("/tenant-features", requireAdmin, async (req, res) => {
   try {
-    const { clienteCpf, frete, nfe } = req.body ?? {};
+    const { clienteCpf, frete, nfe, cte, mdfe, ciot } = req.body ?? {};
     if (clienteCpf !== undefined && typeof clienteCpf !== "boolean") {
       return res.status(400).json({ error: "clienteCpf deve ser boolean" });
     }
@@ -89,10 +89,22 @@ router.put("/tenant-features", requireAdmin, async (req, res) => {
     if (nfe !== undefined && typeof nfe !== "boolean") {
       return res.status(400).json({ error: "nfe deve ser boolean" });
     }
+    if (cte !== undefined && typeof cte !== "boolean") {
+      return res.status(400).json({ error: "cte deve ser boolean" });
+    }
+    if (mdfe !== undefined && typeof mdfe !== "boolean") {
+      return res.status(400).json({ error: "mdfe deve ser boolean" });
+    }
+    if (ciot !== undefined && typeof ciot !== "boolean") {
+      return res.status(400).json({ error: "ciot deve ser boolean" });
+    }
     const features = await setTenantFeatures(prisma, req.tenantId, {
       clienteCpf,
       frete,
       nfe,
+      cte,
+      mdfe,
+      ciot,
     });
     res.json(features);
   } catch (e) {
@@ -205,6 +217,9 @@ router.put("/emitente-fiscal", requireAdmin, async (req, res) => {
       cep: b.cep,
       telefone: b.telefone ?? null,
       serieNfe: b.serieNfe ?? 1,
+      rntrc: b.rntrc != null && String(b.rntrc).trim() ? String(b.rntrc).trim() : null,
+      serieCte: b.serieCte ?? 1,
+      serieMdfe: b.serieMdfe ?? 1,
       ambiente: b.ambiente,
       naturezaOperacao: b.naturezaOperacao || "Venda de mercadoria",
       modalidadeFrete: b.modalidadeFrete ?? 9,

@@ -203,6 +203,7 @@ const PROCESSORS = {
   financeiro_csv: (payload, tenantId) => processFinanceiroCsv(payload, tenantId),
   titulos_csv: (payload, tenantId) => processTitulosCsv(payload, tenantId),
   nfe_pacote_contabil: (payload, tenantId) => processNfePacoteContabil(payload, tenantId),
+  fiscal_pacote_contabil: (payload, tenantId) => processNfePacoteContabil(payload, tenantId),
 };
 
 async function runExportProcessor(type, tenantId, payload = {}) {

@@ -33,6 +33,9 @@ model Tenant {
   ordensCarregamento OrdemCarregamento[]
   emitenteFiscal  EmitenteFiscal?
   notasFiscais    NotaFiscal[]
+  conhecimentosTransporte ConhecimentoTransporte[]
+  manifestosEletronicos   ManifestoEletronico[]
+  operacoesCiot           OperacaoCiot[]
 }
 
 model User {
@@ -193,6 +196,9 @@ model Motorista {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vendas Venda[]
   ordensCarregamento OrdemCarregamento[]
+  conhecimentosTransporte ConhecimentoTransporte[]
+  manifestosEletronicos   ManifestoEletronico[]
+  operacoesCiot           OperacaoCiot[]
 
   @@index([tenantId])
 }
@@ -248,6 +254,9 @@ model Venda {
   comissaoAjuste ComissaoAjusteVenda?
   ordensCarregamento OrdemCarregamento[]
   notasFiscais       NotaFiscal[]
+  conhecimentosTransporte ConhecimentoTransporte[]
+  manifestosEletronicos   ManifestoEletronico[]
+  operacoesCiot           OperacaoCiot[]
 
   @@unique([tenantId, numeroVenda])
   @@index([tenantId, clienteId, dataVenda])
@@ -375,6 +384,9 @@ model FreteMovimento {
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   venda   Venda?  @relation(fields: [vendaId], references: [id], onDelete: SetNull)
   cliente Cliente @relation(fields: [clienteId], references: [id])
+  conhecimentosTransporte ConhecimentoTransporte[]
+  manifestosEletronicos   ManifestoEletronico[]
+  operacoesCiot           OperacaoCiot[]
 
   @@index([tenantId, clienteId, data])
   @@index([vendaId])
@@ -436,6 +448,8 @@ model OrdemCarregamento {
   cliente   Cliente?                  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   motorista Motorista?                @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
   itens     OrdemCarregamentoItem[]
+  conhecimentosTransporte ConhecimentoTransporte[]
+  manifestosEletronicos   ManifestoEletronico[]
 
   @@unique([tenantId, numeroOc])
   @@index([tenantId, dataEmissao])
@@ -474,6 +488,10 @@ model EmitenteFiscal {
   cep                String
   telefone           String?
   serieNfe           Int      @default(1)
+  /// RNTRC do emitente quando opera transporte (CT-e / MDF-e).
+  rntrc              String?
+  serieCte           Int      @default(1)
+  serieMdfe          Int      @default(1)
   /// homologacao | producao
   ambiente           String   @default("homologacao")
   provedor           String   @default("focusnfe")
@@ -521,6 +539,196 @@ model NotaFiscal {
   @@index([tenantId, autorizadaEm])
   @@index([tenantId, emitidaEm])
   @@index([tenantId, serie, numero])
+}
+
+/// CT-e (modelo 57). Vínculos operacionais são opcionais.
+model ConhecimentoTransporte {
+  id                   Int       @id @default(autoincrement())
+  tenantId             Int
+  /// rascunho | processando | autorizada | rejeitada | cancelada | denegada | indisponivel
+  status               String    @default("rascunho")
+  /// homologacao | producao
+  ambiente             String    @default("homologacao")
+  modelo               String    @default("57")
+  serie                Int?
+  numero               Int?
+  chaveAcesso          String?
+  protocolo            String?
+  refProvedor          String
+  emitenteNome         String?
+  emitenteDoc          String?
+  remetenteNome        String?
+  remetenteDoc         String?
+  destinatarioNome     String?
+  destinatarioDoc      String?
+  tomadorNome          String?
+  tomadorDoc           String?
+  origemMunicipio      String?
+  origemUf             String?
+  origemCodigoMunicipio String?
+  destinoMunicipio     String?
+  destinoUf            String?
+  destinoCodigoMunicipio String?
+  valorServico         Decimal?  @db.Decimal(12, 2)
+  valorCarga           Decimal?  @db.Decimal(12, 2)
+  pesoKg               Decimal?  @db.Decimal(12, 3)
+  observacoes          String?
+  xmlUrl               String?
+  dacteUrl             String?
+  motivoRejeicao       String?
+  erroTecnico          String?
+  payloadEnviado       Json?
+  payloadResposta      Json?
+  vendaId              Int?
+  freteMovimentoId     Int?
+  ordemCarregamentoId  Int?
+  motoristaId          Int?
+  emitidaEm            DateTime?
+  autorizadaEm         DateTime?
+  canceladaEm          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venda               Venda?             @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  freteMovimento      FreteMovimento?    @relation(fields: [freteMovimentoId], references: [id], onDelete: SetNull)
+  ordemCarregamento   OrdemCarregamento? @relation(fields: [ordemCarregamentoId], references: [id], onDelete: SetNull)
+  motorista           Motorista?         @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, refProvedor])
+  @@index([tenantId, status])
+  @@index([tenantId, emitidaEm])
+  @@index([tenantId, autorizadaEm])
+  @@index([tenantId, serie, numero])
+  @@index([vendaId])
+  @@index([freteMovimentoId])
+  @@index([ordemCarregamentoId])
+  @@index([motoristaId])
+}
+
+/// MDF-e. Encerramento é distinto de cancelamento.
+model ManifestoEletronico {
+  id                    Int       @id @default(autoincrement())
+  tenantId              Int
+  /// rascunho | processando | autorizada | rejeitada | cancelada | encerrada | denegada | indisponivel
+  status                String    @default("rascunho")
+  ambiente              String    @default("homologacao")
+  serie                 Int?
+  numero                Int?
+  chaveAcesso           String?
+  protocolo             String?
+  refProvedor           String
+  ufInicio              String?
+  ufFim                 String?
+  veiculoPlaca          String?
+  veiculoDescricao      String?
+  motoristaNome         String?
+  motoristaDoc          String?
+  xmlUrl                String?
+  damdfeUrl             String?
+  motivoRejeicao        String?
+  erroTecnico           String?
+  ufEncerramento        String?
+  municipioEncerramento String?
+  payloadEnviado        Json?
+  payloadResposta       Json?
+  vendaId               Int?
+  freteMovimentoId      Int?
+  ordemCarregamentoId   Int?
+  motoristaId           Int?
+  emitidaEm             DateTime?
+  autorizadaEm          DateTime?
+  canceladaEm           DateTime?
+  encerradaEm           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venda               Venda?               @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  freteMovimento      FreteMovimento?      @relation(fields: [freteMovimentoId], references: [id], onDelete: SetNull)
+  ordemCarregamento   OrdemCarregamento?   @relation(fields: [ordemCarregamentoId], references: [id], onDelete: SetNull)
+  motorista           Motorista?           @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
+  documentos          ManifestoDocumento[]
+
+  @@unique([tenantId, refProvedor])
+  @@index([tenantId, status])
+  @@index([tenantId, emitidaEm])
+  @@index([tenantId, autorizadaEm])
+  @@index([tenantId, serie, numero])
+  @@index([vendaId])
+  @@index([freteMovimentoId])
+  @@index([ordemCarregamentoId])
+  @@index([motoristaId])
+}
+
+/// Documentos vinculados a um MDF-e (CT-e ou NF-e por chave).
+model ManifestoDocumento {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  mdfeId      Int
+  /// cte | nfe
+  tipo        String
+  documentoId Int?
+  chaveAcesso String
+  createdAt   DateTime @default(now())
+
+  mdfe ManifestoEletronico @relation(fields: [mdfeId], references: [id], onDelete: Cascade)
+
+  @@index([mdfeId])
+  @@index([tenantId, tipo])
+  @@index([chaveAcesso])
+}
+
+/// CIOT — controle próprio (ANTT/IPEF). Não misturar com CT-e/MDF-e.
+model OperacaoCiot {
+  id                Int       @id @default(autoincrement())
+  tenantId          Int
+  /// rascunho | processando | registrado | rejeitado | cancelado | encerrado | nao_implementado | indisponivel
+  status            String    @default("rascunho")
+  codigoCiot        String?
+  codigoVerificador String?
+  tipoOperacao      String?
+  transportadorNome String?
+  transportadorDoc  String?
+  contratanteNome   String?
+  contratanteDoc    String?
+  motoristaId       Int?
+  motoristaNome     String?
+  veiculoPlaca      String?
+  veiculoDescricao  String?
+  origemMunicipio   String?
+  origemUf          String?
+  destinoMunicipio  String?
+  destinoUf         String?
+  valorOperacao     Decimal?  @db.Decimal(12, 2)
+  observacoes       String?
+  /// mock | ipef | nao_implementado
+  provider          String    @default("nao_implementado")
+  refProvedor       String?
+  erroTecnico       String?
+  payloadEnviado    Json?
+  payloadResposta   Json?
+  freteMovimentoId  Int?
+  vendaId           Int?
+  dataOperacao      DateTime?
+  registradaEm      DateTime?
+  canceladaEm       DateTime?
+  encerradaEm       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  motorista      Motorista?      @relation(fields: [motoristaId], references: [id], onDelete: SetNull)
+  freteMovimento FreteMovimento? @relation(fields: [freteMovimentoId], references: [id], onDelete: SetNull)
+  venda          Venda?          @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, refProvedor])
+  @@index([tenantId, status])
+  @@index([tenantId, dataOperacao])
+  @@index([tenantId, codigoCiot])
+  @@index([motoristaId])
+  @@index([freteMovimentoId])
+  @@index([vendaId])
 }
 
 /// Eventos de auditoria (append-only). Ver política de retenção em `services/financeiroEventos.js`.

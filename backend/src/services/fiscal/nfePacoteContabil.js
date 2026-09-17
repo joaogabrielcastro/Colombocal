@@ -179,6 +179,121 @@ async function processNfePacoteContabil(payload, jobTenantId) {
 
   const geradoEm = new Date().toLocaleString("pt-BR");
   const ambiente = emitente?.ambiente || "homologacao";
+
+  const range = require("../../utils/dateRangeQuery").getDateRange(dataInicio, dataFim);
+  const periodFilter = range.gte || range.lte ? range : undefined;
+
+  const [ctes, mdfes, ciots] = await Promise.all([
+    prisma.conhecimentoTransporte.findMany({
+      where: {
+        tenantId,
+        ...(periodFilter ? { emitidaEm: periodFilter } : {}),
+      },
+    }),
+    prisma.manifestoEletronico.findMany({
+      where: {
+        tenantId,
+        ...(periodFilter ? { emitidaEm: periodFilter } : {}),
+      },
+    }),
+    prisma.operacaoCiot.findMany({
+      where: {
+        tenantId,
+        ...(periodFilter ? { dataOperacao: periodFilter } : {}),
+      },
+    }),
+  ]);
+
+  const { resumoFiscalMulti } = require("../../domain/fiscal");
+  const multi = resumoFiscalMulti({ notas, ctes, mdfes, ciots });
+
+  const cteXmlFalha = [];
+  const mdfeXmlFalha = [];
+  const ciotSemComprovante = [];
+
+  const { createCteProvider } = require("../../infra/cte/provider");
+  const { createMdfeProvider } = require("../../infra/mdfe/provider");
+  let cteProvider = null;
+  let mdfeProvider = null;
+  try {
+    cteProvider = createCteProvider({ emitente });
+  } catch {
+    cteProvider = null;
+  }
+  try {
+    mdfeProvider = createMdfeProvider({ emitente });
+  } catch {
+    mdfeProvider = null;
+  }
+
+  for (const doc of ctes) {
+    if (doc.status !== "autorizada" && doc.status !== "cancelada") continue;
+    const nome = `cte-${doc.numero || doc.id}.xml`;
+    let buffer = null;
+    if (doc.xmlUrl && cteProvider?.baixarArquivo) {
+      try {
+        const file = await cteProvider.baixarArquivo(doc.xmlUrl);
+        if (file?.buffer) buffer = Buffer.from(file.buffer);
+      } catch {
+        /* below */
+      }
+    }
+    if (buffer) {
+      xmlBuffers.push({ path: `${pasta}/cte/${nome}`, buffer });
+    } else {
+      cteXmlFalha.push(doc.numero || doc.id);
+    }
+  }
+
+  for (const doc of mdfes) {
+    if (
+      doc.status !== "autorizada" &&
+      doc.status !== "cancelada" &&
+      doc.status !== "encerrada"
+    ) {
+      continue;
+    }
+    const nome = `mdfe-${doc.numero || doc.id}.xml`;
+    let buffer = null;
+    if (doc.xmlUrl && mdfeProvider?.baixarArquivo) {
+      try {
+        const file = await mdfeProvider.baixarArquivo(doc.xmlUrl);
+        if (file?.buffer) buffer = Buffer.from(file.buffer);
+      } catch {
+        /* below */
+      }
+    }
+    if (buffer) {
+      xmlBuffers.push({ path: `${pasta}/mdfe/${nome}`, buffer });
+    } else {
+      mdfeXmlFalha.push(doc.numero || doc.id);
+    }
+  }
+
+  for (const doc of ciots) {
+    if (!doc.codigoCiot) {
+      ciotSemComprovante.push(doc.id);
+      continue;
+    }
+    const txt = [
+      `CIOT: ${doc.codigoCiot}`,
+      `Verificador: ${doc.codigoVerificador || ""}`,
+      `Status: ${doc.status}`,
+      `Provider: ${doc.provider}`,
+      `Transportador: ${doc.transportadorNome || ""}`,
+      `Valor: ${doc.valorOperacao != null ? Number(doc.valorOperacao) : ""}`,
+      doc.status === "nao_implementado" || doc.provider === "mock"
+        ? "ATENÇÃO: registro de demonstração / sem integração IPEF real."
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    xmlBuffers.push({
+      path: `${pasta}/ciot/ciot-${doc.codigoCiot || doc.id}.txt`,
+      buffer: Buffer.from(txt, "utf8"),
+    });
+  }
+
   const readme = [
     `Empresa: ${emitente?.razaoSocial || tenant?.name || ""}`,
     `CNPJ: ${emitente?.cnpj || ""}`,
@@ -187,23 +302,38 @@ async function processNfePacoteContabil(payload, jobTenantId) {
     `Data de geração: ${geradoEm}`,
     `Ambiente: ${ambiente === "producao" ? "PRODUÇÃO" : "HOMOLOGAÇÃO / DEMONSTRAÇÃO"}`,
     "",
-    `NF-e no período: ${resumo.total}`,
-    `NF-e autorizadas: ${resumo.autorizadas}`,
-    `NF-e canceladas: ${resumo.canceladas}`,
-    `NF-e rejeitadas: ${resumo.rejeitadas}`,
-    `NF-e processando: ${resumo.processando}`,
-    `Valor autorizado: R$ ${resumo.valorAutorizado.toFixed(2)}`,
-    "",
-    `XMLs incluídos: ${xmlOk.length}`,
+    "=== NF-e ===",
+    `Total: ${resumo.total} | Autorizadas: ${resumo.autorizadas} | Canceladas: ${resumo.canceladas} | Rejeitadas: ${resumo.rejeitadas}`,
+    `Valor autorizado (NF-e): R$ ${resumo.valorAutorizado.toFixed(2)}`,
+    `XMLs NF-e incluídos: ${xmlOk.length}`,
     xmlFalha.length
-      ? `XMLs indisponíveis (não incluídos): ${xmlFalha.join(", ")}`
-      : "XMLs indisponíveis: nenhum",
+      ? `XMLs NF-e indisponíveis: ${xmlFalha.join(", ")}`
+      : "XMLs NF-e indisponíveis: nenhum",
+    "",
+    "=== CT-e ===",
+    `Total: ${multi.cte.total} | Autorizados: ${multi.cte.autorizadas} | Cancelados: ${multi.cte.canceladas}`,
+    `Valor serviço autorizado (CT-e): R$ ${multi.cte.valorServicoAutorizado.toFixed(2)}`,
+    cteXmlFalha.length
+      ? `XMLs CT-e indisponíveis: ${cteXmlFalha.join(", ")}`
+      : "XMLs CT-e indisponíveis: nenhum",
+    "",
+    "=== MDF-e ===",
+    `Total: ${multi.mdfe.total} | Autorizados: ${multi.mdfe.autorizadas} | Encerrados: ${multi.mdfe.encerradas} | Cancelados: ${multi.mdfe.canceladas}`,
+    mdfeXmlFalha.length
+      ? `XMLs MDF-e indisponíveis: ${mdfeXmlFalha.join(", ")}`
+      : "XMLs MDF-e indisponíveis: nenhum",
+    "",
+    "=== CIOT ===",
+    `Total: ${multi.ciot.total} | Registrados: ${multi.ciot.registrados} | Cancelados: ${multi.ciot.cancelados}`,
+    `Valor registrado (CIOT): R$ ${multi.ciot.valorRegistrado.toFixed(2)}`,
+    ciotSemComprovante.length
+      ? `CIOT sem código/comprovante: ${ciotSemComprovante.join(", ")}`
+      : "CIOT sem comprovante: nenhum",
     "",
     "Observação:",
-    "Este pacote contém os documentos e informações fiscais disponíveis no sistema",
-    "para o período informado.",
-    "Relatório para conferência e envio à contabilidade.",
-    "Não substitui obrigações acessórias ou escrituração fiscal realizada pelo contador.",
+    "Valores de tipos diferentes NÃO devem ser somados em um único total contábil.",
+    "XML/DACTE/DAMDFE só entram quando disponíveis no provedor — nenhum arquivo falso.",
+    "Relatório para conferência. Não substitui obrigações acessórias do contador.",
     ambiente !== "producao"
       ? "DEMONSTRAÇÃO — SEM VALIDADE FISCAL (ambiente de homologação)."
       : "",
@@ -214,10 +344,19 @@ async function processNfePacoteContabil(payload, jobTenantId) {
   const archive = archiver("zip", { zlib: { level: 9 } });
   const zipPromise = streamToBuffer(archive);
 
-  archive.append(xlsxBuf, { name: `${pasta}/relatorio-nfe.xlsx` });
+  archive.append(xlsxBuf, { name: `${pasta}/relatorios/relatorio-nfe.xlsx` });
+  archive.append(xlsxBuf, { name: `${pasta}/nfe/relatorio-nfe.xlsx` });
   archive.append(readme, { name: `${pasta}/README.txt` });
   for (const file of xmlBuffers) {
-    archive.append(file.buffer, { name: file.path });
+    const path = file.path.includes("/cte/") ||
+      file.path.includes("/mdfe/") ||
+      file.path.includes("/ciot/")
+      ? file.path
+      : file.path.replace(`${pasta}/xml/`, `${pasta}/nfe/xml/`).replace(
+          `${pasta}/canceladas/`,
+          `${pasta}/nfe/canceladas/`,
+        );
+    archive.append(file.buffer, { name: path.startsWith(pasta) ? path : file.path });
   }
   if (resumo.canceladas > 0) {
     const cancelMeta = notas
@@ -235,7 +374,7 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       )
       .join("\n");
     archive.append(cancelMeta || "Sem detalhes.", {
-      name: `${pasta}/canceladas/eventos/resumo-cancelamentos.txt`,
+      name: `${pasta}/nfe/canceladas/eventos/resumo-cancelamentos.txt`,
     });
   }
 
@@ -247,7 +386,7 @@ async function processNfePacoteContabil(payload, jobTenantId) {
     filename: `${pasta}.zip`,
     content: zipBuf.toString("base64"),
     encoding: "base64",
-    totalLinhas: notas.length,
+    totalLinhas: notas.length + ctes.length + mdfes.length + ciots.length,
     truncated: false,
   };
 }

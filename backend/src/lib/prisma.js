@@ -216,6 +216,164 @@ async function ensureDatabaseCompat() {
     CREATE INDEX IF NOT EXISTS "NotaFiscal_vendaId_idx"
       ON "NotaFiscal"("vendaId")
   `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "EmitenteFiscal" ADD COLUMN IF NOT EXISTS "rntrc" TEXT
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "EmitenteFiscal" ADD COLUMN IF NOT EXISTS "serieCte" INTEGER NOT NULL DEFAULT 1
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "EmitenteFiscal" ADD COLUMN IF NOT EXISTS "serieMdfe" INTEGER NOT NULL DEFAULT 1
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ConhecimentoTransporte" (
+      "id" SERIAL PRIMARY KEY,
+      "tenantId" INTEGER NOT NULL,
+      "status" TEXT NOT NULL DEFAULT 'rascunho',
+      "ambiente" TEXT NOT NULL DEFAULT 'homologacao',
+      "modelo" TEXT NOT NULL DEFAULT '57',
+      "serie" INTEGER,
+      "numero" INTEGER,
+      "chaveAcesso" TEXT,
+      "protocolo" TEXT,
+      "refProvedor" TEXT NOT NULL,
+      "emitenteNome" TEXT,
+      "emitenteDoc" TEXT,
+      "remetenteNome" TEXT,
+      "remetenteDoc" TEXT,
+      "destinatarioNome" TEXT,
+      "destinatarioDoc" TEXT,
+      "tomadorNome" TEXT,
+      "tomadorDoc" TEXT,
+      "origemMunicipio" TEXT,
+      "origemUf" TEXT,
+      "origemCodigoMunicipio" TEXT,
+      "destinoMunicipio" TEXT,
+      "destinoUf" TEXT,
+      "destinoCodigoMunicipio" TEXT,
+      "valorServico" DECIMAL(12,2),
+      "valorCarga" DECIMAL(12,2),
+      "pesoKg" DECIMAL(12,3),
+      "observacoes" TEXT,
+      "xmlUrl" TEXT,
+      "dacteUrl" TEXT,
+      "motivoRejeicao" TEXT,
+      "erroTecnico" TEXT,
+      "payloadEnviado" JSONB,
+      "payloadResposta" JSONB,
+      "vendaId" INTEGER,
+      "freteMovimentoId" INTEGER,
+      "ordemCarregamentoId" INTEGER,
+      "motoristaId" INTEGER,
+      "emitidaEm" TIMESTAMP(3),
+      "autorizadaEm" TIMESTAMP(3),
+      "canceladaEm" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "ConhecimentoTransporte_tenantId_refProvedor_key"
+      ON "ConhecimentoTransporte"("tenantId", "refProvedor")
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ManifestoEletronico" (
+      "id" SERIAL PRIMARY KEY,
+      "tenantId" INTEGER NOT NULL,
+      "status" TEXT NOT NULL DEFAULT 'rascunho',
+      "ambiente" TEXT NOT NULL DEFAULT 'homologacao',
+      "serie" INTEGER,
+      "numero" INTEGER,
+      "chaveAcesso" TEXT,
+      "protocolo" TEXT,
+      "refProvedor" TEXT NOT NULL,
+      "ufInicio" TEXT,
+      "ufFim" TEXT,
+      "veiculoPlaca" TEXT,
+      "veiculoDescricao" TEXT,
+      "motoristaNome" TEXT,
+      "motoristaDoc" TEXT,
+      "xmlUrl" TEXT,
+      "damdfeUrl" TEXT,
+      "motivoRejeicao" TEXT,
+      "erroTecnico" TEXT,
+      "ufEncerramento" TEXT,
+      "municipioEncerramento" TEXT,
+      "payloadEnviado" JSONB,
+      "payloadResposta" JSONB,
+      "vendaId" INTEGER,
+      "freteMovimentoId" INTEGER,
+      "ordemCarregamentoId" INTEGER,
+      "motoristaId" INTEGER,
+      "emitidaEm" TIMESTAMP(3),
+      "autorizadaEm" TIMESTAMP(3),
+      "canceladaEm" TIMESTAMP(3),
+      "encerradaEm" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "ManifestoEletronico_tenantId_refProvedor_key"
+      ON "ManifestoEletronico"("tenantId", "refProvedor")
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ManifestoDocumento" (
+      "id" SERIAL PRIMARY KEY,
+      "tenantId" INTEGER NOT NULL,
+      "mdfeId" INTEGER NOT NULL,
+      "tipo" TEXT NOT NULL,
+      "documentoId" INTEGER,
+      "chaveAcesso" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "OperacaoCiot" (
+      "id" SERIAL PRIMARY KEY,
+      "tenantId" INTEGER NOT NULL,
+      "status" TEXT NOT NULL DEFAULT 'rascunho',
+      "codigoCiot" TEXT,
+      "codigoVerificador" TEXT,
+      "tipoOperacao" TEXT,
+      "transportadorNome" TEXT,
+      "transportadorDoc" TEXT,
+      "contratanteNome" TEXT,
+      "contratanteDoc" TEXT,
+      "motoristaId" INTEGER,
+      "motoristaNome" TEXT,
+      "veiculoPlaca" TEXT,
+      "veiculoDescricao" TEXT,
+      "origemMunicipio" TEXT,
+      "origemUf" TEXT,
+      "destinoMunicipio" TEXT,
+      "destinoUf" TEXT,
+      "valorOperacao" DECIMAL(12,2),
+      "observacoes" TEXT,
+      "provider" TEXT NOT NULL DEFAULT 'nao_implementado',
+      "refProvedor" TEXT,
+      "erroTecnico" TEXT,
+      "payloadEnviado" JSONB,
+      "payloadResposta" JSONB,
+      "freteMovimentoId" INTEGER,
+      "vendaId" INTEGER,
+      "dataOperacao" TIMESTAMP(3),
+      "registradaEm" TIMESTAMP(3),
+      "canceladaEm" TIMESTAMP(3),
+      "encerradaEm" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "OperacaoCiot_tenantId_refProvedor_key"
+      ON "OperacaoCiot"("tenantId", "refProvedor")
+  `);
 }
 
 module.exports = { prisma, ensureDatabaseCompat };

@@ -20,6 +20,9 @@ export type EmitenteFiscal = {
   cep: string;
   telefone?: string | null;
   serieNfe: number;
+  rntrc?: string | null;
+  serieCte?: number;
+  serieMdfe?: number;
   ambiente: "homologacao" | "producao";
   naturezaOperacao?: string;
   modalidadeFrete: number;
@@ -42,6 +45,9 @@ const empty: EmitenteFiscal = {
   cep: "",
   telefone: "",
   serieNfe: 1,
+  rntrc: "",
+  serieCte: 1,
+  serieMdfe: 1,
   ambiente: "homologacao",
   naturezaOperacao: "Venda de mercadoria",
   modalidadeFrete: 9,
@@ -91,6 +97,9 @@ export function EmitenteFiscalForm() {
         ...form,
         crt: Number(form.crt),
         serieNfe: Number(form.serieNfe) || 1,
+        serieCte: Number(form.serieCte) || 1,
+        serieMdfe: Number(form.serieMdfe) || 1,
+        rntrc: form.rntrc || null,
         modalidadeFrete: Number(form.modalidadeFrete) || 9,
         provedorToken: token.trim() || undefined,
       });
@@ -175,6 +184,18 @@ export function EmitenteFiscalForm() {
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">Série NF-e</span>
           <input type="number" min={1} value={form.serieNfe} onChange={set("serieNfe")} className="input-field" />
+        </label>
+        <label className="text-sm">
+          <span className="block text-gray-700 mb-1">RNTRC (CT-e / MDF-e)</span>
+          <input value={form.rntrc ?? ""} onChange={set("rntrc")} className="input-field" />
+        </label>
+        <label className="text-sm">
+          <span className="block text-gray-700 mb-1">Série CT-e</span>
+          <input type="number" min={1} value={form.serieCte ?? 1} onChange={set("serieCte")} className="input-field" />
+        </label>
+        <label className="text-sm">
+          <span className="block text-gray-700 mb-1">Série MDF-e</span>
+          <input type="number" min={1} value={form.serieMdfe ?? 1} onChange={set("serieMdfe")} className="input-field" />
         </label>
         <label className="text-sm md:col-span-2">
           <span className="block text-gray-700 mb-1">Natureza da operação</span>

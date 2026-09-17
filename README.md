@@ -16,6 +16,7 @@ Sistema de gestão comercial para distribuidora de cal: vendas, financeiro, fret
 - **Relatórios** — Vendas (KPIs, evolução, rankings, produtos por cliente, PDF/Excel), comissões, contas a receber, fretes, carregamento e motoristas
 - **Auditoria** — Trilha de operações relevantes
 - **NF-e** — Opcional, desligada por padrão. Emissão, histórico, fechamento mensal e pacote para contabilidade: [docs/nfe-homologacao-producao.md](docs/nfe-homologacao-producao.md)
+- **CT-e / MDF-e / CIOT** — Transporte fiscal (Focus CT-e/MDF-e; CIOT scaffold + adapter IPEF): [docs/fiscal-cte-mdfe-ciot.md](docs/fiscal-cte-mdfe-ciot.md)
 
 ## Pré-requisitos
 
@@ -199,6 +200,7 @@ docker compose down     # remove containers; volumes persistentes ficam
 ## Documentação
 
 - [NF-e — homologação e produção](docs/nfe-homologacao-producao.md)
+- [CT-e / MDF-e / CIOT](docs/fiscal-cte-mdfe-ciot.md)
 - [Backup e restore](docs/operacao-backup-restore.md)
 - [Hardening de produção / Coolify](docs/producao-hardening.md)
 - [Cheques — comportamento real](docs/cheques.md)

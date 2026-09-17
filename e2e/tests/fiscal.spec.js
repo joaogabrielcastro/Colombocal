@@ -43,9 +43,9 @@ test.describe("E2E Fiscal", () => {
     const sidebar = page.getByTestId("sidebar-desktop");
     await expect(sidebar.getByText("Fiscal")).toBeVisible({ timeout: 20_000 });
     await sidebar.getByText("Fiscal").click();
-    await sidebar.getByRole("link", { name: "Notas fiscais" }).click();
+    await sidebar.getByRole("link", { name: "NF-e" }).click();
     await expect(page).toHaveURL(/\/fiscal\/notas/);
-    await expect(page.getByRole("heading", { name: /Notas fiscais/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^NF-e$|Notas fiscais/i })).toBeVisible();
     await expect(page.getByText(/AMBIENTE DE HOMOLOGAÇÃO/i)).toBeVisible();
     await expect(page.getByText(/Total de NF-e/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Consultar/i })).toBeVisible();

@@ -28,6 +28,12 @@ function assertProductionConfig() {
     );
   }
 
+  if (String(process.env.CIOT_PROVIDER || "").trim().toLowerCase() === "mock") {
+    throw new Error(
+      "CIOT_PROVIDER=mock não é permitido em produção.",
+    );
+  }
+
   if (passwordResetEnabled()) {
     const appUrl = String(process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "").trim();
     if (!appUrl) {

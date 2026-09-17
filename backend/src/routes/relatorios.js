@@ -44,6 +44,7 @@ const EXPORT_TYPE_NAV = {
   financeiro_csv: "rel_financeiro",
   titulos_csv: "rel_financeiro",
   nfe_pacote_contabil: "fiscal",
+  fiscal_pacote_contabil: "fiscal",
 };
 
 function canAccessExportJob(user, job) {

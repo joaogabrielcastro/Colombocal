@@ -17,6 +17,9 @@ type TenantFeaturesConfig = {
   clienteCpf: boolean;
   frete: boolean;
   nfe: boolean;
+  cte: boolean;
+  mdfe: boolean;
+  ciot: boolean;
 };
 
 export default function ConfiguracoesPage() {
@@ -78,11 +81,17 @@ export default function ConfiguracoesPage() {
         clienteCpf: !!features.clienteCpf,
         frete: !!features.frete,
         nfe: !!features.nfe,
+        cte: !!features.cte,
+        mdfe: !!features.mdfe,
+        ciot: !!features.ciot,
       });
       setFeatures({
         clienteCpf: !!next.clienteCpf,
         frete: !!next.frete,
         nfe: !!next.nfe,
+        cte: !!next.cte,
+        mdfe: !!next.mdfe,
+        ciot: !!next.ciot,
       });
       clearTenantFeaturesCache();
       await fetchTenantFeatures(true);
@@ -155,6 +164,52 @@ export default function ConfiguracoesPage() {
                     Deixe desmarcado até ter o certificado A1 no provedor. Enquanto
                     isso, as vendas são só sem nota. Ao ligar, a nova venda passa a
                     ter as duas opções: sem nota ou com NF-e.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!features.cte}
+                  onChange={(e) => {
+                    setOkFeatures('');
+                    setFeatures((f) => (f ? { ...f, cte: e.target.checked } : f));
+                  }}
+                  className="w-4 h-4 rounded mt-0.5"
+                />
+                <span>
+                  Habilitar CT-e
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Requer RNTRC no emitente e produto CT-e no provedor Focus.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!features.mdfe}
+                  onChange={(e) => {
+                    setOkFeatures('');
+                    setFeatures((f) => (f ? { ...f, mdfe: e.target.checked } : f));
+                  }}
+                  className="w-4 h-4 rounded mt-0.5"
+                />
+                <span>Habilitar MDF-e</span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!features.ciot}
+                  onChange={(e) => {
+                    setOkFeatures('');
+                    setFeatures((f) => (f ? { ...f, ciot: e.target.checked } : f));
+                  }}
+                  className="w-4 h-4 rounded mt-0.5"
+                />
+                <span>
+                  Habilitar CIOT
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Scaffold local. Integração IPEF real ainda não configurada.
                   </span>
                 </span>
               </label>

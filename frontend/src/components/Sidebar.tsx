@@ -110,7 +110,8 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const { me, tenant } = useMe();
-  const { freteEnabled, nfeEnabled } = useTenantFeatures();
+  const { freteEnabled, nfeEnabled, cteEnabled, mdfeEnabled, ciotEnabled } =
+    useTenantFeatures();
   const [reportsOpen, setReportsOpen] = useState(false);
   const [fiscalOpen, setFiscalOpen] = useState(false);
 
@@ -160,6 +161,9 @@ export default function Sidebar({
   const fiscalItems = filterFiscalForSidebar(FISCAL_NAV, {
     ...navOpts,
     nfeEnabled,
+    cteEnabled,
+    mdfeEnabled,
+    ciotEnabled,
   });
 
   const mais: NavLink[] = [

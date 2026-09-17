@@ -22,7 +22,15 @@ describe("fetchTenantFeatures", () => {
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
     const f = await fetchTenantFeatures(true);
-    expect(f).toEqual({ clienteCpf: true, frete: false, fretePagoDefault: false, nfe: false });
+    expect(f).toEqual({
+      clienteCpf: true,
+      frete: false,
+      fretePagoDefault: false,
+      nfe: false,
+      cte: false,
+      mdfe: false,
+      ciot: false,
+    });
   });
 
   it("frete false quando ausente (não assume Colombocal)", async () => {
@@ -30,7 +38,15 @@ describe("fetchTenantFeatures", () => {
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
     const f = await fetchTenantFeatures(true);
-    expect(f).toEqual({ clienteCpf: false, frete: false, fretePagoDefault: false, nfe: false });
+    expect(f).toEqual({
+      clienteCpf: false,
+      frete: false,
+      fretePagoDefault: false,
+      nfe: false,
+      cte: false,
+      mdfe: false,
+      ciot: false,
+    });
   });
 
   it("usa defaults quando a API falha", async () => {
@@ -38,7 +54,15 @@ describe("fetchTenantFeatures", () => {
     const { fetchTenantFeatures, clearTenantFeaturesCache } = await import("./useTenantFeatures");
     clearTenantFeaturesCache();
     const f = await fetchTenantFeatures(true);
-    expect(f).toEqual({ clienteCpf: false, frete: false, fretePagoDefault: false, nfe: false });
+    expect(f).toEqual({
+      clienteCpf: false,
+      frete: false,
+      fretePagoDefault: false,
+      nfe: false,
+      cte: false,
+      mdfe: false,
+      ciot: false,
+    });
   });
 
   it("reaproveita cache em chamadas subsequentes", async () => {

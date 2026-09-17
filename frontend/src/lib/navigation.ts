@@ -164,9 +164,12 @@ export const REPORT_NAV: ReportNavItem[] = [
   },
 ];
 
-/** Menu Fiscal — só com feature nfe + permissão fiscal. */
+/** Menu Fiscal — documentos habilitados + permissão fiscal. */
 export const FISCAL_NAV: FiscalNavItem[] = [
-  { href: '/fiscal/notas', label: 'Notas fiscais', navKey: 'fiscal' },
+  { href: '/fiscal/notas', label: 'NF-e', navKey: 'fiscal' },
+  { href: '/fiscal/cte', label: 'CT-e', navKey: 'fiscal' },
+  { href: '/fiscal/mdfe', label: 'MDF-e', navKey: 'fiscal' },
+  { href: '/fiscal/ciot', label: 'CIOT', navKey: 'fiscal' },
   { href: '/fiscal/fechamento', label: 'Fechamento fiscal', navKey: 'fiscal' },
 ];
 
@@ -245,15 +248,27 @@ export function filterFiscalForSidebar(
     isAdmin?: boolean;
     navPermissions?: string[] | null;
     nfeEnabled?: boolean;
+    cteEnabled?: boolean;
+    mdfeEnabled?: boolean;
+    ciotEnabled?: boolean;
   },
 ): FiscalNavItem[] {
-  if (options?.nfeEnabled === false) return [];
-  return items.filter((i) =>
-    canAccessNavKey(i.navKey, {
+  const any =
+    options?.nfeEnabled ||
+    options?.cteEnabled ||
+    options?.mdfeEnabled ||
+    options?.ciotEnabled;
+  if (!any) return [];
+  return items.filter((i) => {
+    if (i.href.includes("/notas") && !options?.nfeEnabled) return false;
+    if (i.href.includes("/cte") && !options?.cteEnabled) return false;
+    if (i.href.includes("/mdfe") && !options?.mdfeEnabled) return false;
+    if (i.href.includes("/ciot") && !options?.ciotEnabled) return false;
+    return canAccessNavKey(i.navKey, {
       isAdmin: options?.isAdmin,
       navPermissions: options?.navPermissions,
-    }),
-  );
+    });
+  });
 }
 
 export function hasVisibleFiscal(
@@ -261,6 +276,9 @@ export function hasVisibleFiscal(
     isAdmin?: boolean;
     navPermissions?: string[] | null;
     nfeEnabled?: boolean;
+    cteEnabled?: boolean;
+    mdfeEnabled?: boolean;
+    ciotEnabled?: boolean;
   },
 ): boolean {
   return filterFiscalForSidebar(FISCAL_NAV, options).length > 0;

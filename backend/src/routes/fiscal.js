@@ -19,10 +19,26 @@ const {
   dataReferenciaNota,
   montarLinhaExport,
   colunasExport,
+  resumoFiscalMulti,
 } = require("../domain/fiscal");
+const { getTenantFeatures } = require("../services/tenantFeaturesResolver");
+const { getTenantSlug } = require("../utils/tenantRequest");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const { enqueueExportJob } = require("../services/exportJobs");
 const { getDateRange } = require("../utils/dateRangeQuery");
+
+async function assertAnyFiscalDocEnabled(req) {
+  const slug = await getTenantSlug(req.tenantId);
+  const features = await getTenantFeatures(prisma, req.tenantId, slug);
+  if (!features.nfe && !features.cte && !features.mdfe && !features.ciot) {
+    const { AppError } = require("../shared/errors/appError");
+    throw new AppError("Nenhum módulo fiscal de documentos habilitado.", {
+      code: "FISCAL_DESABILITADO",
+      httpStatus: 403,
+    });
+  }
+  return features;
+}
 
 const NOTA_LIST_INCLUDE = {
   venda: {
@@ -395,7 +411,7 @@ async function carregarNotasFechamentoComPayload(filtros) {
 // GET /api/fiscal/fechamento
 router.get("/fechamento", async (req, res) => {
   try {
-    await assertNfeEnabled(req);
+    const features = await assertAnyFiscalDocEnabled(req);
     const filtros = filtrosFromQuery(req);
     if (!filtros.dataInicio || !filtros.dataFim) {
       return res.status(400).json({
@@ -404,7 +420,12 @@ router.get("/fechamento", async (req, res) => {
       });
     }
 
-    const notas = await carregarNotasFechamentoComPayload(filtros);
+    const range = getDateRange(filtros.dataInicio, filtros.dataFim);
+    const periodFilter = range.gte || range.lte ? range : undefined;
+
+    const notas = features.nfe
+      ? await carregarNotasFechamentoComPayload(filtros)
+      : [];
     const canceladasIds = notas
       .filter((n) => n.status === STATUS.CANCELADA)
       .map((n) => n.id);
@@ -415,7 +436,44 @@ router.get("/fechamento", async (req, res) => {
       motivoCancelamento: motivos.get(n.id) || null,
     }));
 
+    const [ctes, mdfes, ciots] = await Promise.all([
+      features.cte
+        ? prisma.conhecimentoTransporte.findMany({
+            where: {
+              tenantId: req.tenantId,
+              ...(periodFilter ? { emitidaEm: periodFilter } : {}),
+            },
+            orderBy: { id: "asc" },
+          })
+        : [],
+      features.mdfe
+        ? prisma.manifestoEletronico.findMany({
+            where: {
+              tenantId: req.tenantId,
+              ...(periodFilter ? { emitidaEm: periodFilter } : {}),
+            },
+            include: { documentos: true },
+            orderBy: { id: "asc" },
+          })
+        : [],
+      features.ciot
+        ? prisma.operacaoCiot.findMany({
+            where: {
+              tenantId: req.tenantId,
+              ...(periodFilter ? { dataOperacao: periodFilter } : {}),
+            },
+            orderBy: { id: "asc" },
+          })
+        : [],
+    ]);
+
     const resumo = resumoFiscal(notasComMotivo);
+    const resumoMulti = resumoFiscalMulti({
+      notas: notasComMotivo,
+      ctes,
+      mdfes,
+      ciots,
+    });
     const lacunas = detectarLacunasNumeracao(
       notasComMotivo.filter((n) =>
         [STATUS.AUTORIZADA, STATUS.CANCELADA].includes(n.status),
@@ -429,14 +487,16 @@ router.get("/fechamento", async (req, res) => {
 
     await registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
-      tipo: "NFE_FECHAMENTO_GERADO",
+      tipo: "FISCAL_FECHAMENTO_GERADO",
       entidade: "FiscalFechamento",
       entidadeId: null,
       payload: {
         dataInicio: filtros.dataInicio,
         dataFim: filtros.dataFim,
-        total: resumo.total,
-        autorizadas: resumo.autorizadas,
+        nfe: resumo.total,
+        cte: resumoMulti.cte.total,
+        mdfe: resumoMulti.mdfe.total,
+        ciot: resumoMulti.ciot.total,
       },
     });
 
@@ -456,12 +516,46 @@ router.get("/fechamento", async (req, res) => {
         dataFim: filtros.dataFim,
       },
       resumo,
+      resumoMulti,
+      observacaoValores:
+        "Valores de NF-e, CT-e e CIOT não são somados entre si — cada tipo mantém contexto próprio.",
       observacaoEmissaoIncerta:
         "Emissão incerta não é status persistido: casos inconclusivos permanecem em Processando.",
       disclaimer:
         "Relatório para conferência e envio à contabilidade. Não substitui obrigações acessórias ou escrituração fiscal realizada pelo contador.",
       lacunas,
       documentos: notasComMotivo.map(serializarNotaLista),
+      cte: ctes.map((d) => ({
+        id: d.id,
+        numero: d.numero,
+        serie: d.serie,
+        status: d.status,
+        emitidaEm: d.emitidaEm,
+        destinatarioNome: d.destinatarioNome,
+        origemUf: d.origemUf,
+        destinoUf: d.destinoUf,
+        valorServico: d.valorServico != null ? Number(d.valorServico) : null,
+      })),
+      mdfe: mdfes.map((d) => ({
+        id: d.id,
+        numero: d.numero,
+        serie: d.serie,
+        status: d.status,
+        emitidaEm: d.emitidaEm,
+        ufInicio: d.ufInicio,
+        ufFim: d.ufFim,
+        veiculoPlaca: d.veiculoPlaca,
+        documentos: d.documentos?.length || 0,
+      })),
+      ciot: ciots.map((d) => ({
+        id: d.id,
+        codigoCiot: d.codigoCiot,
+        status: d.status,
+        dataOperacao: d.dataOperacao,
+        transportadorNome: d.transportadorNome,
+        motoristaNome: d.motoristaNome,
+        valorOperacao: d.valorOperacao != null ? Number(d.valorOperacao) : null,
+      })),
       canceladas: notasComMotivo
         .filter((n) => n.status === STATUS.CANCELADA)
         .map((n) => ({
@@ -568,5 +662,9 @@ router.post("/fechamento/pacote", async (req, res) => {
     handleRouteError(res, error);
   }
 });
+
+router.use("/cte", require("./fiscalCte"));
+router.use("/mdfe", require("./fiscalMdfe"));
+router.use("/ciot", require("./fiscalCiot"));
 
 module.exports = router;

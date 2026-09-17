@@ -70,6 +70,37 @@ function tenantAllowsNfe(slug) {
   return getNfeTenantSlugs().includes(String(slug).trim().toLowerCase());
 }
 
+/** CT-e / MDF-e / CIOT: opt-in por env (fallback). Preferir ConfigSistema. */
+function getSlugList(envKey) {
+  const multi = process.env[envKey];
+  if (multi && String(multi).trim()) {
+    return [
+      ...new Set(
+        String(multi)
+          .split(/[,;]/)
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+  }
+  return [];
+}
+
+function tenantAllowsCte(slug) {
+  if (!slug) return false;
+  return getSlugList("CTE_TENANT_SLUGS").includes(String(slug).trim().toLowerCase());
+}
+
+function tenantAllowsMdfe(slug) {
+  if (!slug) return false;
+  return getSlugList("MDFE_TENANT_SLUGS").includes(String(slug).trim().toLowerCase());
+}
+
+function tenantAllowsCiot(slug) {
+  if (!slug) return false;
+  return getSlugList("CIOT_TENANT_SLUGS").includes(String(slug).trim().toLowerCase());
+}
+
 module.exports = {
   getClientCpfTenantSlugs,
   getNoFreteTenantSlugs,
@@ -78,4 +109,7 @@ module.exports = {
   tenantAllowsFrete,
   tenantFretePagoDefault,
   tenantAllowsNfe,
+  tenantAllowsCte,
+  tenantAllowsMdfe,
+  tenantAllowsCiot,
 };

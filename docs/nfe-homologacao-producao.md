@@ -103,3 +103,6 @@ Em ambiente de **homologação**, a UI exibe o aviso de demonstração sem valid
 - SPED / obrigações acessórias
 - Persistência local do XML (hoje o XML é obtido via URL do provedor no momento do download)
 - Alíquotas/valores de ICMS, PIS e COFINS no cadastro (o sistema envia/exibe NCM, CFOP, CST/CSOSN)
+- Integração IPEF real para CIOT (ver [fiscal-cte-mdfe-ciot.md](fiscal-cte-mdfe-ciot.md))
+
+CT-e e MDF-e: ver [fiscal-cte-mdfe-ciot.md](fiscal-cte-mdfe-ciot.md).

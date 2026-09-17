@@ -61,6 +61,9 @@ export default function LoginPage() {
             frete: !!res.features.frete,
             fretePagoDefault: !!res.features.fretePagoDefault,
             nfe: !!res.features.nfe,
+            cte: !!res.features.cte,
+            mdfe: !!res.features.mdfe,
+            ciot: !!res.features.ciot,
           },
           res.user.tenantId ?? res.tenant.id,
         );

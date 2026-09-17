@@ -152,6 +152,9 @@ app.use("/api/auth", require("./routes/auth"));
 
 // Webhook do provedor NF-e (sem JWT; autenticado por NFE_WEBHOOK_SECRET)
 app.use("/api/webhooks/nfe", require("./routes/webhooksNfe"));
+const { cteRouter, mdfeRouter } = require("./routes/webhooksFiscalTransporte");
+app.use("/api/webhooks/cte", cteRouter);
+app.use("/api/webhooks/mdfe", mdfeRouter);
 
 // API protegida: multi-tenant + JWT (ou AUTH_DISABLED=true em desenvolvimento)
 app.use("/api/clientes", requireTenantUser, requireNavKey("clientes"), require("./routes/clientes"));

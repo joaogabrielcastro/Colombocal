@@ -39,6 +39,9 @@ export function fetchTenantFeatures(force = false): Promise<TenantFeatures> {
         frete: !!r.features?.frete,
         fretePagoDefault: !!r.features?.fretePagoDefault,
         nfe: !!r.features?.nfe,
+        cte: !!r.features?.cte,
+        mdfe: !!r.features?.mdfe,
+        ciot: !!r.features?.ciot,
       };
       const meTid = Number(r.user?.tenantId) || tid;
       setTenantFeaturesCache(next, meTid);
@@ -101,5 +104,10 @@ export function useTenantFeatures() {
     clienteCpfEnabled: features.clienteCpf,
     fretePagoDefault: features.fretePagoDefault,
     nfeEnabled: features.nfe,
+    cteEnabled: features.cte,
+    mdfeEnabled: features.mdfe,
+    ciotEnabled: features.ciot,
+    fiscalEnabled:
+      features.nfe || features.cte || features.mdfe || features.ciot,
   };
 }
