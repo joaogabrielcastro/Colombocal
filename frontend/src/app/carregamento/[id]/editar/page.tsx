@@ -31,6 +31,7 @@ type OcDetail = OrdemCarregamentoPrintData & {
   id: number;
   clienteId?: number | null;
   motoristaId?: number | null;
+  vendaId?: number | null;
   itens: {
     id?: number;
     descricao: string;
@@ -62,6 +63,7 @@ export default function EditarOcPage() {
 
   const [clienteId, setClienteId] = useState("");
   const [motoristaId, setMotoristaId] = useState("");
+  const [vendaId, setVendaId] = useState<number | null>(null);
   const [pedido, setPedido] = useState("");
   const [dataEmissao, setDataEmissao] = useState(localDateInputValue());
   const [observacoes, setObservacoes] = useState("");
@@ -81,6 +83,7 @@ export default function EditarOcPage() {
         setOrdem(oc);
         setClienteId(oc.clienteId ? String(oc.clienteId) : "");
         setMotoristaId(oc.motoristaId ? String(oc.motoristaId) : "");
+        setVendaId(oc.vendaId ?? null);
         setPedido(oc.pedido || "");
         setDataEmissao(toInputDate(oc.dataEmissao) || localDateInputValue());
         setObservacoes(oc.observacoes || "");
@@ -199,6 +202,7 @@ export default function EditarOcPage() {
           motoristaNome: motorista?.nome || ordem?.motoristaNome || null,
           motoristaPlaca: motorista?.placa || ordem?.motoristaPlaca || null,
           pedido: pedido.trim() || null,
+          vendaId,
           dataEmissao,
           observacoes: observacoes.trim() || null,
           itens: itensValidos,
@@ -277,8 +281,31 @@ export default function EditarOcPage() {
               <input
                 className="input-field"
                 value={pedido}
-                onChange={(e) => setPedido(e.target.value)}
+                onChange={(e) => {
+                  setPedido(e.target.value);
+                  if (vendaId) setVendaId(null);
+                }}
+                placeholder="Opcional"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                {vendaId ? (
+                  <>
+                    Vinculada à venda #{pedido.trim() || vendaId}.{" "}
+                    <button
+                      type="button"
+                      className="text-blue-700 hover:underline font-medium"
+                      onClick={() => {
+                        setVendaId(null);
+                        toast.message("Venda desvinculada");
+                      }}
+                    >
+                      Desvincular
+                    </button>
+                  </>
+                ) : (
+                  "Opcional — sem vínculo a venda, frete ou financeiro."
+                )}
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

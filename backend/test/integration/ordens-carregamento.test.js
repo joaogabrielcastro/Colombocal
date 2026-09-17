@@ -154,6 +154,26 @@ test("PUT /api/ordens-carregamento/:id corrige quantidade já gravada", async ()
   assert.equal(qtd(updated.body.itens[0]), 160);
 });
 
+test("PUT desvincula vendaId sem apagar a OC", async () => {
+  const venda = await criarVenda({ produto: ctx.calSaco, quantidade: 10 });
+  assert.equal(venda.status, 201);
+
+  const oc = await agent.post("/api/ordens-carregamento").send({
+    clienteNome: "Pátio misto",
+    vendaId: venda.body.id,
+    itens: [{ descricao: "Cal", quantidade: 50, unidade: "SAC" }],
+  });
+  assert.equal(oc.status, 201);
+  assert.equal(oc.body.vendaId, venda.body.id);
+
+  const unlinked = await agent
+    .put(`/api/ordens-carregamento/${oc.body.id}`)
+    .send({ vendaId: null, pedido: null });
+  assert.equal(unlinked.status, 200);
+  assert.equal(unlinked.body.vendaId, null);
+  assert.equal(unlinked.body.pedido, null);
+});
+
 test("GET lista e detalhe; DELETE remove a OC", async () => {
   const created = await agent.post("/api/ordens-carregamento").send({
     clienteNome: "Pátio",

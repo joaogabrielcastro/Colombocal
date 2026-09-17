@@ -293,6 +293,24 @@ router.put("/:id", async (req, res) => {
       body.doct !== undefined ? strOrNull(body.doct) : existing.doct;
     const pedido =
       body.pedido !== undefined ? strOrNull(body.pedido) : existing.pedido;
+    let vendaId = existing.vendaId;
+    if (body.vendaId !== undefined) {
+      if (body.vendaId === null || body.vendaId === "") {
+        vendaId = null;
+      } else {
+        const parsed = parseInt(body.vendaId, 10);
+        vendaId = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        if (vendaId) {
+          const vendaOk = await prisma.venda.findFirst({
+            where: { id: vendaId, tenantId },
+            select: { id: true },
+          });
+          if (!vendaOk) {
+            return res.status(404).json({ error: "Venda não encontrada" });
+          }
+        }
+      }
+    }
     const observacoes =
       body.observacoes !== undefined
         ? strOrNull(body.observacoes)
@@ -344,6 +362,7 @@ router.put("/:id", async (req, res) => {
           dataEmissao,
           doct,
           pedido,
+          vendaId,
           clienteId,
           clienteNome,
           clienteEndereco,

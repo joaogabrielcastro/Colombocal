@@ -77,8 +77,6 @@ function NovaOcForm() {
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<ItemForm[]>([emptyItem()]);
   const buscaSeq = useRef(0);
-  const pedidoRef = useRef(pedido);
-  pedidoRef.current = pedido;
 
   useEffect(() => {
     let active = true;
@@ -196,28 +194,8 @@ function NovaOcForm() {
     [aplicarVenda, pedido],
   );
 
-  const puxarUltimaVendaDoCliente = useCallback(
-    async (cid: string) => {
-      if (!cid) return;
-      const seq = ++buscaSeq.current;
-      try {
-        const lista = await api.get<Venda[]>(`/vendas?clienteId=${cid}&take=1`);
-        if (seq !== buscaSeq.current) return;
-        if (pedidoRef.current.trim()) return;
-        const v = Array.isArray(lista) ? lista[0] : null;
-        if (!v) {
-          setVendaId(null);
-          return;
-        }
-        aplicarVenda(v);
-      } catch {
-        /* cliente sem vendas: deixa o formulário em branco */
-      }
-    },
-    [aplicarVenda],
-  );
-
   useEffect(() => {
+    // Só pré-preenche venda quando a URL pede explicitamente (?ordem= / ?vendaId=).
     if (preOrdem) {
       void buscarVendaPorOrdem(preOrdem);
       return;
@@ -234,20 +212,12 @@ function NovaOcForm() {
         if (seq !== buscaSeq.current) return;
         reportApiError(e, { title: "Não foi possível carregar a venda" });
       });
-    // Só na entrada da tela (query string).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preOrdem, preVendaId]);
 
-  const onChangeCliente = (id: string) => {
-    setClienteId(id);
+  const desvincularVenda = () => {
     setVendaId(null);
-    if (!id) return;
-    const termo = pedidoRef.current.trim().replace(/^#/, "");
-    if (termo) {
-      void buscarVendaPorOrdem(termo);
-      return;
-    }
-    void puxarUltimaVendaDoCliente(id);
+    toast.message("Venda desvinculada — a OC segue só como documento do pátio.");
   };
 
   const loadClienteOptions = useCallback(
@@ -397,7 +367,7 @@ function NovaOcForm() {
             <SearchableSelect
               label="Cliente"
               value={clienteId}
-              onChange={onChangeCliente}
+              onChange={setClienteId}
               loadOptions={loadClienteOptions}
               loadLabelById={loadClienteLabelById}
               minChars={0}
@@ -422,13 +392,8 @@ function NovaOcForm() {
                   value={pedido}
                   onChange={(e) => {
                     setPedido(e.target.value.replace(/^#/, ""));
-                    setVendaId(null);
-                  }}
-                  onBlur={() => {
-                    const termo = pedido.trim().replace(/^#/, "");
-                    if (/^\d+$/.test(termo) && !vendaId) {
-                      void buscarVendaPorOrdem(termo);
-                    }
+                    // Digitar sozinho não vincula — só Buscar / Enter.
+                    if (vendaId) setVendaId(null);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -436,23 +401,34 @@ function NovaOcForm() {
                       void buscarVendaPorOrdem();
                     }
                   }}
-                  placeholder="Ex.: 303"
+                  placeholder="Opcional"
                 />
                 <button
                   type="button"
                   className="btn-secondary shrink-0"
                   disabled={buscandoVenda || !pedido.trim()}
                   onClick={() => void buscarVendaPorOrdem()}
-                  title="Buscar venda e preencher a ordem"
+                  title="Buscar venda e preencher a ordem (opcional)"
                 >
                   <MagnifyingGlassIcon className="w-4 h-4" />
                   {buscandoVenda ? "…" : "Buscar"}
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {vendaId
-                  ? `Vinculada à venda #${pedido.trim() || vendaId}`
-                  : "Enter ou Buscar puxa cliente, motorista e produtos da venda."}
+                {vendaId ? (
+                  <>
+                    Vinculada à venda #{pedido.trim() || vendaId}.{" "}
+                    <button
+                      type="button"
+                      className="text-blue-700 hover:underline font-medium"
+                      onClick={desvincularVenda}
+                    >
+                      Desvincular
+                    </button>
+                  </>
+                ) : (
+                  "Opcional. Deixe vazio para OC só de pátio (carga mista). Buscar / Enter só se quiser puxar uma venda."
+                )}
               </p>
             </div>
             <div>
