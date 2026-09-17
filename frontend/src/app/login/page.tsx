@@ -47,6 +47,9 @@ export default function LoginPage() {
           frete?: boolean;
           fretePagoDefault?: boolean;
           nfe?: boolean;
+          cte?: boolean;
+          mdfe?: boolean;
+          ciot?: boolean;
         };
       }>('/auth/login', {
         email: email.trim().toLowerCase(),
