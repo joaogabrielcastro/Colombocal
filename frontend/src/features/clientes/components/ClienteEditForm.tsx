@@ -12,6 +12,7 @@ type Props = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   loadVendedorOptions: (query: string) => Promise<{ id: number; label: string }[]>;
   loadVendedorLabelById: (id: string) => Promise<string | null>;
+  condicoesPagamento?: { id: number; nome: string; diasParcelas: number[] }[];
 };
 
 export function ClienteEditForm({
@@ -24,6 +25,7 @@ export function ClienteEditForm({
   onSubmit,
   loadVendedorOptions,
   loadVendedorLabelById,
+  condicoesPagamento = [],
 }: Props) {
   return (
     <ClienteForm
@@ -34,6 +36,7 @@ export function ClienteEditForm({
       nfeEnabled={nfeEnabled}
       loadVendedorOptions={loadVendedorOptions}
       loadVendedorLabelById={loadVendedorLabelById}
+      condicoesPagamento={condicoesPagamento}
       erro={erro}
       salvando={salvando}
       onSubmit={onSubmit}

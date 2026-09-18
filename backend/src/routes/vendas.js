@@ -25,6 +25,10 @@ const { tenantFretePagoDefault } = require("../constants/tenantFeatures");
 const {
   upsertFreteMovimentoFromVenda,
 } = require("../services/syncFreteMovimentoVenda");
+const { montarParcelas } = require("../domain/financeiro/parcelamento");
+const {
+  resolveCondicaoPagamento,
+} = require("../services/condicaoPagamento");
 const {
   parsePagination,
   setPaginationHeaders,
@@ -359,8 +363,12 @@ router.get("/:id", async (req, res) => {
             },
           },
         },
-        titulos: { orderBy: { vencimento: "asc" } },
+        titulos: {
+          orderBy: { vencimento: "asc" },
+          include: { cobranca: true },
+        },
         fretes: { orderBy: { data: "desc" } },
+        cobrancasBancarias: { orderBy: { vencimento: "asc" } },
         ordensCarregamento: {
           orderBy: { dataEmissao: "desc" },
           select: {
@@ -525,6 +533,8 @@ router.post("/", async (req, res) => {
       itens: body.itens,
       freteEnabled,
       atualizarClienteBody: body.atualizarCliente ?? null,
+      condicaoPagamentoId: body.condicaoPagamentoId ?? null,
+      bancoCobranca: body.bancoCobranca ?? null,
       req,
     });
 
@@ -719,6 +729,21 @@ router.put("/:id", async (req, res) => {
         where: { vendaId: id, tenantId },
       });
 
+      const condicao = await resolveCondicaoPagamento(tx, {
+        tenantId,
+        condicaoPagamentoId: body.condicaoPagamentoId,
+        clienteCondicaoPagamentoId: cliente.condicaoPagamentoId,
+      });
+      const diasParcelas = Array.isArray(condicao?.diasParcelas)
+        ? condicao.diasParcelas
+        : Array.isArray(existente.condicaoPagamentoDias)
+          ? existente.condicaoPagamentoDias
+          : [30];
+      const bancoEfetivo =
+        body.bancoCobranca !== undefined
+          ? body.bancoCobranca
+          : existente.bancoCobranca ?? cliente.bancoCobrancaPadrao ?? null;
+
       const vendaAtualizada = await tx.venda.update({
         where: { id },
         data: {
@@ -738,6 +763,10 @@ router.put("/:id", async (req, res) => {
             body.observacoes !== undefined
               ? body.observacoes
               : existente.observacoes,
+          condicaoPagamentoId: condicao?.id ?? null,
+          condicaoPagamentoNome: condicao?.nome ?? existente.condicaoPagamentoNome,
+          condicaoPagamentoDias: diasParcelas,
+          bancoCobranca: bancoEfetivo,
           itens: {
             create: itensComComissao.map((item) => ({
               produtoId: item.produtoId,
@@ -765,38 +794,56 @@ router.put("/:id", async (req, res) => {
         });
       }
 
-      // SSOT: título = cobrança da venda (valorTotal/produtos). Upsert se legado sem título.
+      // Regenera parcelas se nenhum título tiver pagamento e sem cobrança registrada.
       const titulosExistentes = existente.titulos || [];
-      if (titulosExistentes.length === 0) {
+      for (const titulo of titulosExistentes) {
+        const vp = parseFloat(String(titulo.valorPago ?? 0));
+        if (vp > 0) {
+          throw new Error(
+            "Título com pagamento parcial impede edição da venda",
+          );
+        }
+      }
+      const cobrancasReg = await tx.cobrancaBancaria.findMany({
+        where: {
+          vendaId: id,
+          tenantId,
+          status: { in: ["REGISTRADA", "DISPONIVEL", "PROCESSANDO"] },
+        },
+        select: { id: true },
+        take: 1,
+      });
+      if (cobrancasReg.length > 0) {
+        throw new Error(
+          "Venda com cobrança bancária registrada não pode regenerar parcelas",
+        );
+      }
+      if (titulosExistentes.length > 0) {
+        await tx.tituloReceber.deleteMany({
+          where: { vendaId: id, tenantId },
+        });
+      }
+      const parcelas = montarParcelas({
+        valorTotal,
+        dias: diasParcelas,
+        dataBase: dataEfetivaVenda,
+        numeroVenda,
+      });
+      for (const p of parcelas) {
         await tx.tituloReceber.create({
           data: {
             tenantId,
             clienteId: clienteIdNum,
             vendaId: id,
-            numero: `VENDA-${numeroVenda}`,
-            vencimento: addDays(dataEfetivaVenda, 30),
-            valorOriginal: valorTotal,
+            numero: p.numero,
+            vencimento: p.vencimento,
+            valorOriginal: p.valor,
             status: "aberto",
-            observacoes: `Titulo gerado na edicao da venda #${numeroVenda}`,
+            parcelaNumero: p.parcelaNumero,
+            parcelaTotal: p.parcelaTotal,
+            observacoes: `Titulo gerado na edicao da venda #${numeroVenda} (${p.parcelaNumero}/${p.parcelaTotal})`,
           },
         });
-      } else {
-        for (const titulo of titulosExistentes) {
-          const vp = parseFloat(String(titulo.valorPago ?? 0));
-          if (vp > 0) {
-            throw new Error(
-              "Título com pagamento parcial impede edição da venda",
-            );
-          }
-          await tx.tituloReceber.updateMany({
-            where: { id: titulo.id, tenantId: req.tenantId },
-            data: {
-              clienteId: clienteIdNum,
-              valorOriginal: valorTotal,
-              vencimento: addDays(dataEfetivaVenda, 30),
-            },
-          });
-        }
       }
 
       const rd =

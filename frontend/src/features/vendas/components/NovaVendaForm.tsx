@@ -98,6 +98,20 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [erro, setErro] = useState("");
   const [mostrarDetalhes, setMostrarDetalhes] = useState(isEdit);
   const [emissaoNfe, setEmissaoNfe] = useState<"sem" | "com">("sem");
+  const [condicaoPagamentoId, setCondicaoPagamentoId] = useState("");
+  const [bancoCobranca, setBancoCobranca] = useState("");
+  const [condicoesPagamento, setCondicoesPagamento] = useState<
+    { id: number; nome: string; diasParcelas: number[] }[]
+  >([]);
+
+  useEffect(() => {
+    void api
+      .get<{ id: number; nome: string; diasParcelas: number[] }[]>(
+        "/config/condicoes-pagamento",
+      )
+      .then(setCondicoesPagamento)
+      .catch(() => setCondicoesPagamento([]));
+  }, []);
 
   useEffect(() => {
     if (!isEdit && fretePagoDefault) {
@@ -143,6 +157,12 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         const rd = v.fretes?.[0]?.reciboData;
         setFreteReciboData(rd ? toInputDate(rd) : localDateInputValue());
         setSelectedCliente(v.cliente);
+        if (v.condicaoPagamentoId) {
+          setCondicaoPagamentoId(String(v.condicaoPagamentoId));
+        }
+        if (v.bancoCobranca) {
+          setBancoCobranca(String(v.bancoCobranca));
+        }
         setItens(
           v.itens.map((item) => ({
             produtoId: String(item.produtoId),
@@ -197,6 +217,14 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         setFreteRefSaco(saco);
         setFreteRefTonelada(ton);
         if (cli.vendedorId) setVendedorId(String(cli.vendedorId));
+        if (!isEdit) {
+          if (cli.condicaoPagamentoId) {
+            setCondicaoPagamentoId(String(cli.condicaoPagamentoId));
+          }
+          if (cli.bancoCobrancaPadrao) {
+            setBancoCobranca(String(cli.bancoCobrancaPadrao));
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setSelectedCliente(null);
@@ -205,7 +233,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [clienteId]);
+  }, [clienteId, isEdit]);
 
   const clienteObs = (selectedCliente?.observacoes ?? "").trim();
   const clienteCarregado =
@@ -409,6 +437,31 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const fretePorSacoVal = parseFloat(fretePorSaco || "0");
   const fretePorTonVal = parseFloat(fretePorTonelada || "0");
 
+  const condicaoSelecionada = condicoesPagamento.find(
+    (c) => String(c.id) === String(condicaoPagamentoId),
+  );
+  const diasParcelasPreview =
+    condicaoSelecionada?.diasParcelas?.length
+      ? condicaoSelecionada.diasParcelas
+      : [30];
+  const parcelasPreview = (() => {
+    const n = diasParcelasPreview.length;
+    const totalCentavos = Math.round(subtotal * 100);
+    const base = Math.floor(totalCentavos / n);
+    const resto = totalCentavos - base * n;
+    return diasParcelasPreview.map((dias, i) => {
+      const centavos = i === n - 1 ? base + resto : base;
+      const venc = new Date(dataVenda || new Date());
+      venc.setDate(venc.getDate() + dias);
+      return {
+        parcela: `${i + 1}/${n}`,
+        dias,
+        valor: centavos / 100,
+        vencimento: venc.toISOString().slice(0, 10),
+      };
+    });
+  })();
+
   useEffect(() => {
     if (!freteEnabled) {
       setFrete("0");
@@ -446,6 +499,10 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       fretePorTonelada: Number.isFinite(fretePorTonVal) ? fretePorTonVal : 0,
       dataVenda,
       observacoes: observacoes || null,
+      condicaoPagamentoId: condicaoPagamentoId
+        ? parseInt(condicaoPagamentoId, 10)
+        : null,
+      bancoCobranca: bancoCobranca || null,
       itens: itensValidos.map((i) => ({
         produtoId: parseInt(i.produtoId, 10),
         quantidade: parseFloat(i.quantidade),
@@ -641,6 +698,60 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
               placeholder="Nome, fantasia, CNPJ ou cidade…"
               data-testid="nova-venda-cliente"
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Condição de pagamento
+                </label>
+                <select
+                  className="input-field"
+                  value={condicaoPagamentoId}
+                  onChange={(e) => setCondicaoPagamentoId(e.target.value)}
+                  data-testid="nova-venda-condicao"
+                >
+                  <option value="">Padrão (30 dias)</option>
+                  {condicoesPagamento.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Banco para cobrança
+                </label>
+                <select
+                  className="input-field"
+                  value={bancoCobranca}
+                  onChange={(e) => setBancoCobranca(e.target.value)}
+                  data-testid="nova-venda-banco"
+                >
+                  <option value="">Nenhum</option>
+                  <option value="BRADESCO">Bradesco</option>
+                  <option value="SICREDI">Sicredi</option>
+                </select>
+              </div>
+            </div>
+
+            {subtotal > 0 && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                <p className="font-medium text-gray-800 mb-2">
+                  Parcelas previstas ({condicaoSelecionada?.nome || "30"})
+                </p>
+                <ul className="space-y-1 text-gray-700">
+                  {parcelasPreview.map((p) => (
+                    <li key={p.parcela} className="flex justify-between gap-2">
+                      <span>
+                        {p.parcela} · +{p.dias}d · {p.vencimento}
+                      </span>
+                      <span className="font-medium">{formatMoney(p.valor)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {formBloqueadoPorObs && precisaAckObs ? (
               <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

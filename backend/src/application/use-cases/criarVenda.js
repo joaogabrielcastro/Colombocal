@@ -16,9 +16,21 @@ const {
   calcularFreteAutomatico,
 } = require("../../domain/frete/calcularFrete");
 const { tenantFretePagoDefault } = require("../../constants/tenantFeatures");
+const { montarParcelas } = require("../../domain/financeiro/parcelamento");
+const {
+  resolveCondicaoPagamento,
+} = require("../../services/condicaoPagamento");
 
 function addDays(date, days) {
   return addDaysCalendar(date, days);
+}
+
+const BANCOS_COBRANCA = new Set(["BRADESCO", "SICREDI"]);
+
+function normalizarBancoCobranca(v) {
+  if (v == null || v === "") return null;
+  const s = String(v).trim().toUpperCase();
+  return BANCOS_COBRANCA.has(s) ? s : null;
 }
 
 /** Classe de advisory lock só para numeração de venda (não colide com outros locks da app). */
@@ -55,6 +67,8 @@ async function criarVenda(prisma, payload) {
     atualizarClienteBody = null,
     auditActor = null,
     req = null,
+    condicaoPagamentoId = null,
+    bancoCobranca = null,
   } = payload;
 
   if (tenantId == null) {
@@ -188,6 +202,18 @@ async function criarVenda(prisma, payload) {
     });
     const numeroVenda = (ultimaNum?.numeroVenda ?? 0) + 1;
 
+    const condicao = await resolveCondicaoPagamento(tx, {
+      tenantId,
+      condicaoPagamentoId,
+      clienteCondicaoPagamentoId: cliente.condicaoPagamentoId,
+    });
+    const diasParcelas = Array.isArray(condicao?.diasParcelas)
+      ? condicao.diasParcelas
+      : [30];
+    const bancoEfetivo =
+      normalizarBancoCobranca(bancoCobranca) ??
+      normalizarBancoCobranca(cliente.bancoCobrancaPadrao);
+
     const novaVenda = await tx.venda.create({
       data: {
         tenantId,
@@ -205,6 +231,10 @@ async function criarVenda(prisma, payload) {
         valorTotal,
         dataVenda: dataEfetivaVenda,
         observacoes,
+        condicaoPagamentoId: condicao?.id ?? null,
+        condicaoPagamentoNome: condicao?.nome ?? "30",
+        condicaoPagamentoDias: diasParcelas,
+        bancoCobranca: bancoEfetivo,
         itens: {
           create: itensComComissao.map((item) => ({
             produtoId: item.produtoId,
@@ -219,20 +249,29 @@ async function criarVenda(prisma, payload) {
       include: { itens: true },
     });
 
-    // SSOT de cobrança: título = conta a receber da venda (produtos / valorTotal).
-    // Frete da venda NÃO entra no título — fica só em Venda.frete / FreteMovimento.
-    await tx.tituloReceber.create({
-      data: {
-        tenantId,
-        clienteId,
-        vendaId: novaVenda.id,
-        numero: `VENDA-${numeroVenda}`,
-        vencimento: addDays(dataEfetivaVenda, 30),
-        valorOriginal: valorTotal,
-        status: "aberto",
-        observacoes: `Titulo gerado automaticamente para venda #${numeroVenda}`,
-      },
+    // SSOT: títulos = parcelas da venda (produtos / valorTotal). Frete NÃO entra.
+    const parcelas = montarParcelas({
+      valorTotal,
+      dias: diasParcelas,
+      dataBase: dataEfetivaVenda,
+      numeroVenda,
     });
+    for (const p of parcelas) {
+      await tx.tituloReceber.create({
+        data: {
+          tenantId,
+          clienteId,
+          vendaId: novaVenda.id,
+          numero: p.numero,
+          vencimento: p.vencimento,
+          valorOriginal: p.valor,
+          status: "aberto",
+          parcelaNumero: p.parcelaNumero,
+          parcelaTotal: p.parcelaTotal,
+          observacoes: `Titulo gerado automaticamente para venda #${numeroVenda} (${p.parcelaNumero}/${p.parcelaTotal})`,
+        },
+      });
+    }
 
     if (freteFinal > 0) {
       await upsertFreteMovimentoFromVenda(tx, {
@@ -263,6 +302,10 @@ async function criarVenda(prisma, payload) {
         fretePorSaco: fretePorSacoAplicado,
         fretePorTonelada: fretePorTonAplicado,
         itens: itensValidos.length,
+        condicaoPagamentoNome: condicao?.nome,
+        condicaoPagamentoDias: diasParcelas,
+        bancoCobranca: bancoEfetivo,
+        parcelas: parcelas.length,
       },
     });
 

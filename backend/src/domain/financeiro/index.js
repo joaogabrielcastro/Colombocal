@@ -3,4 +3,5 @@ module.exports = {
   ...require("./saldoCliente"),
   ...require("./saldoVenda"),
   ...require("./agingTitulos"),
+  ...require("./parcelamento"),
 };

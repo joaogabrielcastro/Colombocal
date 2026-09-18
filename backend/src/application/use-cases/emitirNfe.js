@@ -184,6 +184,7 @@ async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
   try {
     const resposta = await nfeProvider.emitir({ ref: nota.refProvedor, payload });
     const patch = aplicarRespostaProvedor(resposta);
+    const statusAnterior = nota.status;
     const atualizada = await prisma.notaFiscal.update({
       where: { id: nota.id },
       data: {
@@ -208,6 +209,13 @@ async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
         payload: { status: atualizada.status, refProvedor: nota.refProvedor },
       });
     }
+    const { onNfeAutorizada } = require("../../domain/nfe/onNfeAutorizada");
+    await onNfeAutorizada(prisma, {
+      tenantId,
+      vendaId,
+      statusAnterior,
+      statusNovo: atualizada.status,
+    });
     return atualizada;
   } catch (err) {
     if (isErroInconclusivoNfe(err)) {

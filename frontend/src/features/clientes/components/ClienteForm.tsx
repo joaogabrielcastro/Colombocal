@@ -21,6 +21,8 @@ export type ClienteFormState = {
   fretePadrao?: string | number;
   vendedorId?: string | number | null;
   comissaoFixaPercentual?: string | number | null;
+  condicaoPagamentoId?: string | number | null;
+  bancoCobrancaPadrao?: string | null;
   inscricaoEstadual?: string | null;
   indIEDest?: string | number | null;
   cep?: string | null;
@@ -45,6 +47,7 @@ type Props = {
   onBuscarCnpj?: () => void;
   loadVendedorOptions: (q: string) => Promise<{ id: number; label: string }[]>;
   loadVendedorLabelById: (id: string) => Promise<string | null>;
+  condicoesPagamento?: { id: number; nome: string; diasParcelas: number[] }[];
   erro: string;
   salvando: boolean;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
@@ -84,6 +87,7 @@ export function ClienteForm({
   onBuscarCnpj,
   loadVendedorOptions,
   loadVendedorLabelById,
+  condicoesPagamento = [],
   erro,
   salvando,
   onSubmit,
@@ -347,6 +351,49 @@ export function ClienteForm({
             placeholder="Nenhum — digite para buscar vendedor"
             emptyHint="Lista os primeiros vendedores ativos; refine digitando o nome."
           />
+
+          <Field label="Condição de pagamento padrão">
+            <select
+              className="input-field"
+              value={
+                form.condicaoPagamentoId == null || form.condicaoPagamentoId === ''
+                  ? ''
+                  : String(form.condicaoPagamentoId)
+              }
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  condicaoPagamentoId: e.target.value
+                    ? parseInt(e.target.value, 10)
+                    : null,
+                }))
+              }
+            >
+              <option value="">Padrão do sistema (30 dias)</option>
+              {condicoesPagamento.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Banco padrão para cobrança">
+            <select
+              className="input-field"
+              value={form.bancoCobrancaPadrao ?? ''}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  bancoCobrancaPadrao: e.target.value || null,
+                }))
+              }
+            >
+              <option value="">Nenhum</option>
+              <option value="BRADESCO">Bradesco</option>
+              <option value="SICREDI">Sicredi</option>
+            </select>
+          </Field>
 
           <Field label="Comissão fixa (%)">
             <input

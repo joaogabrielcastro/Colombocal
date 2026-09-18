@@ -170,11 +170,13 @@ app.use(
   require("./routes/ordens-carregamento"),
 );
 app.use("/api/config", requireTenantUser, require("./routes/config"));
+app.use("/api/config", requireTenantUser, require("./routes/configBancaria"));
 app.use("/api/users", requireTenantUser, requireAdmin, require("./routes/users"));
 app.use("/api/auditoria", requireTenantUser, require("./routes/auditoria"));
 app.use("/api/cheques", requireTenantUser, requireNavKey("financeiro"), require("./routes/cheques"));
 app.use("/api/pagamentos", requireTenantUser, requireNavKey("financeiro"), require("./routes/pagamentos"));
 app.use("/api/recebimentos", requireTenantUser, requireNavKey("financeiro"), require("./routes/recebimentos"));
+app.use("/api/cobrancas", requireTenantUser, requireNavKey("financeiro"), require("./routes/cobrancas"));
 app.use("/api/relatorios", requireTenantUser, require("./routes/relatorios"));
 app.use(
   "/api/fiscal",

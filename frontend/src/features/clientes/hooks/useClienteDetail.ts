@@ -31,19 +31,28 @@ export function useClienteDetail(id: string, _freteEnabled: boolean, options: Op
   const [filtroChqFim, setFiltroChqFim] = useState("");
   const [buscaChq, setBuscaChq] = useState("");
   const [reconciliando, setReconciliando] = useState(false);
+  const [condicoesPagamento, setCondicoesPagamento] = useState<
+    { id: number; nome: string; diasParcelas: number[] }[]
+  >([]);
 
   const carregarPrincipal = useCallback(async () => {
     setLoading(true);
     try {
-      const [contaData, prodData] = await Promise.all([
+      const [contaData, prodData, condicoes] = await Promise.all([
         api.get<ContaData>(`/clientes/${id}/conta`),
         api.get<ProdutoPreco[]>(`/clientes/${id}/precos`),
+        api.get<{ id: number; nome: string; diasParcelas: number[] }[]>(
+          "/config/condicoes-pagamento",
+        ).catch(() => []),
       ]);
       setConta(contaData);
+      setCondicoesPagamento(condicoes);
       setForm({
         ...contaData.cliente,
         vendedorId: contaData.cliente.vendedorId ?? undefined,
         comissaoFixaPercentual: contaData.cliente.comissaoFixaPercentual ?? undefined,
+        condicaoPagamentoId: contaData.cliente.condicaoPagamentoId ?? null,
+        bancoCobrancaPadrao: contaData.cliente.bancoCobrancaPadrao ?? null,
       });
       setProdutos(prodData);
       const mapa: Record<number, string> = {};
@@ -146,6 +155,8 @@ export function useClienteDetail(id: string, _freteEnabled: boolean, options: Op
         ...form,
         vendedorId: form.vendedorId == null ? null : Number(form.vendedorId),
         comissaoFixaPercentual: form.comissaoFixaPercentual == null ? null : parseFloat(String(form.comissaoFixaPercentual).replace(",", ".")),
+        condicaoPagamentoId: form.condicaoPagamentoId ?? null,
+        bancoCobrancaPadrao: form.bancoCobrancaPadrao ?? null,
       });
       await carregarPrincipal();
       options.onClienteSalvo?.();
@@ -160,7 +171,7 @@ export function useClienteDetail(id: string, _freteEnabled: boolean, options: Op
   return {
     conta, produtos, cheques, loading, form, erro, salvandoForm, precosEdit, salvandoPrecos,
     comissoesData, comissoesEdit, salvandoComissoes, filtroChqIni, filtroChqFim, buscaChq,
-    reconciliando,
+    reconciliando, condicoesPagamento,
     setForm, setPrecosEdit, setComissoesEdit, setFiltroChqIni, setFiltroChqFim, setBuscaChq,
     carregarPrincipal, carregarCheques, carregarComissoes,
     handleReconciliarRecebiveis, handleSalvarPrecos,

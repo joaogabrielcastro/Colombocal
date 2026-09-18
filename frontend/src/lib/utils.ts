@@ -126,6 +126,9 @@ export interface Cliente {
   fretePadraoTonelada: number;
   vendedorId?: number | null;
   comissaoFixaPercentual?: number | null;
+  condicaoPagamentoId?: number | null;
+  bancoCobrancaPadrao?: string | null;
+  condicaoPagamento?: { id: number; nome: string; diasParcelas: number[] } | null;
   vendedor?: Vendedor | null;
   ativo: boolean;
   createdAt: string;
@@ -183,6 +186,10 @@ export interface Venda {
   valorTotal: number; // apenas produtos, sem frete
   dataVenda: string;
   observacoes?: string;
+  condicaoPagamentoId?: number | null;
+  condicaoPagamentoNome?: string | null;
+  condicaoPagamentoDias?: number[] | null;
+  bancoCobranca?: string | null;
   cliente: Cliente;
   vendedor: Vendedor;
   motorista?: Motorista;
@@ -190,6 +197,7 @@ export interface Venda {
   pagamentos?: Pagamento[];
   titulos?: TituloReceber[];
   fretes?: FreteMovimento[];
+  cobrancasBancarias?: CobrancaBancaria[];
   ordensCarregamento?: {
     id: number;
     numeroOc: number;
@@ -208,6 +216,36 @@ export interface Venda {
     numero?: string | null;
     valor?: number;
   }[];
+}
+
+export interface CobrancaBancaria {
+  id: number;
+  tituloId: number;
+  vendaId?: number | null;
+  clienteId: number;
+  banco: string;
+  status: string;
+  nossoNumero?: string | null;
+  linhaDigitavel?: string | null;
+  codigoBarras?: string | null;
+  valor: number;
+  vencimento: string;
+  refExterna?: string | null;
+  pdfRef?: string | null;
+  temPdf?: boolean;
+  ultimoErro?: string | null;
+  registradaEm?: string | null;
+  parcelaNumero?: number;
+  parcelaTotal?: number;
+  cliente?: { id: number; razaoSocial: string; nomeFantasia?: string | null };
+  venda?: { id: number; numeroVenda?: number | null };
+  titulo?: {
+    id: number;
+    numero?: string | null;
+    parcelaNumero?: number;
+    parcelaTotal?: number;
+    status?: string;
+  };
 }
 
 export interface NotaFiscal {
@@ -237,6 +275,9 @@ export interface TituloReceber {
   valorPago: number;
   status: "aberto" | "parcial" | "quitado";
   observacoes?: string;
+  parcelaNumero?: number;
+  parcelaTotal?: number;
+  cobranca?: CobrancaBancaria | null;
 }
 
 export interface FreteMovimento {

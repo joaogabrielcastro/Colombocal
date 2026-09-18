@@ -43,6 +43,22 @@ const atualizarClienteSchema = z
   .optional()
   .nullable();
 
+const bancoCobrancaSchema = z
+  .preprocess(
+    (v) => (v === "" || v === null || v === undefined ? null : v),
+    z
+      .union([
+        z.enum(["BRADESCO", "SICREDI", "bradesco", "sicredi"]),
+        z.null(),
+      ])
+      .optional()
+      .nullable(),
+  )
+  .transform((v) => {
+    if (v == null) return null;
+    return String(v).toUpperCase();
+  });
+
 const vendaCreateBase = {
   clienteId: z.coerce.number().int().positive(),
   vendedorId: z.coerce.number().int().positive(),
@@ -66,6 +82,13 @@ const vendaCreateBase = {
   observacoes: z.union([z.string(), z.null()]).optional(),
   itens: z.array(vendaItemSchema).min(1),
   atualizarCliente: atualizarClienteSchema,
+  condicaoPagamentoId: z
+    .preprocess(
+      (v) => (v === "" || v === null || v === undefined ? null : v),
+      z.coerce.number().int().positive().nullable(),
+    )
+    .optional(),
+  bancoCobranca: bancoCobrancaSchema.optional(),
 };
 
 /** POST /vendas — criação. emitirNfe não impede gravar a ordem se a nota falhar. */

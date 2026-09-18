@@ -6,6 +6,7 @@ const {
   isErroInconclusivoNfe,
   isNfeNaoEncontradaNoProvedor,
 } = require("../../domain/nfe/refNfe");
+const { onNfeAutorizada } = require("../../domain/nfe/onNfeAutorizada");
 
 function patchFromConsulta(nota, patch) {
   return {
@@ -31,6 +32,7 @@ async function sincronizarNotaSeProcessando(prisma, { nota, provider, emitente }
   if (!nota || nota.status !== STATUS.PROCESSANDO) {
     return { kind: "skip", nota };
   }
+  const statusAnterior = nota.status;
   const nfeProvider = provider || createNfeProvider({ emitente });
   try {
     const resposta = await nfeProvider.consultar({ ref: nota.refProvedor });
@@ -38,6 +40,12 @@ async function sincronizarNotaSeProcessando(prisma, { nota, provider, emitente }
     const atualizada = await prisma.notaFiscal.update({
       where: { id: nota.id },
       data: patchFromConsulta(nota, patch),
+    });
+    await onNfeAutorizada(prisma, {
+      tenantId: atualizada.tenantId,
+      vendaId: atualizada.vendaId,
+      statusAnterior,
+      statusNovo: atualizada.status,
     });
     return { kind: "ok", nota: atualizada };
   } catch (err) {
@@ -145,9 +153,10 @@ async function aplicarWebhookNfe(prisma, { ref, body }) {
       httpStatus: 404,
     });
   }
+  const statusAnterior = nota.status;
   const { mapStatusFocus } = require("../../domain/nfe/montarPayload");
   const status = mapStatusFocus(body?.status);
-  return prisma.notaFiscal.update({
+  const atualizada = await prisma.notaFiscal.update({
     where: { id: nota.id },
     data: {
       status,
@@ -163,6 +172,13 @@ async function aplicarWebhookNfe(prisma, { ref, body }) {
       canceladaEm: status === STATUS.CANCELADA ? new Date() : undefined,
     },
   });
+  await onNfeAutorizada(prisma, {
+    tenantId: atualizada.tenantId,
+    vendaId: atualizada.vendaId,
+    statusAnterior,
+    statusNovo: atualizada.status,
+  });
+  return atualizada;
 }
 
 module.exports = {

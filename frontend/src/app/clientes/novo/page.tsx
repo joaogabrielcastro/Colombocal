@@ -51,6 +51,8 @@ const initialForm: ClienteFormState = {
   fretePadraoTonelada: '',
   vendedorId: '',
   comissaoFixaPercentual: '',
+  condicaoPagamentoId: '',
+  bancoCobrancaPadrao: '',
 };
 
 export default function NovoClientePage() {
@@ -62,10 +64,22 @@ export default function NovoClientePage() {
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  const [condicoesPagamento, setCondicoesPagamento] = useState<
+    { id: number; nome: string; diasParcelas: number[] }[]
+  >([]);
 
   useEffect(() => {
     if (permiteCpf) setTipoPessoa('PF');
   }, [permiteCpf]);
+
+  useEffect(() => {
+    void api
+      .get<{ id: number; nome: string; diasParcelas: number[] }[]>(
+        '/config/condicoes-pagamento',
+      )
+      .then(setCondicoesPagamento)
+      .catch(() => setCondicoesPagamento([]));
+  }, []);
 
   const isPf = permiteCpf && tipoPessoa === 'PF';
 
@@ -161,6 +175,10 @@ export default function NovoClientePage() {
           form.comissaoFixaPercentual !== '' && form.comissaoFixaPercentual != null
             ? parseFloat(String(form.comissaoFixaPercentual).replace(',', '.'))
             : undefined,
+        condicaoPagamentoId: form.condicaoPagamentoId
+          ? parseInt(String(form.condicaoPagamentoId), 10)
+          : null,
+        bancoCobrancaPadrao: form.bancoCobrancaPadrao || null,
       };
 
       if (tipoPessoa === 'PF') {
@@ -208,6 +226,7 @@ export default function NovoClientePage() {
         onBuscarCnpj={() => void handleBuscarCNPJ()}
         loadVendedorOptions={loadVendedorOptions}
         loadVendedorLabelById={loadVendedorLabelById}
+        condicoesPagamento={condicoesPagamento}
         erro={erro}
         salvando={salvando}
         onSubmit={handleSubmit}

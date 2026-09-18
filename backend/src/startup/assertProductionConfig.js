@@ -34,6 +34,18 @@ function assertProductionConfig() {
     );
   }
 
+  if (String(process.env.BRADESCO_PROVIDER || "").trim().toLowerCase() === "mock") {
+    throw new Error(
+      "BRADESCO_PROVIDER=mock não é permitido em produção.",
+    );
+  }
+
+  if (String(process.env.SICREDI_PROVIDER || "").trim().toLowerCase() === "mock") {
+    throw new Error(
+      "SICREDI_PROVIDER=mock não é permitido em produção.",
+    );
+  }
+
   if (passwordResetEnabled()) {
     const appUrl = String(process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "").trim();
     if (!appUrl) {

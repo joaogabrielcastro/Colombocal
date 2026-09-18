@@ -671,24 +671,77 @@ export default function VendaDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
       <div className="card p-5">
-        <h3 className="font-semibold text-gray-900 mb-2">Títulos desta venda</h3>
+        <h3 className="font-semibold text-gray-900 mb-2">Títulos / parcelas desta venda</h3>
+        {(venda.condicaoPagamentoNome || venda.bancoCobranca) && (
+          <p className="text-xs text-gray-500 mb-2">
+            Condição: {venda.condicaoPagamentoNome || "—"}
+            {venda.bancoCobranca ? ` · Banco: ${venda.bancoCobranca}` : ""}
+          </p>
+        )}
         {venda.titulos && venda.titulos.length > 0 ? (
           <ul className="divide-y divide-gray-100 text-sm mb-3">
-            {venda.titulos.map((t) => (
-              <li key={t.id} className="py-2 flex justify-between">
-                <span className="text-gray-700">
-                  {t.numero || `Título #${t.id}`} • Vence {formatDate(t.vencimento)} •{" "}
-                  <span className="capitalize">{t.status}</span>
-                </span>
-                <span className="font-medium">
-                  {formatMoney(t.valorPago)} / {formatMoney(t.valorOriginal)}
-                </span>
-              </li>
-            ))}
+            {venda.titulos.map((t) => {
+              const cob = t.cobranca;
+              return (
+                <li key={t.id} className="py-2 space-y-1">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-gray-700">
+                      {t.parcelaNumero && t.parcelaTotal
+                        ? `${t.parcelaNumero}/${t.parcelaTotal}`
+                        : ""}{" "}
+                      {t.numero || `Título #${t.id}`} • Vence{" "}
+                      {formatDate(t.vencimento)} •{" "}
+                      <span className="capitalize">{t.status}</span>
+                    </span>
+                    <span className="font-medium">
+                      {formatMoney(t.valorPago)} / {formatMoney(t.valorOriginal)}
+                    </span>
+                  </div>
+                  {cob ? (
+                    <div className="text-xs text-gray-500 flex flex-wrap gap-2">
+                      <span>
+                        Cobrança: {cob.status}
+                        {cob.banco ? ` (${cob.banco})` : ""}
+                      </span>
+                      {(cob.status === "DISPONIVEL" || cob.status === "REGISTRADA") &&
+                      (cob.temPdf || cob.pdfRef) ? (
+                        <button
+                          type="button"
+                          className="text-blue-600 hover:underline"
+                          onClick={() => {
+                            void api
+                              .getBlob(`/cobrancas/${cob.id}/boleto`)
+                              .then(({ blob }) => {
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, "_blank", "noopener,noreferrer");
+                              })
+                              .catch((e) =>
+                                reportApiError(e, { title: "Boleto indisponível" }),
+                              );
+                          }}
+                        >
+                          Ver boleto
+                        </button>
+                      ) : cob.status === "PENDENTE" || cob.status === "ERRO" ? (
+                        <span className="text-amber-700">
+                          Boleto indisponível — cobrança ainda não registrada
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-sm text-gray-400 mb-3">Nenhum título vinculado.</p>
         )}
+        <Link
+          href={`/financeiro/cobrancas?vendaId=${venda.id}`}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Ver cobranças desta venda
+        </Link>
       </div>
 
       <div className="card p-5">

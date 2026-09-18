@@ -363,6 +363,8 @@ router.post("/", async (req, res) => {
         b.comissaoFixaPercentual === null
           ? null
           : parseFloat(String(b.comissaoFixaPercentual)),
+      condicaoPagamentoId: b.condicaoPagamentoId ?? null,
+      bancoCobrancaPadrao: b.bancoCobrancaPadrao ?? null,
       ...pickClienteFiscal(b),
     };
 
@@ -464,9 +466,17 @@ router.put("/:id", async (req, res) => {
               : b.comissaoFixaPercentual === null
                 ? null
                 : parseFloat(String(b.comissaoFixaPercentual)),
+          condicaoPagamentoId:
+            b.condicaoPagamentoId === undefined
+              ? undefined
+              : b.condicaoPagamentoId,
+          bancoCobrancaPadrao:
+            b.bancoCobrancaPadrao === undefined
+              ? undefined
+              : b.bancoCobrancaPadrao,
           ...pickClienteFiscal(b),
         },
-        include: { vendedor: true },
+        include: { vendedor: true, condicaoPagamento: true },
       });
       await registrarAuditoria(tx, req, {
         tenantId: req.tenantId,

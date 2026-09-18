@@ -311,6 +311,7 @@ export function resolvePathNavAccess(pathname: string): PathNavAccess {
   if (p.startsWith("/clientes")) return { navKey: "clientes" };
   if (p.startsWith("/produtos")) return { navKey: "produtos" };
   if (p.startsWith("/vendas")) return { navKey: "vendas" };
+  if (p.startsWith("/financeiro/cobrancas")) return { navKey: "financeiro" };
   if (p.startsWith("/financeiro")) return { navKey: "financeiro" };
   if (p.startsWith("/contas-a-receber")) return { navKey: "rel_financeiro" };
   if (p.startsWith("/fretes")) return { navKey: "fretes" };

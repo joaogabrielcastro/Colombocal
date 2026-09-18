@@ -36,6 +36,9 @@ model Tenant {
   conhecimentosTransporte ConhecimentoTransporte[]
   manifestosEletronicos   ManifestoEletronico[]
   operacoesCiot           OperacaoCiot[]
+  condicoesPagamento      CondicaoPagamento[]
+  configuracoesBancarias  ConfiguracaoBancaria[]
+  cobrancasBancarias      CobrancaBancaria[]
 }
 
 model User {
@@ -103,24 +106,31 @@ model Cliente {
   fretePadraoTonelada    Decimal  @default(0) @db.Decimal(10, 2)
   vendedorId             Int?
   comissaoFixaPercentual Decimal? @db.Decimal(5, 2)
+  /// Condição de pagamento padrão (opcional).
+  condicaoPagamentoId    Int?
+  /// BRADESCO | SICREDI | null
+  bancoCobrancaPadrao    String?
   ativo                  Boolean  @default(true)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  vendedor        Vendedor?             @relation(fields: [vendedorId], references: [id])
-  precosEspeciais PrecoClienteProduto[]
-  comissoesProduto ComissaoClienteProduto[]
-  vendas          Venda[]
-  cheques         Cheque[]
-  pagamentos      Pagamento[]
-  titulos         TituloReceber[]
-  fretes          FreteMovimento[]
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendedor           Vendedor?             @relation(fields: [vendedorId], references: [id])
+  condicaoPagamento  CondicaoPagamento?    @relation(fields: [condicaoPagamentoId], references: [id], onDelete: SetNull)
+  precosEspeciais    PrecoClienteProduto[]
+  comissoesProduto   ComissaoClienteProduto[]
+  vendas             Venda[]
+  cheques            Cheque[]
+  pagamentos         Pagamento[]
+  titulos            TituloReceber[]
+  fretes             FreteMovimento[]
   ordensCarregamento OrdemCarregamento[]
+  cobrancasBancarias CobrancaBancaria[]
 
   @@unique([tenantId, cnpj])
   @@unique([tenantId, cpf])
   @@index([tenantId, ativo, razaoSocial])
+  @@index([condicaoPagamentoId])
 }
 
 model Produto {
@@ -238,12 +248,20 @@ model Venda {
   valorTotal      Decimal  @db.Decimal(10, 2) // apenas produtos, sem frete
   dataVenda       DateTime @default(now())
   observacoes     String?
+  /// Snapshot da condição usada nesta venda (não muda se o cliente alterar depois).
+  condicaoPagamentoId    Int?
+  condicaoPagamentoNome  String?
+  /// Int[] gravado como JSON, ex. [15,30,45]
+  condicaoPagamentoDias  Json?
+  /// BRADESCO | SICREDI | null — banco efetivo para cobrança desta venda
+  bancoCobranca          String?
   createdAt       DateTime @default(now())
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cliente   Cliente    @relation(fields: [clienteId], references: [id])
   vendedor  Vendedor   @relation(fields: [vendedorId], references: [id])
   motorista Motorista? @relation(fields: [motoristaId], references: [id])
+  condicaoPagamento CondicaoPagamento? @relation(fields: [condicaoPagamentoId], references: [id], onDelete: SetNull)
 
   itens          ItemVenda[]
   movimentacoes  MovimentacaoEstoque[]
@@ -257,6 +275,7 @@ model Venda {
   conhecimentosTransporte ConhecimentoTransporte[]
   manifestosEletronicos   ManifestoEletronico[]
   operacoesCiot           OperacaoCiot[]
+  cobrancasBancarias      CobrancaBancaria[]
 
   @@unique([tenantId, numeroVenda])
   @@index([tenantId, clienteId, dataVenda])
@@ -356,14 +375,106 @@ model TituloReceber {
   valorPago     Decimal  @default(0) @db.Decimal(10, 2)
   status        String   @default("aberto") // aberto, parcial, quitado
   observacoes   String?
+  /// Parcela p/q (legado = 1/1)
+  parcelaNumero Int      @default(1)
+  parcelaTotal  Int      @default(1)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente Cliente @relation(fields: [clienteId], references: [id])
-  venda   Venda?  @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente  Cliente            @relation(fields: [clienteId], references: [id])
+  venda    Venda?             @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  cobranca CobrancaBancaria?
 
   @@index([tenantId, clienteId, status, vencimento])
+  @@index([vendaId])
+}
+
+/// Condição de pagamento comercial por tenant (ex.: 15/30/45).
+model CondicaoPagamento {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  nome         String
+  descricao    String?
+  /// Dias corridos por parcela, ex. [15, 30, 45]. À vista = [0].
+  diasParcelas Int[]
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientes Cliente[]
+  vendas   Venda[]
+
+  @@unique([tenantId, nome])
+  @@index([tenantId, ativo])
+}
+
+/// Credenciais/config de cobrança por banco e tenant (secrets criptografados).
+model ConfiguracaoBancaria {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  /// BRADESCO | SICREDI
+  banco           String
+  /// homologacao | producao
+  ambiente        String   @default("homologacao")
+  /// NAO_CONFIGURADO | CONFIGURADO
+  status          String   @default("NAO_CONFIGURADO")
+  agencia         String?
+  conta           String?
+  carteira        String?
+  convenio        String?
+  codigoBeneficiario String?
+  /// Secrets criptografados (AES-GCM) — nunca expor no frontend
+  secretsCipher   String?
+  ativo           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cobrancas CobrancaBancaria[]
+
+  @@unique([tenantId, banco])
+  @@index([tenantId, ativo])
+}
+
+/// Instrumento de cobrança bancária (boleto) — 1:1 com TituloReceber.
+model CobrancaBancaria {
+  id                     Int       @id @default(autoincrement())
+  tenantId               Int
+  tituloId               Int       @unique
+  vendaId                Int?
+  clienteId              Int
+  configuracaoBancariaId Int?
+  /// Snapshot do banco (BRADESCO | SICREDI)
+  banco                  String
+  /// PENDENTE | PROCESSANDO | REGISTRADA | DISPONIVEL | ERRO | CANCELADA
+  status                 String    @default("PENDENTE")
+  nossoNumero            String?
+  linhaDigitavel         String?
+  codigoBarras           String?
+  valor                  Decimal   @db.Decimal(10, 2)
+  vencimento             DateTime
+  idempotencyKey         String
+  refExterna             String?
+  pdfRef                 String?
+  ultimoErro             String?
+  registradaEm           DateTime?
+  /// Resposta sanitizada do banco (sem secrets)
+  payloadRetorno         Json?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  titulo               TituloReceber         @relation(fields: [tituloId], references: [id], onDelete: Cascade)
+  venda                Venda?                @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  cliente              Cliente               @relation(fields: [clienteId], references: [id])
+  configuracaoBancaria ConfiguracaoBancaria? @relation(fields: [configuracaoBancariaId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, vencimento])
+  @@index([tenantId, banco, status])
+  @@index([tenantId, clienteId])
   @@index([vendaId])
 }
 

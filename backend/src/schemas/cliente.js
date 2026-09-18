@@ -17,6 +17,25 @@ const clienteFieldsSchema = z
     comissaoFixaPercentual: z
       .union([z.coerce.number().nonnegative(), z.null()])
       .optional(),
+    condicaoPagamentoId: z
+      .preprocess(
+        (v) => (v === "" || v === null || v === undefined ? null : v),
+        z.coerce.number().int().positive().nullable(),
+      )
+      .optional(),
+    bancoCobrancaPadrao: z
+      .preprocess(
+        (v) => (v === "" || v === null || v === undefined ? null : v),
+        z
+          .union([
+            z.enum(["BRADESCO", "SICREDI", "bradesco", "sicredi"]),
+            z.null(),
+          ])
+          .optional()
+          .nullable(),
+      )
+      .transform((v) => (v == null ? null : String(v).toUpperCase()))
+      .optional(),
   })
   .merge(clienteFiscalFieldsSchema);
 
@@ -104,6 +123,25 @@ const clienteUpdateSchema = z
     vendedorId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
     comissaoFixaPercentual: z
       .union([z.coerce.number().nonnegative(), z.null()])
+      .optional(),
+    condicaoPagamentoId: z
+      .preprocess(
+        (v) => (v === "" || v === null || v === undefined ? null : v),
+        z.coerce.number().int().positive().nullable(),
+      )
+      .optional(),
+    bancoCobrancaPadrao: z
+      .preprocess(
+        (v) => (v === "" || v === null || v === undefined ? null : v),
+        z
+          .union([
+            z.enum(["BRADESCO", "SICREDI", "bradesco", "sicredi"]),
+            z.null(),
+          ])
+          .optional()
+          .nullable(),
+      )
+      .transform((v) => (v == null ? null : String(v).toUpperCase()))
       .optional(),
   })
   .merge(clienteFiscalFieldsSchema);

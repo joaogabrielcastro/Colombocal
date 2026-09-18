@@ -273,9 +273,14 @@ function FinanceiroPageContent() {
         title="Financeiro"
         subtitle="Cheque, PIX e dinheiro — com a ordem vinculada. O tipo aparece em cada linha."
         actions={
-          <Link href="/financeiro/novo" className="btn-primary">
-            <PlusIcon className="w-4 h-4" /> Receber pagamento
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/financeiro/cobrancas" className="btn-secondary">
+              Cobranças / Boletos
+            </Link>
+            <Link href="/financeiro/novo" className="btn-primary">
+              <PlusIcon className="w-4 h-4" /> Receber pagamento
+            </Link>
+          </div>
         }
         filters={
           <FilterBar className="p-4 space-y-3">
