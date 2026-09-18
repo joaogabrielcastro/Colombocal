@@ -21,7 +21,7 @@ const { resolveCiotProviderName } = require("../infra/ciot/provider");
 
 function auditFromReq(req) {
   return (payload) =>
-    registrarAuditoria(prisma, {
+    registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
       userId: req.user?.id,
       userLabel: req.user?.email || req.user?.name,
@@ -91,7 +91,7 @@ router.get("/:id", async (req, res) => {
       where: { id, tenantId: req.tenantId },
     });
     if (!doc) return res.status(404).json({ error: "CIOT não encontrado" });
-    await registrarAuditoria(prisma, {
+    await registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
       userId: req.user?.id,
       tipo: "CIOT_VISUALIZADO",

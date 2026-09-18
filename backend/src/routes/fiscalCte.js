@@ -21,7 +21,7 @@ const { getDateRange } = require("../utils/dateRangeQuery");
 
 function auditFromReq(req) {
   return (payload) =>
-    registrarAuditoria(prisma, {
+    registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
       userId: req.user?.id,
       userLabel: req.user?.email || req.user?.name,
@@ -94,7 +94,7 @@ router.get("/:id", async (req, res) => {
       where: { id, tenantId: req.tenantId },
     });
     if (!doc) return res.status(404).json({ error: "CT-e não encontrado" });
-    await registrarAuditoria(prisma, {
+    await registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
       userId: req.user?.id,
       userLabel: req.user?.email,
@@ -181,7 +181,7 @@ async function enviarArquivo(req, res, campo) {
   if (!file) {
     return res.status(404).json({ error: "Arquivo indisponível no provedor" });
   }
-  await registrarAuditoria(prisma, {
+  await registrarAuditoria(prisma, req, {
     tenantId: req.tenantId,
     userId: req.user?.id,
     tipo: "CTE_XML_DOWNLOAD",
