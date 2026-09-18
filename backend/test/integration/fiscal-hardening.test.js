@@ -471,7 +471,7 @@ test("ZIP mock: estrutura, XLSX, README, XML; sem XML falso fora do mock", async
   const readmeProd = zipProd.readAsText(
     zipProd.getEntries().find((e) => e.entryName.endsWith("README.txt")),
   );
-  assert.match(readmeProd, /XMLs indisponíveis \(não incluídos\):/);
+  assert.match(readmeProd, /XMLs NF-e indisponíveis:/);
   process.env.NFE_PROVIDER = "mock";
 });
 
