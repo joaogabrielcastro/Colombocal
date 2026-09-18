@@ -394,7 +394,7 @@ test("isolamento completo A vs B + ignore tenantId no request + job", async () =
   // Conteúdo do job processado com tenant B não inclui nota A
   const zipB = new AdmZip(Buffer.from(jobB.content, "base64"));
   const readmeB = zipB.readAsText(zipB.getEntries().find((e) => e.entryName.endsWith("README.txt")));
-  assert.match(readmeB, /NF-e autorizadas: 1/);
+  assert.match(readmeB, /=== NF-e ===[\s\S]*Autorizadas: 1/);
 
   const startA = await agent
     .post("/api/fiscal/fechamento/pacote")
@@ -449,8 +449,8 @@ test("ZIP mock: estrutura, XLSX, README, XML; sem XML falso fora do mock", async
 
   const readme = zip.readAsText(zip.getEntries().find((e) => e.entryName.endsWith("README.txt")));
   assert.match(readme, /HOMOLOGAÇÃO/);
-  assert.match(readme, /NF-e autorizadas: 1/);
-  assert.match(readme, /contabilidade/i);
+  assert.match(readme, /=== NF-e ===[\s\S]*Autorizadas: 1/);
+  assert.match(readme, /contador/i);
 
   const xlsxEntry = zip.getEntries().find((e) => e.entryName.endsWith("relatorio-nfe.xlsx"));
   const wb = new ExcelJS.Workbook();
