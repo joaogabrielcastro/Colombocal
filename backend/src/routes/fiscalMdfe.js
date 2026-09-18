@@ -26,7 +26,7 @@ const { getDateRange } = require("../utils/dateRangeQuery");
 
 function auditFromReq(req) {
   return (payload) =>
-    registrarAuditoria(prisma, {
+    registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
       userId: req.user?.id,
       userLabel: req.user?.email || req.user?.name,
@@ -87,7 +87,7 @@ router.get("/:id", async (req, res) => {
       include: { documentos: true },
     });
     if (!doc) return res.status(404).json({ error: "MDF-e não encontrado" });
-    await registrarAuditoria(prisma, {
+    await registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
       userId: req.user?.id,
       tipo: "MDFE_VISUALIZADO",
@@ -197,7 +197,7 @@ async function enviarArquivo(req, res, campo) {
   if (!file) {
     return res.status(404).json({ error: "Arquivo indisponível no provedor" });
   }
-  await registrarAuditoria(prisma, {
+  await registrarAuditoria(prisma, req, {
     tenantId: req.tenantId,
     userId: req.user?.id,
     tipo: "MDFE_XML_DOWNLOAD",
