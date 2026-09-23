@@ -24,7 +24,16 @@ export function normalizarUnidade(unidadeRaw: unknown): string {
 }
 
 /**
+ * Produto ensacado (ex.: "DOLOMITA M-325 ENSACADA"): OC usa a quantidade
+ * em sacos mesmo se o cadastro estiver em ton/kg.
+ */
+export function produtoEnsacado(nome: unknown): boolean {
+  return /\bENSACAD[AO]S?\b/i.test(String(nome ?? ""));
+}
+
+/**
  * Converte quantidade da venda para sacos (ordem de carregamento).
+ * - nome ENSACADA/ENSACADO: usa a quantidade como está (já é saco)
  * - saco: usa a quantidade como está
  * - ton: (qtd × 1000) / peso do saco (pesoKg do produto ou 20 kg)
  * - kg: qtd / peso do saco
@@ -33,9 +42,11 @@ export function quantidadeEmSacos(params: {
   quantidade: number | string;
   unidade?: string | null;
   pesoKg?: number | string | null;
+  nome?: string | null;
 }): number {
   const qtd = toNum(params.quantidade);
   if (qtd <= 0) return 0;
+  if (produtoEnsacado(params.nome)) return qtd;
   const unidade = normalizarUnidade(params.unidade);
   if (unidade === "saco") return qtd;
   const pesoSaco = (() => {
