@@ -136,6 +136,29 @@ test("POST a partir da venda: dolomita 25 kg (4 t = 160 SAC)", async () => {
   assert.equal(qtd(oc.body.itens[0]), 160);
 });
 
+test("POST a partir da venda: dolomita ENSACADA em ton não infla sacos", async () => {
+  const ensacada = await seedProduto(ctx.tenant.id, {
+    nome: "DOLOMITA M-325 ENSACADA",
+    unidade: "ton",
+    codigo: "DOL325E",
+    precoPadrao: 320,
+  });
+  const venda = await criarVenda({
+    produto: ensacada,
+    quantidade: 416,
+    precoUnitario: 320,
+  });
+  assert.equal(venda.status, 201);
+
+  const oc = await agent
+    .post("/api/ordens-carregamento")
+    .send({ vendaId: venda.body.id });
+  assert.equal(oc.status, 201);
+  assert.equal(oc.body.itens[0].descricao, "DOLOMITA M-325 ENSACADA");
+  assert.equal(qtd(oc.body.itens[0]), 416);
+  assert.equal(oc.body.itens[0].unidade, "SAC");
+});
+
 test("PUT /api/ordens-carregamento/:id corrige quantidade já gravada", async () => {
   const created = await agent.post("/api/ordens-carregamento").send({
     clienteNome: "Pátio",

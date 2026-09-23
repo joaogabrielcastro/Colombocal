@@ -52,3 +52,42 @@ test("OC: quantidade inválida vira 0", () => {
   assert.equal(quantidadeEmSacos({ quantidade: 0, unidade: "saco" }), 0);
   assert.equal(quantidadeEmSacos({ quantidade: -1, unidade: "ton" }), 0);
 });
+
+test("OC: ENSACADA não converte ton→sacos (evita 416 → 20.800)", () => {
+  assert.equal(
+    quantidadeEmSacos({
+      quantidade: 416,
+      produto: {
+        nome: "DOLOMITA M-325 ENSACADA",
+        unidade: "ton",
+        pesoKg: null,
+      },
+    }),
+    416,
+  );
+  assert.equal(
+    quantidadeEmSacos({
+      quantidade: 64,
+      nome: "DOLOMITA M-040 ENSACADA",
+      unidade: "ton",
+    }),
+    64,
+  );
+  assert.equal(
+    quantidadeEmSacos({
+      quantidade: 1092,
+      produto: { nome: "CAL HIDRATADA CH-III", unidade: "saco" },
+    }),
+    1092,
+  );
+});
+
+test("OC: dolomita a granel (sem ENSACADA) continua convertendo ton→sacos", () => {
+  assert.equal(
+    quantidadeEmSacos({
+      quantidade: 160,
+      produto: { nome: "DOLOMITA M-325", unidade: "ton", pesoKg: null },
+    }),
+    8000,
+  );
+});

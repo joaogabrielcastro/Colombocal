@@ -11,6 +11,7 @@ import { ListScaffold } from "@/components/ui/list-scaffold";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { produtoEnsacado } from "@/lib/frete";
 
 function ProdutosPageContent() {
   const searchParams = useSearchParams();
@@ -344,6 +345,14 @@ function ProdutosPageContent() {
                     <option value="m3">M³</option>
                     <option value="un">Unidade</option>
                   </select>
+                  {produtoEnsacado(form.nome) &&
+                    String(form.unidade || "ton").toLowerCase() !== "saco" && (
+                      <p className="text-xs text-amber-800 mt-1">
+                        Nome com ENSACADA: use unidade <strong>Saco</strong> para a
+                        ordem de carregamento não converter ton→sacos. A OC já trata
+                        ENSACADA como saco, mas o frete e a venda seguem esta unidade.
+                      </p>
+                    )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
