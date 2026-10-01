@@ -170,7 +170,7 @@ test("emitente-fiscal: token é criptografado e nunca retornado", async () => {
     assert.equal(put.body.provedorTokenConfigurado, true);
     assert.ok(!JSON.stringify(put.body).includes("token-secreto-nao-vazar"));
 
-    const row = await prisma.emitenteFiscal.findUnique({
+    const row = await prisma.emitenteFiscal.findFirst({
       where: { tenantId: user.tenantId },
     });
     assert.ok(isEncryptedFiscalToken(row.provedorToken));

@@ -59,6 +59,15 @@ const emitenteFiscalSchema = z.object({
   naturezaOperacao: z.string().max(60).optional(),
   modalidadeFrete: z.coerce.number().int().min(0).max(9).default(9),
   provedorToken: z.string().nullable().optional(),
+  ativo: z.boolean().optional(),
+  padrao: z.boolean().optional(),
+  habilitaNfe: z.boolean().optional(),
+  habilitaCte: z.boolean().optional(),
+  habilitaMdfe: z.boolean().optional(),
+});
+
+const nfeEmitirSchema = z.object({
+  emitenteFiscalId: z.coerce.number().int().positive().optional(),
 });
 
 const nfeCancelarSchema = z.object({
@@ -98,5 +107,6 @@ const clienteFiscalFieldsSchema = z.object({
 module.exports = {
   emitenteFiscalSchema,
   nfeCancelarSchema,
+  nfeEmitirSchema,
   clienteFiscalFieldsSchema,
 };

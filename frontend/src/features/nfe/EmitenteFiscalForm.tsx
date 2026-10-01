@@ -5,6 +5,7 @@ import api, { ApiError } from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
 
 export type EmitenteFiscal = {
+  id?: number;
   cnpj: string;
   inscricaoEstadual: string;
   razaoSocial: string;
@@ -27,6 +28,11 @@ export type EmitenteFiscal = {
   naturezaOperacao?: string;
   modalidadeFrete: number;
   provedorTokenConfigurado?: boolean;
+  ativo?: boolean;
+  padrao?: boolean;
+  habilitaNfe?: boolean;
+  habilitaCte?: boolean;
+  habilitaMdfe?: boolean;
 };
 
 const empty: EmitenteFiscal = {
@@ -51,6 +57,11 @@ const empty: EmitenteFiscal = {
   ambiente: "homologacao",
   naturezaOperacao: "Venda de mercadoria",
   modalidadeFrete: 9,
+  ativo: true,
+  padrao: false,
+  habilitaNfe: true,
+  habilitaCte: false,
+  habilitaMdfe: false,
 };
 
 export function EmitenteFiscalForm() {
@@ -60,22 +71,36 @@ export function EmitenteFiscalForm() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [tokenOk, setTokenOk] = useState(false);
+  const [emitentes, setEmitentes] = useState<EmitenteFiscal[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const set =
     (field: keyof EmitenteFiscal) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((p) => ({ ...p, [field]: e.target.value }));
 
+  const selecionar = (row: EmitenteFiscal | null) => {
+    setSelectedId(row?.id ?? null);
+    setForm(row ? { ...empty, ...row } : { ...empty });
+    setTokenOk(!!row?.provedorTokenConfigurado);
+    setToken("");
+    setErro("");
+  };
+
+  const carregar = async (preferredId?: number) => {
+    const rows = await api.get<EmitenteFiscal[]>("/config/emitentes-fiscais");
+    setEmitentes(rows);
+    selecionar(rows.find((r) => r.id === preferredId) || rows.find((r) => r.padrao) || rows[0] || null);
+  };
+
   useEffect(() => {
     let cancelled = false;
     api
-      .get<EmitenteFiscal | null>("/config/emitente-fiscal")
-      .then((row) => {
+      .get<EmitenteFiscal[]>("/config/emitentes-fiscais")
+      .then((rows) => {
         if (cancelled) return;
-        if (row) {
-          setForm({ ...empty, ...row });
-          setTokenOk(!!row.provedorTokenConfigurado);
-        }
+        setEmitentes(rows);
+        selecionar(rows.find((r) => r.padrao) || rows[0] || null);
       })
       .catch((e) => {
         if (!cancelled) reportApiError(e, { title: "Não foi possível carregar o emitente" });
@@ -93,7 +118,7 @@ export function EmitenteFiscalForm() {
     setSalvando(true);
     setErro("");
     try {
-      const saved = await api.put<EmitenteFiscal>("/config/emitente-fiscal", {
+      const body = {
         ...form,
         crt: Number(form.crt),
         serieNfe: Number(form.serieNfe) || 1,
@@ -102,10 +127,15 @@ export function EmitenteFiscalForm() {
         rntrc: form.rntrc || null,
         modalidadeFrete: Number(form.modalidadeFrete) || 9,
         provedorToken: token.trim() || undefined,
-      });
+      };
+      const saved = selectedId
+        ? await api.put<EmitenteFiscal>(`/config/emitentes-fiscais/${selectedId}`, body)
+        : await api.post<EmitenteFiscal>("/config/emitentes-fiscais", body);
       setForm({ ...empty, ...saved });
       setTokenOk(!!saved.provedorTokenConfigurado);
       setToken("");
+      setSelectedId(saved.id ?? null);
+      await carregar(saved.id);
     } catch (err) {
       reportApiError(err, { title: "Erro ao salvar dados fiscais" });
       setErro(err instanceof ApiError ? err.message : "Erro ao salvar");
@@ -120,8 +150,42 @@ export function EmitenteFiscalForm() {
 
   return (
     <form onSubmit={(ev) => void salvar(ev)} className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <label className="text-sm flex-1 min-w-64">
+          <span className="block text-gray-700 mb-1">Empresa emissora</span>
+          <select
+            className="input-field"
+            value={selectedId ?? ""}
+            onChange={(e) => selecionar(emitentes.find((row) => row.id === Number(e.target.value)) || null)}
+          >
+            {emitentes.length === 0 ? <option value="">Nenhuma empresa cadastrada</option> : null}
+            {emitentes.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.nomeFantasia || row.razaoSocial} — {row.cnpj}{row.padrao ? " (padrão)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="btn-secondary" onClick={() => selecionar(null)}>
+          Adicionar empresa
+        </button>
+      </div>
       {erro ? <p className="text-sm text-red-600">{erro}</p> : null}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="md:col-span-2 flex flex-wrap gap-4 rounded-lg border border-gray-200 p-3">
+          {([
+            ["ativo", "Empresa ativa"],
+            ["padrao", "Empresa padrão"],
+            ["habilitaNfe", "NF-e"],
+            ["habilitaCte", "CT-e"],
+            ["habilitaMdfe", "MDF-e"],
+          ] as const).map(([field, label]) => (
+            <label key={field} className="flex items-center gap-2 text-sm text-gray-800">
+              <input type="checkbox" checked={!!form[field]} onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.checked }))} />
+              {label}
+            </label>
+          ))}
+        </div>
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">CNPJ *</span>
           <input required value={form.cnpj} onChange={set("cnpj")} className="input-field" />
@@ -219,7 +283,7 @@ export function EmitenteFiscalForm() {
         O certificado A1 fica no provedor, não neste sistema. Frete da venda não entra na NF-e.
       </p>
       <button type="submit" className="btn-primary" disabled={salvando}>
-        {salvando ? "Salvando…" : "Salvar dados fiscais"}
+        {salvando ? "Salvando…" : selectedId ? "Salvar empresa" : "Cadastrar empresa"}
       </button>
     </form>
   );

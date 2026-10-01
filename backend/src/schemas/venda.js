@@ -95,6 +95,7 @@ const vendaCreateBase = {
 const vendaPostSchema = z.object({
   ...vendaCreateBase,
   emitirNfe: z.boolean().optional(),
+  emitenteFiscalId: z.coerce.number().int().positive().optional(),
 });
 
 /** PUT /vendas/:id — edição completa (mesmos campos do POST). */

@@ -13,9 +13,15 @@ const { createCteProvider } = require("../../infra/cte/provider");
 const { sincronizarCteSeProcessando } = require("./gerirCte");
 const { onlyDigits } = require("../../domain/nfe/constants");
 const { randomUUID } = require("node:crypto");
+const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
 
 async function emitirCte(prisma, { tenantId, input = {}, provider, audit } = {}) {
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await buscarEmitenteFiscal(prisma, {
+    tenantId,
+    emitenteFiscalId: input.emitenteFiscalId,
+    recurso: "cte",
+    obrigatorio: true,
+  });
   const validacao = validarPreEmissaoCte({ emitente, input });
   if (!validacao.ok) {
     throw new AppError(validacao.erros.join(" "), {

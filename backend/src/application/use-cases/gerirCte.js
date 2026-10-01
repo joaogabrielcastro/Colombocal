@@ -6,6 +6,10 @@ const {
   isErroInconclusivoCte,
   isCteNaoEncontradoNoProvedor,
 } = require("../../domain/cte/refCte");
+const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+
+const emitenteCtePadrao = (prisma, tenantId) =>
+  buscarEmitenteFiscal(prisma, { tenantId, recurso: "cte", obrigatorio: true });
 
 async function sincronizarCteSeProcessando(prisma, { doc, provider, emitente } = {}) {
   if (!doc || doc.status !== STATUS.PROCESSANDO) {
@@ -50,7 +54,7 @@ async function consultarCte(prisma, { tenantId, id, provider } = {}) {
     });
   }
   if (doc.status !== STATUS.PROCESSANDO) return doc;
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await emitenteCtePadrao(prisma, tenantId);
   const sync = await sincronizarCteSeProcessando(prisma, { doc, provider, emitente });
   if (sync.kind === "ok") return sync.doc;
   if (sync.kind === "ausente") return doc;
@@ -80,7 +84,7 @@ async function cancelarCte(prisma, { tenantId, id, justificativa, provider, audi
       httpStatus: 400,
     });
   }
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await emitenteCtePadrao(prisma, tenantId);
   const cteProvider = provider || createCteProvider({ emitente });
   const resposta = await cteProvider.cancelar({
     ref: doc.refProvedor,

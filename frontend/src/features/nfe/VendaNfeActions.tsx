@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DocumentTextIcon } from "@heroicons/react/24/outline";
 import api, { ApiError } from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
@@ -63,21 +63,41 @@ export function VendaNfeActions({ venda, onUpdated }: Props) {
   const [erros, setErros] = useState<string[]>([]);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [justificativa, setJustificativa] = useState("");
+  const [emitentes, setEmitentes] = useState<
+    { id: number; cnpj: string; razaoSocial: string; nomeFantasia?: string | null; ambiente: string; padrao: boolean }[]
+  >([]);
+  const [emitenteFiscalId, setEmitenteFiscalId] = useState("");
   const nota = venda.notaFiscal;
+
+  useEffect(() => {
+    if (nota && !["rejeitada", "cancelada", "denegada", "rascunho"].includes(nota.status)) return;
+    void api
+      .get<{ id: number; cnpj: string; razaoSocial: string; nomeFantasia?: string | null; ambiente: string; padrao: boolean }[]>(
+        "/config/emitentes-fiscais-opcoes",
+      )
+      .then((rows) => {
+        setEmitentes(rows);
+        const atual = rows.find((r) => r.id === nota?.emitenteFiscalId) || rows.find((r) => r.padrao) || rows[0];
+        setEmitenteFiscalId(atual ? String(atual.id) : "");
+      })
+      .catch(() => setEmitentes([]));
+  }, [nota?.emitenteFiscalId, nota?.status]);
 
   const emitir = async () => {
     setBusy(true);
     setErros([]);
     try {
       const valid = await api.get<{ ok: boolean; erros: string[] }>(
-        `/vendas/${venda.id}/nfe/validacao`,
+        `/vendas/${venda.id}/nfe/validacao?emitenteFiscalId=${emitenteFiscalId}`,
       );
       if (!valid.ok) {
         setErros(valid.erros);
         toast.error("Cadastro fiscal incompleto");
         return;
       }
-      const emitted = await api.post<NotaFiscal>(`/vendas/${venda.id}/nfe`, {});
+      const emitted = await api.post<NotaFiscal>(`/vendas/${venda.id}/nfe`, {
+        emitenteFiscalId: Number(emitenteFiscalId),
+      });
       onUpdated();
       if (emitted.status === "autorizada") toast.success("NF-e autorizada");
       else if (emitted.status === "rejeitada") toast.error(emitted.motivoRejeicao || "NF-e rejeitada");
@@ -173,6 +193,11 @@ export function VendaNfeActions({ venda, onUpdated }: Props) {
           {statusLabel(nota?.status)}
         </span>
       </div>
+      {nota?.emitenteNome ? (
+        <p className="text-sm text-gray-700 mt-3">
+          Emitente: {nota.emitenteNome}{nota.emitenteCnpj ? ` — ${nota.emitenteCnpj}` : ""}
+        </p>
+      ) : null}
       {nota?.numero ? (
         <p className="text-sm text-gray-700 mt-3">
           Número {nota.numero}/{nota.serie ?? "—"}
@@ -195,9 +220,19 @@ export function VendaNfeActions({ venda, onUpdated }: Props) {
       ) : null}
       <div className="flex flex-wrap gap-2 mt-4">
         {podeEmitir ? (
-          <button type="button" className="btn-primary" disabled={busy} onClick={() => void emitir()}>
-            {busy ? "Emitindo…" : "Emitir NF-e"}
-          </button>
+          <>
+            <select className="input-field max-w-md" value={emitenteFiscalId} onChange={(e) => setEmitenteFiscalId(e.target.value)}>
+              <option value="">Selecione a empresa emissora</option>
+              {emitentes.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.nomeFantasia || row.razaoSocial} — {row.cnpj} ({row.ambiente})
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn-primary" disabled={busy || !emitenteFiscalId} onClick={() => void emitir()}>
+              {busy ? "Emitindo…" : "Emitir NF-e"}
+            </button>
+          </>
         ) : null}
         {nota?.status === "processando" ? (
           <button type="button" className="btn-secondary" disabled={busy} onClick={() => void consultar()}>

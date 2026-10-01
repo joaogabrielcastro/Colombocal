@@ -189,8 +189,11 @@ async function enviarArquivo(req, res, campo) {
   if (!url) {
     return res.status(404).json({ error: "Arquivo indisponível para este MDF-e" });
   }
-  const emitente = await prisma.emitenteFiscal.findUnique({
-    where: { tenantId: req.tenantId },
+  const { buscarEmitenteFiscal } = require("../services/emitenteFiscal");
+  const emitente = await buscarEmitenteFiscal(prisma, {
+    tenantId: req.tenantId,
+    recurso: "mdfe",
+    obrigatorio: true,
   });
   const provider = createMdfeProvider({ emitente });
   const file = await provider.baixarArquivo(url);

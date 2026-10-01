@@ -551,6 +551,7 @@ router.post("/", async (req, res) => {
           await emitirNfe(prisma, {
             tenantId: req.tenantId,
             vendaId: vendaCompleta.id,
+            emitenteFiscalId: body.emitenteFiscalId,
             audit: (p) =>
               registrarAuditoria(prisma, req, {
                 tenantId: req.tenantId,

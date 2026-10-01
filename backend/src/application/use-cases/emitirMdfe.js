@@ -11,9 +11,15 @@ const {
   isErroInconclusivoMdfe,
 } = require("../../domain/mdfe/refMdfe");
 const { createMdfeProvider } = require("../../infra/mdfe/provider");
+const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
 
 async function emitirMdfe(prisma, { tenantId, input = {}, provider, audit } = {}) {
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await buscarEmitenteFiscal(prisma, {
+    tenantId,
+    emitenteFiscalId: input.emitenteFiscalId,
+    recurso: "mdfe",
+    obrigatorio: true,
+  });
   const documentos = Array.isArray(input.documentos) ? input.documentos : [];
   const validacao = validarPreEmissaoMdfe({ emitente, input, documentos });
   if (!validacao.ok) {

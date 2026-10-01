@@ -173,8 +173,11 @@ async function enviarArquivo(req, res, campo) {
   if (!url) {
     return res.status(404).json({ error: "Arquivo indisponível para este CT-e" });
   }
-  const emitente = await prisma.emitenteFiscal.findUnique({
-    where: { tenantId: req.tenantId },
+  const { buscarEmitenteFiscal } = require("../services/emitenteFiscal");
+  const emitente = await buscarEmitenteFiscal(prisma, {
+    tenantId: req.tenantId,
+    recurso: "cte",
+    obrigatorio: true,
   });
   const provider = createCteProvider({ emitente });
   const file = await provider.baixarArquivo(url);

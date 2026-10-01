@@ -9,21 +9,28 @@ const {
   notaBloqueanteDaVenda,
   ultimaNotaDaVenda,
 } = require("../../domain/nfe/notaDaVenda");
-const { createNfeProvider } = require("../../infra/nfe/provider");
+const { createNfeProvider, resolveProviderName } = require("../../infra/nfe/provider");
+const { hasFiscalTokenConfigured } = require("../../infra/crypto/fiscalTokenCrypto");
 const {
   refNfeTentativa,
   isErroInconclusivoNfe,
   statusPermiteReutilizarRef,
 } = require("../../domain/nfe/refNfe");
 const { sincronizarNotaSeProcessando } = require("./gerirNfe");
+const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
 
 function produtosMap(produtos) {
   return new Map(produtos.map((p) => [p.id, p]));
 }
 
-async function carregarContextoEmissao(prisma, { tenantId, vendaId }) {
+async function carregarContextoEmissao(prisma, { tenantId, vendaId, emitenteFiscalId }) {
   const [emitente, venda] = await Promise.all([
-    prisma.emitenteFiscal.findUnique({ where: { tenantId } }),
+    buscarEmitenteFiscal(prisma, {
+      tenantId,
+      emitenteFiscalId,
+      recurso: "nfe",
+      obrigatorio: true,
+    }),
     prisma.venda.findFirst({
       where: { id: vendaId, tenantId },
       include: {
@@ -46,8 +53,8 @@ async function carregarContextoEmissao(prisma, { tenantId, vendaId }) {
   return { emitente, venda, produtosPorId: produtosMap(produtos) };
 }
 
-async function validarEmissaoNfe(prisma, { tenantId, vendaId }) {
-  const ctx = await carregarContextoEmissao(prisma, { tenantId, vendaId });
+async function validarEmissaoNfe(prisma, { tenantId, vendaId, emitenteFiscalId }) {
+  const ctx = await carregarContextoEmissao(prisma, { tenantId, vendaId, emitenteFiscalId });
   return validarPreEmissaoNfe({
     emitente: ctx.emitente,
     cliente: ctx.venda.cliente,
@@ -61,11 +68,38 @@ async function proximaRefNfe(prisma, { tenantId, vendaId }) {
   return refNfeTentativa(tenantId, vendaId, count + 1);
 }
 
-async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
-  const ctx = await carregarContextoEmissao(prisma, { tenantId, vendaId });
+async function emitirNfe(
+  prisma,
+  { tenantId, vendaId, emitenteFiscalId, provider, audit } = {},
+) {
+  const ctx = await carregarContextoEmissao(prisma, {
+    tenantId,
+    vendaId,
+    emitenteFiscalId,
+  });
+  if (resolveProviderName() !== "mock") {
+    const quantidadeEmitentes = await prisma.emitenteFiscal.count({
+      where: { tenantId, ativo: true, habilitaNfe: true },
+    });
+    if (quantidadeEmitentes > 1 && !hasFiscalTokenConfigured(ctx.emitente.provedorToken)) {
+      throw new AppError(
+        "Configure o token Focus específico desta empresa antes de emitir.",
+        { code: "NFE_TOKEN_EMITENTE_OBRIGATORIO", httpStatus: 400 },
+      );
+    }
+  }
   const nfeProvider = provider || createNfeProvider({ emitente: ctx.emitente });
 
   const bloqueante = await notaBloqueanteDaVenda(prisma, { tenantId, vendaId });
+  if (
+    bloqueante?.emitenteFiscalId &&
+    bloqueante.emitenteFiscalId !== ctx.emitente.id
+  ) {
+    throw new AppError("A emissão em andamento pertence a outra empresa emissora.", {
+      code: "NFE_EMITENTE_DIVERGENTE",
+      httpStatus: 409,
+    });
+  }
   if (bloqueante?.status === STATUS.AUTORIZADA) {
     throw new AppError("Esta venda já possui NF-e autorizada.", {
       code: "NFE_JA_EXISTE",
@@ -153,6 +187,9 @@ async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
       where: { id: nota.id },
       data: {
         status: STATUS.PROCESSANDO,
+        emitenteFiscalId: ctx.emitente.id,
+        emitenteNome: ctx.emitente.razaoSocial,
+        emitenteCnpj: ctx.emitente.cnpj,
         payloadEnviado: payload,
         emitidaEm: new Date(),
         motivoRejeicao: null,
@@ -164,6 +201,9 @@ async function emitirNfe(prisma, { tenantId, vendaId, provider, audit } = {}) {
         data: {
           tenantId,
           vendaId,
+          emitenteFiscalId: ctx.emitente.id,
+          emitenteNome: ctx.emitente.razaoSocial,
+          emitenteCnpj: ctx.emitente.cnpj,
           status: STATUS.PROCESSANDO,
           refProvedor: ref,
           payloadEnviado: payload,

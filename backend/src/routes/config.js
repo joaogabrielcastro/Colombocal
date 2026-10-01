@@ -14,6 +14,11 @@ const { timingSafeEqualString } = require("../utils/setupSecret");
 const { parseBody } = require("../utils/zodParse");
 const { emitenteFiscalSchema } = require("../schemas/nfe");
 const { onlyDigits } = require("../utils/cpf");
+const {
+  listarEmitentesFiscais,
+  buscarEmitenteFiscal,
+  definirEmitentePadrao,
+} = require("../services/emitenteFiscal");
 
 /**
  * POST /api/config/reset-financeiro-legacy
@@ -179,10 +184,43 @@ async function maybeReencryptLegacyToken(row) {
   });
 }
 
+function emitenteDataFromBody(b, tokenNovo) {
+  return {
+    cnpj: onlyDigits(b.cnpj),
+    inscricaoEstadual: b.inscricaoEstadual,
+    razaoSocial: b.razaoSocial,
+    nomeFantasia: b.nomeFantasia ?? null,
+    crt: b.crt,
+    logradouro: b.logradouro,
+    numero: b.numero,
+    complemento: b.complemento ?? null,
+    bairro: b.bairro,
+    municipio: b.municipio,
+    codigoMunicipio: b.codigoMunicipio,
+    uf: b.uf,
+    cep: b.cep,
+    telefone: b.telefone ?? null,
+    serieNfe: b.serieNfe ?? 1,
+    rntrc: b.rntrc != null && String(b.rntrc).trim() ? String(b.rntrc).trim() : null,
+    serieCte: b.serieCte ?? 1,
+    serieMdfe: b.serieMdfe ?? 1,
+    ambiente: b.ambiente,
+    naturezaOperacao: b.naturezaOperacao || "Venda de mercadoria",
+    modalidadeFrete: b.modalidadeFrete ?? 9,
+    ativo: b.ativo ?? true,
+    padrao: b.padrao ?? false,
+    habilitaNfe: b.habilitaNfe ?? true,
+    habilitaCte: b.habilitaCte ?? false,
+    habilitaMdfe: b.habilitaMdfe ?? false,
+    ...(tokenNovo !== undefined ? { provedorToken: tokenNovo } : {}),
+  };
+}
+
 router.get("/emitente-fiscal", requireAdmin, async (req, res) => {
   try {
-    let row = await prisma.emitenteFiscal.findUnique({
-      where: { tenantId: req.tenantId },
+    let row = await buscarEmitenteFiscal(prisma, {
+      tenantId: req.tenantId,
+      recurso: null,
     });
     if (row) row = await maybeReencryptLegacyToken(row);
     res.json(publicEmitente(row));
@@ -194,45 +232,115 @@ router.get("/emitente-fiscal", requireAdmin, async (req, res) => {
 router.put("/emitente-fiscal", requireAdmin, async (req, res) => {
   try {
     const b = parseBody(emitenteFiscalSchema, req.body);
-    const atual = await prisma.emitenteFiscal.findUnique({
-      where: { tenantId: req.tenantId },
+    const atual = await buscarEmitenteFiscal(prisma, {
+      tenantId: req.tenantId,
+      recurso: null,
     });
     const tokenNovo =
       b.provedorToken != null && String(b.provedorToken).trim()
         ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
         : undefined;
-    const data = {
-      cnpj: onlyDigits(b.cnpj),
-      inscricaoEstadual: b.inscricaoEstadual,
-      razaoSocial: b.razaoSocial,
-      nomeFantasia: b.nomeFantasia ?? null,
-      crt: b.crt,
-      logradouro: b.logradouro,
-      numero: b.numero,
-      complemento: b.complemento ?? null,
-      bairro: b.bairro,
-      municipio: b.municipio,
-      codigoMunicipio: b.codigoMunicipio,
-      uf: b.uf,
-      cep: b.cep,
-      telefone: b.telefone ?? null,
-      serieNfe: b.serieNfe ?? 1,
-      rntrc: b.rntrc != null && String(b.rntrc).trim() ? String(b.rntrc).trim() : null,
-      serieCte: b.serieCte ?? 1,
-      serieMdfe: b.serieMdfe ?? 1,
-      ambiente: b.ambiente,
-      naturezaOperacao: b.naturezaOperacao || "Venda de mercadoria",
-      modalidadeFrete: b.modalidadeFrete ?? 9,
-      ...(tokenNovo !== undefined ? { provedorToken: tokenNovo } : {}),
-    };
-    const row = atual
+    const data = emitenteDataFromBody(b, tokenNovo);
+    data.padrao = b.padrao ?? atual?.padrao ?? true;
+    let row = atual
       ? await prisma.emitenteFiscal.update({
-          where: { tenantId: req.tenantId },
+          where: { id: atual.id },
           data,
         })
       : await prisma.emitenteFiscal.create({
-          data: { tenantId: req.tenantId, ...data },
+          data: { tenantId: req.tenantId, ...data, padrao: true },
         });
+    if (data.padrao) {
+      row = await definirEmitentePadrao(prisma, {
+        tenantId: req.tenantId,
+        emitenteFiscalId: row.id,
+      });
+    }
+    res.json(publicEmitente(row));
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+router.get("/emitentes-fiscais", requireAdmin, async (req, res) => {
+  try {
+    const rows = await listarEmitentesFiscais(prisma, req.tenantId);
+    const migrated = await Promise.all(rows.map(maybeReencryptLegacyToken));
+    res.json(migrated.map(publicEmitente));
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+router.get("/emitentes-fiscais-opcoes", async (req, res) => {
+  try {
+    const rows = await prisma.emitenteFiscal.findMany({
+      where: { tenantId: req.tenantId, ativo: true, habilitaNfe: true },
+      select: {
+        id: true,
+        cnpj: true,
+        razaoSocial: true,
+        nomeFantasia: true,
+        ambiente: true,
+        padrao: true,
+      },
+      orderBy: [{ padrao: "desc" }, { razaoSocial: "asc" }],
+    });
+    res.json(rows);
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+router.post("/emitentes-fiscais", requireAdmin, async (req, res) => {
+  try {
+    const b = parseBody(emitenteFiscalSchema, req.body);
+    const tokenNovo =
+      b.provedorToken != null && String(b.provedorToken).trim()
+        ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
+        : undefined;
+    const existentes = await prisma.emitenteFiscal.count({ where: { tenantId: req.tenantId } });
+    let row = await prisma.emitenteFiscal.create({
+      data: {
+        tenantId: req.tenantId,
+        ...emitenteDataFromBody(b, tokenNovo),
+        padrao: existentes === 0 ? true : !!b.padrao,
+      },
+    });
+    if (b.padrao && existentes > 0) {
+      row = await definirEmitentePadrao(prisma, {
+        tenantId: req.tenantId,
+        emitenteFiscalId: row.id,
+      });
+    }
+    res.status(201).json(publicEmitente(row));
+  } catch (e) {
+    handleRouteError(res, e);
+  }
+});
+
+router.put("/emitentes-fiscais/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const atual = await prisma.emitenteFiscal.findFirst({
+      where: { id, tenantId: req.tenantId },
+    });
+    if (!atual) return res.status(404).json({ error: "Empresa emissora não encontrada" });
+    const b = parseBody(emitenteFiscalSchema, req.body);
+    const tokenNovo =
+      b.provedorToken != null && String(b.provedorToken).trim()
+        ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
+        : undefined;
+    let row = await prisma.emitenteFiscal.update({
+      where: { id },
+      data: emitenteDataFromBody(b, tokenNovo),
+    });
+    if (b.padrao) {
+      row = await definirEmitentePadrao(prisma, {
+        tenantId: req.tenantId,
+        emitenteFiscalId: id,
+      });
+    }
     res.json(publicEmitente(row));
   } catch (e) {
     handleRouteError(res, e);

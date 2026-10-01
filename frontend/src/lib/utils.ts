@@ -251,6 +251,9 @@ export interface CobrancaBancaria {
 export interface NotaFiscal {
   id: number;
   vendaId: number;
+  emitenteFiscalId?: number | null;
+  emitenteNome?: string | null;
+  emitenteCnpj?: string | null;
   status: string;
   serie?: number | null;
   numero?: number | null;

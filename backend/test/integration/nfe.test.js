@@ -116,6 +116,41 @@ test("PUT emitente fiscal mascara o token", async () => {
   assert.equal(put.body.cnpj, "11222333000181");
 });
 
+test("multiemitente: escolhe empresa do tenant e grava snapshot na NF-e", async () => {
+  const { cliente, produto, vendedor } = await seedFiscal();
+  const segundo = await agent.post("/api/config/emitentes-fiscais").send({
+    ...emitenteBody,
+    cnpj: "99888777000166",
+    razaoSocial: "Segundo Emitente Ltda",
+    nomeFantasia: "Segundo Emitente",
+    padrao: false,
+    habilitaNfe: true,
+    provedorToken: "token-segundo",
+  });
+  assert.equal(segundo.status, 201);
+
+  const venda = await agent.post("/api/vendas").send({
+    clienteId: cliente.id,
+    vendedorId: vendedor.id,
+    itens: [{ produtoId: produto.id, quantidade: 1, precoUnitario: 100 }],
+  });
+  assert.equal(venda.status, 201);
+
+  const emit = await agent.post(`/api/vendas/${venda.body.id}/nfe`).send({
+    emitenteFiscalId: segundo.body.id,
+  });
+  assert.equal(emit.status, 201);
+  assert.equal(emit.body.emitenteFiscalId, segundo.body.id);
+  assert.equal(emit.body.emitenteCnpj, "99888777000166");
+  assert.equal(emit.body.emitenteNome, "Segundo Emitente Ltda");
+
+  const persistida = await prisma.notaFiscal.findFirst({
+    where: { tenantId: cliente.tenantId, vendaId: venda.body.id },
+  });
+  assert.equal(persistida.emitenteFiscalId, segundo.body.id);
+  assert.equal(persistida.emitenteCnpj, "99888777000166");
+});
+
 test("emissão NF-e via mock + bloqueio de edição/cancelamento da venda", async () => {
   const { cliente, produto, vendedor } = await seedFiscal();
   const vendaRes = await agent.post("/api/vendas").send({

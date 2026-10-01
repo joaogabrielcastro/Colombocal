@@ -23,6 +23,9 @@ function sanitizarNota(nota) {
   return {
     id: nota.id,
     vendaId: nota.vendaId,
+    emitenteFiscalId: nota.emitenteFiscalId,
+    emitenteNome: nota.emitenteNome,
+    emitenteCnpj: nota.emitenteCnpj,
     status: nota.status,
     serie: nota.serie,
     numero: nota.numero,

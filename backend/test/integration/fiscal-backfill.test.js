@@ -69,7 +69,7 @@ test("backfill fiscal: plaintext → encrypted → decrypt; 2ª passagem idempot
   const first = await runBackfillOnce();
   assert.equal(first.encrypted, 1);
 
-  const after1 = await prisma.emitenteFiscal.findUnique({ where: { tenantId: tenant.id } });
+  const after1 = await prisma.emitenteFiscal.findFirst({ where: { tenantId: tenant.id } });
   assert.ok(isEncryptedFiscalToken(after1.provedorToken));
   assert.ok(!String(after1.provedorToken).includes(plain));
   assert.equal(decryptFiscalToken(after1.provedorToken), plain);
@@ -79,6 +79,6 @@ test("backfill fiscal: plaintext → encrypted → decrypt; 2ª passagem idempot
   assert.equal(second.encrypted, 0);
   assert.ok(second.skipped >= 1);
 
-  const after2 = await prisma.emitenteFiscal.findUnique({ where: { tenantId: tenant.id } });
+  const after2 = await prisma.emitenteFiscal.findFirst({ where: { tenantId: tenant.id } });
   assert.equal(after2.provedorToken, cipher1);
 });

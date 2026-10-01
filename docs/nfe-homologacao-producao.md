@@ -19,10 +19,15 @@ Frete da venda **não entra** na NF-e (permanece no recibo interno).
 
 ## 2. Provedor
 
-1. Abrir conta na [Focus NFe](https://focusnfe.com.br) (ou Nuvem Fiscal / PlugNotas — exige outro adapter).
-2. Enviar o **certificado A1** da empresa no painel do provedor.
-3. Copiar o **token** da empresa.
-4. No Colombocal: Configurações → marcar **Habilitar emissão de NF-e** → Dados fiscais do emitente (colar o token).
+1. Abrir conta na [Focus NFe](https://focusnfe.com.br) (outro provedor exige um adapter próprio).
+2. Cadastrar cada CNPJ no painel e enviar o respectivo **certificado A1**.
+3. Copiar o token de homologação/produção de cada empresa.
+4. No Colombocal: Configurações → marcar **Habilitar emissão de NF-e** → Empresas emissoras.
+5. Cadastrar todos os CNPJs, marcar os documentos habilitados e escolher uma empresa padrão.
+
+O mesmo tenant pode possuir várias empresas emissoras. Na venda com NF-e, o usuário
+escolhe o CNPJ antes da emissão. A nota guarda o vínculo e um snapshot do emitente;
+consulta, cancelamento, XML e DANFE continuam usando o token da empresa escolhida.
 5. Ambiente: começar em **homologação**.
 
 Até esse checkbox ser marcado, a produção opera **só venda sem nota** (sem rádio Com NF-e e sem botão de emitir). Depois do certificado, ligue o módulo para aparecerem as duas opções.
@@ -73,7 +78,8 @@ Timeout, 502/503 ou erro de rede **mantêm** a nota local em `processando` e **r
 - A venda continua sendo a ordem comercial (estoque, título, frete, O.S., OC).
 - NF-e autorizada **bloqueia** editar e cancelar a venda. Cancele a nota primeiro (prazo SEFAZ, em geral 24h) ou use nota de devolução depois.
 - Cancelar NF-e ≠ cancelar venda.
-- Um token/certificado por empresa (tenant). Não misture em variável global se houver mais de um CNPJ.
+- Um token/certificado por CNPJ. Não use `FOCUS_NFE_TOKEN` como credencial global quando
+  houver mais de uma empresa; salve o token individual em cada empresa emissora.
 
 ## 6. Fechamento Fiscal Mensal
 

@@ -10,6 +10,10 @@ const {
   isErroInconclusivoMdfe,
   isMdfeNaoEncontradoNoProvedor,
 } = require("../../domain/mdfe/refMdfe");
+const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+
+const emitenteMdfePadrao = (prisma, tenantId) =>
+  buscarEmitenteFiscal(prisma, { tenantId, recurso: "mdfe", obrigatorio: true });
 
 async function sincronizarMdfeSeProcessando(prisma, { doc, provider, emitente } = {}) {
   if (!doc || doc.status !== STATUS.PROCESSANDO) {
@@ -57,7 +61,7 @@ async function consultarMdfe(prisma, { tenantId, id, provider } = {}) {
     });
   }
   if (doc.status !== STATUS.PROCESSANDO) return doc;
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await emitenteMdfePadrao(prisma, tenantId);
   const sync = await sincronizarMdfeSeProcessando(prisma, { doc, provider, emitente });
   if (sync.kind === "ok") return sync.doc;
   if (sync.kind === "ausente") return doc;
@@ -87,7 +91,7 @@ async function cancelarMdfe(prisma, { tenantId, id, justificativa, provider, aud
       httpStatus: 400,
     });
   }
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await emitenteMdfePadrao(prisma, tenantId);
   const mdfeProvider = provider || createMdfeProvider({ emitente });
   if (!mdfeProvider.supports?.cancelar) {
     throw new AppError("Cancelamento de MDF-e não suportado pelo provedor.", {
@@ -149,7 +153,7 @@ async function encerrarMdfe(
       httpStatus: 400,
     });
   }
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await emitenteMdfePadrao(prisma, tenantId);
   const mdfeProvider = provider || createMdfeProvider({ emitente });
   if (!mdfeProvider.supports?.encerrar) {
     throw new AppError("Encerramento de MDF-e não suportado pelo provedor.", {

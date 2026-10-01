@@ -7,6 +7,16 @@ const {
   isNfeNaoEncontradaNoProvedor,
 } = require("../../domain/nfe/refNfe");
 const { onNfeAutorizada } = require("../../domain/nfe/onNfeAutorizada");
+const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+
+async function emitenteDaNota(prisma, nota) {
+  return buscarEmitenteFiscal(prisma, {
+    tenantId: nota.tenantId,
+    emitenteFiscalId: nota.emitenteFiscalId || undefined,
+    recurso: "nfe",
+    obrigatorio: true,
+  });
+}
 
 function patchFromConsulta(nota, patch) {
   return {
@@ -79,7 +89,7 @@ async function cancelarNfe(prisma, { tenantId, vendaId, justificativa, provider,
     });
   }
 
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await emitenteDaNota(prisma, nota);
   const nfeProvider = provider || createNfeProvider({ emitente });
   const resposta = await nfeProvider.cancelar({
     ref: nota.refProvedor,
@@ -120,7 +130,7 @@ async function consultarNfe(prisma, { tenantId, vendaId, provider } = {}) {
   }
   if (nota.status !== STATUS.PROCESSANDO) return nota;
 
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await emitenteDaNota(prisma, nota);
   const sync = await sincronizarNotaSeProcessando(prisma, {
     nota,
     provider,

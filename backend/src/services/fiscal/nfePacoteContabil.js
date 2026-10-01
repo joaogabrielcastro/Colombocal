@@ -122,7 +122,10 @@ async function processNfePacoteContabil(payload, jobTenantId) {
   );
   const resumo = resumoFiscal(notas);
 
-  const emitente = await prisma.emitenteFiscal.findUnique({ where: { tenantId } });
+  const emitente = await prisma.emitenteFiscal.findFirst({
+    where: { tenantId, ativo: true },
+    orderBy: [{ padrao: "desc" }, { id: "asc" }],
+  });
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { name: true, slug: true },

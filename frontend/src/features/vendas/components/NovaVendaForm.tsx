@@ -98,6 +98,10 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [erro, setErro] = useState("");
   const [mostrarDetalhes, setMostrarDetalhes] = useState(isEdit);
   const [emissaoNfe, setEmissaoNfe] = useState<"sem" | "com">("sem");
+  const [emitentesFiscais, setEmitentesFiscais] = useState<
+    { id: number; cnpj: string; razaoSocial: string; nomeFantasia?: string | null; ambiente: string; padrao: boolean }[]
+  >([]);
+  const [emitenteFiscalId, setEmitenteFiscalId] = useState("");
   const [condicaoPagamentoId, setCondicaoPagamentoId] = useState("");
   const [bancoCobranca, setBancoCobranca] = useState("");
   const [condicoesPagamento, setCondicoesPagamento] = useState<
@@ -112,6 +116,20 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       .then(setCondicoesPagamento)
       .catch(() => setCondicoesPagamento([]));
   }, []);
+
+  useEffect(() => {
+    if (!nfeEnabled || isEdit) return;
+    void api
+      .get<{ id: number; cnpj: string; razaoSocial: string; nomeFantasia?: string | null; ambiente: string; padrao: boolean }[]>(
+        "/config/emitentes-fiscais-opcoes",
+      )
+      .then((rows) => {
+        setEmitentesFiscais(rows);
+        const padrao = rows.find((row) => row.padrao) || rows[0];
+        setEmitenteFiscalId(padrao ? String(padrao.id) : "");
+      })
+      .catch(() => setEmitentesFiscais([]));
+  }, [nfeEnabled, isEdit]);
 
   useEffect(() => {
     if (!isEdit && fretePagoDefault) {
@@ -529,6 +547,10 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         motoristaId: motoristaId || undefined,
         itens: itensValidos,
         emitirNfe: nfeEnabled && emissaoNfe === "com",
+        emitenteFiscalId:
+          nfeEnabled && emissaoNfe === "com" && emitenteFiscalId
+            ? Number(emitenteFiscalId)
+            : undefined,
       });
       if (venda.nfeErro) {
         const extra = Array.isArray(venda.nfeErro.details)
@@ -1116,11 +1138,28 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
               </label>
             </div>
             {emissaoNfe === "com" ? (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
-                Cliente e produtos precisam de cadastro fiscal (NCM, endereço,
-                IE). Se a SEFAZ recusar, a venda fica gravada e você emite a
-                nota depois.
-              </p>
+              <div className="mt-3 space-y-2">
+                <label className="block text-sm text-gray-800">
+                  <span className="block font-medium mb-1">Empresa emissora *</span>
+                  <select
+                    className="input-field"
+                    required
+                    value={emitenteFiscalId}
+                    onChange={(e) => setEmitenteFiscalId(e.target.value)}
+                  >
+                    <option value="">Selecione a empresa</option>
+                    {emitentesFiscais.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.nomeFantasia || row.razaoSocial} — {row.cnpj} ({row.ambiente})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Cliente e produtos precisam de cadastro fiscal (NCM, endereço,
+                  IE). Se a SEFAZ recusar, a venda fica gravada e você emite a nota depois.
+                </p>
+              </div>
             ) : null}
           </div>
         ) : null}

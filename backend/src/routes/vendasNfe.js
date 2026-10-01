@@ -2,7 +2,7 @@ const { prisma } = require("../lib/prisma");
 const { handleRouteError } = require("../utils/api");
 const { parseBody } = require("../utils/zodParse");
 const { parseIntField } = require("../utils/validation");
-const { nfeCancelarSchema } = require("../schemas/nfe");
+const { nfeCancelarSchema, nfeEmitirSchema } = require("../schemas/nfe");
 const { validarEmissaoNfe, emitirNfe } = require("../application/use-cases/emitirNfe");
 const { cancelarNfe, consultarNfe } = require("../application/use-cases/gerirNfe");
 const {
@@ -41,8 +41,12 @@ async function enviarArquivoNota(req, res, kind) {
     where: { id: vendaId, ...tw(req) },
     select: { numeroVenda: true },
   });
-  const emitente = await prisma.emitenteFiscal.findUnique({
-    where: { tenantId: req.tenantId },
+  const { buscarEmitenteFiscal } = require("../services/emitenteFiscal");
+  const emitente = await buscarEmitenteFiscal(prisma, {
+    tenantId: req.tenantId,
+    emitenteFiscalId: nota.emitenteFiscalId || undefined,
+    recurso: "nfe",
+    obrigatorio: true,
   });
   const provider = createNfeProvider({ emitente });
   const url = kind === "danfe" ? nota.danfeUrl : nota.xmlUrl;
@@ -96,9 +100,13 @@ function registerVendaNfeRoutes(router) {
     try {
       await assertNfeEnabled(req);
       const vendaId = parseIntField(req.params.id, "id", { min: 1 });
+      const emitenteFiscalId = req.query.emitenteFiscalId
+        ? parseIntField(req.query.emitenteFiscalId, "emitenteFiscalId", { min: 1 })
+        : undefined;
       const result = await validarEmissaoNfe(prisma, {
         tenantId: req.tenantId,
         vendaId,
+        emitenteFiscalId,
       });
       res.json(result);
     } catch (error) {
@@ -110,9 +118,11 @@ function registerVendaNfeRoutes(router) {
     try {
       await assertNfeEnabled(req);
       const vendaId = parseIntField(req.params.id, "id", { min: 1 });
+      const { emitenteFiscalId } = parseBody(nfeEmitirSchema, req.body || {});
       const nota = await emitirNfe(prisma, {
         tenantId: req.tenantId,
         vendaId,
+        emitenteFiscalId,
         audit: auditFn(req),
       });
       res.status(201).json(sanitizarNota(nota));

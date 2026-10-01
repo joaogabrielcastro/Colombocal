@@ -74,7 +74,10 @@ async function main() {
     fs.writeFileSync(dumpPath, dump, "utf8");
 
     // Round-trip decrypt na app (mesma chave) após "restore" lógico (dados já no DB).
-    const row = await prisma.emitenteFiscal.findUnique({ where: { tenantId: tenant.id } });
+    const row = await prisma.emitenteFiscal.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: [{ padrao: "desc" }, { id: "asc" }],
+    });
     if (!isEncryptedFiscalToken(row.provedorToken)) {
       throw new Error("Token no banco não está no formato cifrado esperado");
     }

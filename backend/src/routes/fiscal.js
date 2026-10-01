@@ -26,6 +26,7 @@ const { getTenantSlug } = require("../utils/tenantRequest");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const { enqueueExportJob } = require("../services/exportJobs");
 const { getDateRange } = require("../utils/dateRangeQuery");
+const { buscarEmitenteFiscal } = require("../services/emitenteFiscal");
 
 async function assertAnyFiscalDocEnabled(req) {
   const slug = await getTenantSlug(req.tenantId);
@@ -87,8 +88,9 @@ function filtrosFromQuery(req) {
 }
 
 async function carregarEmitenteAmbiente(tenantId) {
-  const emitente = await prisma.emitenteFiscal.findUnique({
-    where: { tenantId },
+  const emitente = await prisma.emitenteFiscal.findFirst({
+    where: { tenantId, ativo: true },
+    orderBy: [{ padrao: "desc" }, { id: "asc" }],
     select: {
       razaoSocial: true,
       nomeFantasia: true,
@@ -333,8 +335,11 @@ async function enviarArquivoNotaPorId(req, res, kind) {
     where: { id: nota.vendaId, tenantId: req.tenantId },
     select: { numeroVenda: true },
   });
-  const emitente = await prisma.emitenteFiscal.findUnique({
-    where: { tenantId: req.tenantId },
+  const emitente = await buscarEmitenteFiscal(prisma, {
+    tenantId: req.tenantId,
+    emitenteFiscalId: nota.emitenteFiscalId || undefined,
+    recurso: "nfe",
+    obrigatorio: true,
   });
   const provider = createNfeProvider({ emitente });
   const url = kind === "danfe" ? nota.danfeUrl : nota.xmlUrl;

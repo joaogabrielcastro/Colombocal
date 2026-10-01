@@ -176,9 +176,18 @@ async function ensureDatabaseCompat() {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await prisma.$executeRawUnsafe(`DROP INDEX IF EXISTS "EmitenteFiscal_tenantId_key"`);
   await prisma.$executeRawUnsafe(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "EmitenteFiscal_tenantId_key"
-      ON "EmitenteFiscal"("tenantId")
+    ALTER TABLE "EmitenteFiscal"
+      ADD COLUMN IF NOT EXISTS "ativo" BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS "padrao" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "habilitaNfe" BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS "habilitaCte" BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS "habilitaMdfe" BOOLEAN NOT NULL DEFAULT true
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "EmitenteFiscal_tenantId_cnpj_key"
+      ON "EmitenteFiscal"("tenantId", "cnpj")
   `);
 
   await prisma.$executeRawUnsafe(`
@@ -215,6 +224,12 @@ async function ensureDatabaseCompat() {
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "NotaFiscal_vendaId_idx"
       ON "NotaFiscal"("vendaId")
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "NotaFiscal"
+      ADD COLUMN IF NOT EXISTS "emitenteFiscalId" INTEGER,
+      ADD COLUMN IF NOT EXISTS "emitenteNome" TEXT,
+      ADD COLUMN IF NOT EXISTS "emitenteCnpj" TEXT
   `);
 
   await prisma.$executeRawUnsafe(`
