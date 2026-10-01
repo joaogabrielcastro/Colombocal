@@ -1,3 +1,8 @@
+// O tipo do engine precisa ser definido antes do primeiro import do Prisma.
+process.env.PRISMA_CLIENT_ENGINE_TYPE ||= "library";
+delete process.env.PRISMA_GENERATE_NO_ENGINE;
+delete process.env.PRISMA_GENERATE_DATAPROXY;
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -13,11 +18,6 @@ const { requireNavKey } = require("./middleware/navPermission");
 const { runPrismaMigrateOnStart } = require("./startup/migrateOnStart");
 const { assertProductionConfig } = require("./startup/assertProductionConfig");
 const { startExportWorker, useRedisQueue } = require("./services/exportJobs");
-
-// Garante uso do engine local no ambiente de desenvolvimento
-process.env.PRISMA_CLIENT_ENGINE_TYPE = "library";
-delete process.env.PRISMA_GENERATE_NO_ENGINE;
-delete process.env.PRISMA_GENERATE_DATAPROXY;
 
 const app = express();
 app.use(requestIdMiddleware);
@@ -74,7 +74,7 @@ app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" }));
 
 function skipGlobalApiLimiter(req) {
   const url = req.originalUrl || "";
-  if (url.includes("/api/cnpj")) return true;
+  if (url.includes("/api/cnpj") || url.includes("/api/cep")) return true;
   if (url.startsWith("/api/setup")) return true;
   // /register-status e /register têm limiter próprio em auth.js
   if (url.startsWith("/api/auth/register")) return true;
@@ -105,6 +105,7 @@ const setupLimiter = rateLimit({
 });
 
 app.use("/api/cnpj", cnpjLimiter);
+app.use("/api/cep", cnpjLimiter);
 app.use("/api", apiLimiter);
 
 // Health check
@@ -186,6 +187,7 @@ app.use(
 );
 app.use("/api/dashboard", requireTenantUser, requireNavKey("dashboard"), require("./routes/dashboard"));
 app.use("/api/cnpj", requireTenantUser, require("./routes/cnpj"));
+app.use("/api/cep", requireTenantUser, require("./routes/cep"));
 
 // Global error handler
 app.use((err, req, res, next) => {

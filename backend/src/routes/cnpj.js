@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const axios = require("axios");
 const { z } = require("zod");
+const { isValidCnpj } = require("../utils/cpf");
 
 const cnpjDigits = z
   .string()
@@ -18,11 +19,15 @@ router.get("/:cnpj", async (req, res) => {
       });
     }
     const cnpj = parsed.data;
+    if (!isValidCnpj(cnpj)) {
+      return res.status(400).json({ error: "CNPJ inválido. Verifique os dígitos." });
+    }
 
     const response = await axios.get(
       `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`,
       {
         timeout: 10000,
+        headers: { "User-Agent": "Colombocal/1.0 (consulta cadastral)" },
       },
     );
 
@@ -31,11 +36,11 @@ router.get("/:cnpj", async (req, res) => {
       cnpj: data.cnpj,
       razaoSocial: data.razao_social,
       nomeFantasia: data.nome_fantasia || data.razao_social,
-      telefone: data.ddd_telefone_1
-        ? `(${data.ddd_telefone_1}) ${data.telefone_1}`
-        : "",
+      telefone: data.ddd_telefone_1 || "",
       cidade: data.municipio,
       estado: data.uf,
+      municipio: data.municipio || "",
+      uf: data.uf || "",
       endereco: `${data.logradouro}, ${data.numero}${data.complemento ? " " + data.complemento : ""} - ${data.bairro}`,
       cep: data.cep,
       logradouro: data.logradouro || "",

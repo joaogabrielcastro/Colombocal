@@ -87,6 +87,8 @@ services:
       REDIS_URL: redis://redis:6379
       EXPORT_QUEUE_MODE: redis
       PRISMA_CLIENT_ENGINE_TYPE: library
+      # Somente desenvolvimento local: simula autorizaÃ§Ã£o sem Focus/SEFAZ.
+      NFE_PROVIDER: mock
       JWT_SECRET: dev_jwt_secret_change_me
       # /setup — mín. 8 caracteres; remova após o 1.º admin (dev local só).
       SETUP_SECRET: "colombocal-dev-setup-change-me"

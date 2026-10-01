@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { onlyDigits } = require("../utils/cpf");
+const { onlyDigits, isValidCnpj, isValidIeParana } = require("../utils/cpf");
 
 const optionalDigits = (len) =>
   z
@@ -20,7 +20,8 @@ const emitenteFiscalSchema = z.object({
     .string()
     .min(1, "CNPJ é obrigatório")
     .transform((s) => onlyDigits(s))
-    .refine((s) => s.length === 14, "CNPJ deve ter 14 dígitos"),
+    .refine((s) => s.length === 14, "CNPJ deve ter 14 dígitos")
+    .refine(isValidCnpj, "CNPJ inválido. Verifique os dígitos"),
   inscricaoEstadual: z
     .string()
     .min(1, "Inscrição estadual é obrigatória")
@@ -50,7 +51,11 @@ const emitenteFiscalSchema = z.object({
     .string()
     .transform((s) => onlyDigits(s))
     .refine((s) => s.length === 8, "CEP deve ter 8 dígitos"),
-  telefone: z.string().nullable().optional(),
+  telefone: z
+    .string()
+    .nullable()
+    .optional()
+    .refine((v) => !v || [10, 11].includes(onlyDigits(v).length), "Telefone deve ter 10 ou 11 dígitos"),
   serieNfe: z.coerce.number().int().positive().default(1),
   rntrc: z.string().nullable().optional(),
   serieCte: z.coerce.number().int().positive().optional(),
@@ -64,6 +69,14 @@ const emitenteFiscalSchema = z.object({
   habilitaNfe: z.boolean().optional(),
   habilitaCte: z.boolean().optional(),
   habilitaMdfe: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.uf === "PR" && data.inscricaoEstadual !== "ISENTO" && !isValidIeParana(data.inscricaoEstadual)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["inscricaoEstadual"],
+      message: "Inscrição estadual do Paraná inválida",
+    });
+  }
 });
 
 const nfeEmitirSchema = z.object({

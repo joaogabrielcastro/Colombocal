@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { isValidCpf, normalizeCpf } = require("../src/utils/cpf");
+const { isValidCpf, isValidCnpj, isValidIeParana, normalizeCpf } = require("../src/utils/cpf");
 const {
   tenantAllowsClienteCpf,
   tenantAllowsFrete,
@@ -23,6 +23,17 @@ test("isValidCpf: rejeita tamanho incorreto", () => {
 
 test("normalizeCpf: retorna só dígitos", () => {
   assert.equal(normalizeCpf("529.982.247-25"), "52998224725");
+});
+
+test("isValidCnpj: valida os dois dígitos verificadores", () => {
+  assert.equal(isValidCnpj("11.222.333/0001-81"), true);
+  assert.equal(isValidCnpj("11.222.333/0001-00"), false);
+  assert.equal(isValidCnpj("00.000.000/0000-00"), false);
+});
+
+test("isValidIeParana: valida os dois dígitos verificadores", () => {
+  assert.equal(isValidIeParana("123.45678-50"), true);
+  assert.equal(isValidIeParana("123.45678-00"), false);
 });
 
 test("tenantAllowsClienteCpf: respeita CLIENT_CPF_TENANT_SLUGS", () => {

@@ -20,6 +20,32 @@ function isValidCpf(cpf) {
   return rest === Number(d[10]);
 }
 
+function isValidCnpj(cnpj) {
+  const d = onlyDigits(cnpj);
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const calc = (base, weights) => {
+    const sum = base.split("").reduce((acc, n, i) => acc + Number(n) * weights[i], 0);
+    const rest = sum % 11;
+    return rest < 2 ? 0 : 11 - rest;
+  };
+  const first = calc(d.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const second = calc(d.slice(0, 12) + first, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  return d.endsWith(`${first}${second}`);
+}
+
+function isValidIeParana(ie) {
+  const d = onlyDigits(ie);
+  if (d.length !== 10 || /^(\d)\1{9}$/.test(d)) return false;
+  const digit = (base, weights) => {
+    const rest = base.split("").reduce((acc, n, i) => acc + Number(n) * weights[i], 0) % 11;
+    const result = 11 - rest;
+    return result >= 10 ? 0 : result;
+  };
+  const first = digit(d.slice(0, 8), [3, 2, 7, 6, 5, 4, 3, 2]);
+  const second = digit(d.slice(0, 8) + first, [4, 3, 2, 7, 6, 5, 4, 3, 2]);
+  return d.endsWith(`${first}${second}`);
+}
+
 function normalizeCpf(cpf) {
   const d = onlyDigits(cpf);
   if (!isValidCpf(d)) {
@@ -33,5 +59,7 @@ function normalizeCpf(cpf) {
 module.exports = {
   onlyDigits,
   isValidCpf,
+  isValidCnpj,
+  isValidIeParana,
   normalizeCpf,
 };

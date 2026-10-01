@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import api, { ApiError } from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
+import { isValidCnpjDigits, onlyDigits } from "@/lib/document-validation";
 
 export type EmitenteFiscal = {
   id?: number;
@@ -64,6 +65,34 @@ const empty: EmitenteFiscal = {
   habilitaMdfe: false,
 };
 
+type CepData = Pick<EmitenteFiscal, "cep" | "logradouro" | "complemento" | "bairro" | "municipio" | "uf" | "codigoMunicipio">;
+type CnpjData = CepData & Pick<EmitenteFiscal, "cnpj" | "razaoSocial" | "nomeFantasia" | "telefone" | "numero">;
+
+const maskCnpj = (value: string) => onlyDigits(value).slice(0, 14)
+  .replace(/^(\d{2})(\d)/, "$1.$2")
+  .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+  .replace(/\.(\d{3})(\d)/, ".$1/$2")
+  .replace(/(\d{4})(\d)/, "$1-$2");
+const maskCep = (value: string) => onlyDigits(value).slice(0, 8).replace(/^(\d{5})(\d)/, "$1-$2");
+const maskPhone = (value: string) => {
+  const d = onlyDigits(value).slice(0, 11);
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2");
+  return d.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
+};
+
+function isValidIeParana(value: string) {
+  const d = onlyDigits(value);
+  if (d.length !== 10 || /^(\d)\1{9}$/.test(d)) return false;
+  const calc = (base: string, weights: number[]) => {
+    const rest = base.split("").reduce((sum, n, i) => sum + Number(n) * weights[i], 0) % 11;
+    const result = 11 - rest;
+    return result >= 10 ? 0 : result;
+  };
+  const first = calc(d.slice(0, 8), [3, 2, 7, 6, 5, 4, 3, 2]);
+  const second = calc(d.slice(0, 8) + first, [4, 3, 2, 7, 6, 5, 4, 3, 2]);
+  return d.endsWith(`${first}${second}`);
+}
+
 export function EmitenteFiscalForm() {
   const [form, setForm] = useState<EmitenteFiscal>(empty);
   const [token, setToken] = useState("");
@@ -73,6 +102,10 @@ export function EmitenteFiscalForm() {
   const [tokenOk, setTokenOk] = useState(false);
   const [emitentes, setEmitentes] = useState<EmitenteFiscal[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [ultimoCepBuscado, setUltimoCepBuscado] = useState("");
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const [ultimoCnpjBuscado, setUltimoCnpjBuscado] = useState("");
 
   const set =
     (field: keyof EmitenteFiscal) =>
@@ -85,6 +118,63 @@ export function EmitenteFiscalForm() {
     setTokenOk(!!row?.provedorTokenConfigurado);
     setToken("");
     setErro("");
+    setUltimoCepBuscado(onlyDigits(row?.cep || ""));
+    setUltimoCnpjBuscado(onlyDigits(row?.cnpj || ""));
+  };
+
+  const buscarCnpj = async () => {
+    const cnpj = onlyDigits(form.cnpj);
+    if (!isValidCnpjDigits(cnpj)) {
+      setErro("CNPJ inválido. Verifique os dígitos informados.");
+      return;
+    }
+    if (buscandoCnpj || cnpj === ultimoCnpjBuscado) return;
+    setBuscandoCnpj(true);
+    setErro("");
+    try {
+      const data = await api.get<CnpjData>(`/cnpj/${cnpj}`);
+      setForm((prev) => ({
+        ...prev,
+        cnpj: maskCnpj(data.cnpj),
+        razaoSocial: data.razaoSocial || prev.razaoSocial,
+        nomeFantasia: data.nomeFantasia || data.razaoSocial || prev.nomeFantasia,
+        telefone: data.telefone ? maskPhone(data.telefone) : prev.telefone,
+        cep: data.cep ? maskCep(data.cep) : prev.cep,
+        logradouro: data.logradouro || prev.logradouro,
+        numero: data.numero || prev.numero,
+        complemento: data.complemento || prev.complemento,
+        bairro: data.bairro || prev.bairro,
+        municipio: data.municipio || prev.municipio,
+        uf: data.uf || prev.uf,
+        codigoMunicipio: data.codigoMunicipio || prev.codigoMunicipio,
+      }));
+      setUltimoCnpjBuscado(cnpj);
+      if (data.cep) setUltimoCepBuscado(onlyDigits(data.cep));
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : "Não foi possível consultar o CNPJ.");
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  };
+
+  const buscarCep = async () => {
+    const cep = onlyDigits(form.cep);
+    if (cep.length !== 8) {
+      setErro("CEP inválido. Informe 8 dígitos.");
+      return;
+    }
+    if (buscandoCep || cep === ultimoCepBuscado) return;
+    setBuscandoCep(true);
+    setErro("");
+    try {
+      const data = await api.get<CepData>(`/cep/${cep}`);
+      setForm((prev) => ({ ...prev, ...data, cep: maskCep(data.cep), complemento: prev.complemento || data.complemento || "" }));
+      setUltimoCepBuscado(cep);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : "Não foi possível consultar o CEP.");
+    } finally {
+      setBuscandoCep(false);
+    }
   };
 
   const carregar = async (preferredId?: number) => {
@@ -115,11 +205,33 @@ export function EmitenteFiscalForm() {
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSalvando(true);
     setErro("");
+    if (!isValidCnpjDigits(form.cnpj)) {
+      setErro("CNPJ inválido. Verifique os dígitos informados.");
+      return;
+    }
+    if (form.uf.trim().toUpperCase() === "PR" && form.inscricaoEstadual.trim().toUpperCase() !== "ISENTO" && !isValidIeParana(form.inscricaoEstadual)) {
+      setErro("Inscrição estadual do Paraná inválida.");
+      return;
+    }
+    if (onlyDigits(form.cep).length !== 8 || onlyDigits(form.codigoMunicipio).length !== 7) {
+      setErro("Confira o CEP e o código IBGE do município.");
+      return;
+    }
+    if (form.telefone && ![10, 11].includes(onlyDigits(form.telefone).length)) {
+      setErro("Telefone deve ter DDD e 10 ou 11 dígitos.");
+      return;
+    }
+    setSalvando(true);
     try {
       const body = {
         ...form,
+        cnpj: onlyDigits(form.cnpj),
+        inscricaoEstadual: form.inscricaoEstadual.trim().toUpperCase() === "ISENTO" ? "ISENTO" : onlyDigits(form.inscricaoEstadual),
+        cep: onlyDigits(form.cep),
+        codigoMunicipio: onlyDigits(form.codigoMunicipio),
+        telefone: form.telefone ? onlyDigits(form.telefone) : null,
+        uf: form.uf.trim().toUpperCase(),
         crt: Number(form.crt),
         serieNfe: Number(form.serieNfe) || 1,
         serieCte: Number(form.serieCte) || 1,
@@ -188,11 +300,16 @@ export function EmitenteFiscalForm() {
         </div>
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">CNPJ *</span>
-          <input required value={form.cnpj} onChange={set("cnpj")} className="input-field" />
+          <span className="flex gap-2">
+            <input required value={form.cnpj} onChange={(e) => { setForm((p) => ({ ...p, cnpj: maskCnpj(e.target.value) })); setUltimoCnpjBuscado(""); }} onBlur={() => void buscarCnpj()} className="input-field" placeholder="00.000.000/0000-00" maxLength={18} inputMode="numeric" />
+            <button type="button" className="btn-secondary whitespace-nowrap" disabled={buscandoCnpj || !isValidCnpjDigits(form.cnpj)} onClick={() => void buscarCnpj()}>
+              {buscandoCnpj ? "Buscando…" : "Buscar CNPJ"}
+            </button>
+          </span>
         </label>
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">Inscrição estadual *</span>
-          <input required value={form.inscricaoEstadual} onChange={set("inscricaoEstadual")} className="input-field" />
+          <input required value={form.inscricaoEstadual} onChange={(e) => setForm((p) => ({ ...p, inscricaoEstadual: e.target.value.toUpperCase().replace(/[^\dA-Z]/g, "").slice(0, 10) }))} className="input-field" placeholder="10 dígitos ou ISENTO" maxLength={10} />
         </label>
         <label className="text-sm md:col-span-2">
           <span className="block text-gray-700 mb-1">Razão social *</span>
@@ -235,15 +352,24 @@ export function EmitenteFiscalForm() {
         </label>
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">UF *</span>
-          <input required value={form.uf} onChange={set("uf")} className="input-field" maxLength={2} />
+          <input required value={form.uf} onChange={(e) => setForm((p) => ({ ...p, uf: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2) }))} className="input-field" maxLength={2} />
         </label>
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">CEP *</span>
-          <input required value={form.cep} onChange={set("cep")} className="input-field" />
+          <span className="flex gap-2">
+            <input required value={form.cep} onChange={(e) => { setForm((p) => ({ ...p, cep: maskCep(e.target.value) })); setUltimoCepBuscado(""); }} onBlur={() => void buscarCep()} className="input-field" placeholder="00000-000" maxLength={9} inputMode="numeric" />
+            <button type="button" className="btn-secondary whitespace-nowrap" disabled={buscandoCep || onlyDigits(form.cep).length !== 8} onClick={() => void buscarCep()}>
+              {buscandoCep ? "Buscando…" : "Buscar CEP"}
+            </button>
+          </span>
         </label>
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">Código IBGE *</span>
-          <input required value={form.codigoMunicipio} onChange={set("codigoMunicipio")} className="input-field" maxLength={7} />
+          <input required value={form.codigoMunicipio} onChange={(e) => setForm((p) => ({ ...p, codigoMunicipio: onlyDigits(e.target.value).slice(0, 7) }))} className="input-field" maxLength={7} inputMode="numeric" />
+        </label>
+        <label className="text-sm">
+          <span className="block text-gray-700 mb-1">Telefone</span>
+          <input value={form.telefone ?? ""} onChange={(e) => setForm((p) => ({ ...p, telefone: maskPhone(e.target.value) }))} className="input-field" placeholder="(41) 99999-9999" maxLength={15} inputMode="tel" />
         </label>
         <label className="text-sm">
           <span className="block text-gray-700 mb-1">Série NF-e</span>

@@ -120,7 +120,7 @@ test("multiemitente: escolhe empresa do tenant e grava snapshot na NF-e", async 
   const { cliente, produto, vendedor } = await seedFiscal();
   const segundo = await agent.post("/api/config/emitentes-fiscais").send({
     ...emitenteBody,
-    cnpj: "99888777000166",
+    cnpj: "12345678000195",
     razaoSocial: "Segundo Emitente Ltda",
     nomeFantasia: "Segundo Emitente",
     padrao: false,
@@ -141,14 +141,14 @@ test("multiemitente: escolhe empresa do tenant e grava snapshot na NF-e", async 
   });
   assert.equal(emit.status, 201);
   assert.equal(emit.body.emitenteFiscalId, segundo.body.id);
-  assert.equal(emit.body.emitenteCnpj, "99888777000166");
+  assert.equal(emit.body.emitenteCnpj, "12345678000195");
   assert.equal(emit.body.emitenteNome, "Segundo Emitente Ltda");
 
   const persistida = await prisma.notaFiscal.findFirst({
     where: { tenantId: cliente.tenantId, vendaId: venda.body.id },
   });
   assert.equal(persistida.emitenteFiscalId, segundo.body.id);
-  assert.equal(persistida.emitenteCnpj, "99888777000166");
+  assert.equal(persistida.emitenteCnpj, "12345678000195");
 });
 
 test("emissão NF-e via mock + bloqueio de edição/cancelamento da venda", async () => {
