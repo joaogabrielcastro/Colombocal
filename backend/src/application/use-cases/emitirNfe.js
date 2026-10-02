@@ -18,6 +18,8 @@ const {
 } = require("../../domain/nfe/refNfe");
 const { sincronizarNotaSeProcessando } = require("./gerirNfe");
 const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+const { randomUUID } = require("node:crypto");
+const { auditarSemFalhar } = require("../../services/fiscal/auditoriaFiscal");
 
 function produtosMap(produtos) {
   return new Map(produtos.map((p) => [p.id, p]));
@@ -133,7 +135,10 @@ async function emitirNfe(
         { code: "NFE_STATUS_INCERTO", httpStatus: 503 },
       );
     } else if (sync.kind === "ausente") {
-      notaReuso = sync.nota;
+      notaReuso = await prisma.notaFiscal.update({
+        where: { id: sync.nota.id },
+        data: { status: STATUS.RASCUNHO, claimEmissao: null },
+      });
     }
   }
 
@@ -182,11 +187,14 @@ async function emitirNfe(
     ? nota.refProvedor
     : await proximaRefNfe(prisma, { tenantId, vendaId });
 
+  const claimEmissao = randomUUID();
+
   if (nota) {
-    nota = await prisma.notaFiscal.update({
-      where: { id: nota.id },
+    const claimed = await prisma.notaFiscal.updateMany({
+      where: { id: nota.id, tenantId, claimEmissao: null },
       data: {
         status: STATUS.PROCESSANDO,
+        claimEmissao,
         emitenteFiscalId: ctx.emitente.id,
         emitenteNome: ctx.emitente.razaoSocial,
         emitenteCnpj: ctx.emitente.cnpj,
@@ -195,6 +203,13 @@ async function emitirNfe(
         motivoRejeicao: null,
       },
     });
+    if (claimed.count !== 1) {
+      throw new AppError("Outra emissÃ£o desta NF-e jÃ¡ estÃ¡ em andamento.", {
+        code: "NFE_EMISSAO_CONCORRENTE",
+        httpStatus: 409,
+      });
+    }
+    nota = await prisma.notaFiscal.findFirst({ where: { id: nota.id, tenantId } });
   } else {
     try {
       nota = await prisma.notaFiscal.create({
@@ -205,6 +220,7 @@ async function emitirNfe(
           emitenteNome: ctx.emitente.razaoSocial,
           emitenteCnpj: ctx.emitente.cnpj,
           status: STATUS.PROCESSANDO,
+          claimEmissao,
           refProvedor: ref,
           payloadEnviado: payload,
           emitidaEm: new Date(),
@@ -213,11 +229,14 @@ async function emitirNfe(
     } catch (error) {
       if (error?.code !== "P2002") throw error;
       const existing = await prisma.notaFiscal.findFirst({
-        where: { tenantId, vendaId, refProvedor: ref },
+        where: { tenantId, vendaId, status: { in: [STATUS.RASCUNHO, STATUS.PROCESSANDO, STATUS.AUTORIZADA] } },
       });
       if (!existing) throw error;
       if (existing.status === STATUS.AUTORIZADA) return existing;
-      nota = existing;
+      throw new AppError("Outra emissÃ£o desta venda jÃ¡ estÃ¡ em andamento.", {
+        code: "NFE_EMISSAO_CONCORRENTE",
+        httpStatus: 409,
+      });
     }
   }
 
@@ -240,15 +259,13 @@ async function emitirNfe(
         autorizadaEm: patch.autorizadaEm ?? undefined,
       },
     });
-    if (audit) {
-      await audit({
+    await auditarSemFalhar(audit, {
         tipo: "NFE_EMITIDA",
         entidade: "NotaFiscal",
         entidadeId: atualizada.id,
         vendaId,
         payload: { status: atualizada.status, refProvedor: nota.refProvedor },
-      });
-    }
+    });
     const { onNfeAutorizada } = require("../../domain/nfe/onNfeAutorizada");
     await onNfeAutorizada(prisma, {
       tenantId,

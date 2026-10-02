@@ -10,6 +10,12 @@ const {
   assertVendaDoTenant,
 } = require("../../utils/tenantOwnership");
 const { parseDateField } = require("../../utils/validation");
+const {
+  buscarReplay,
+  lockIdempotencyKey,
+  lockSaldoVenda,
+  salvarResultado,
+} = require("../../services/financeiroIdempotencia");
 
 async function registrarCheque(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -23,6 +29,16 @@ async function registrarCheque(prisma, payload) {
   const dataPagamento = dataRecebimentoDate;
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockIdempotencyKey(tx, payload.idempotencyKey);
+    await lockSaldoVenda(tx, tenantId, payload.vendaId, payload.clienteId);
+    const replay = await buscarReplay(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "cheque",
+      payload,
+    });
+    if (replay) return replay;
+
     await assertClienteDoTenant(tx, payload.clienteId, tenantId);
     await assertVendaDoTenant(tx, payload.vendaId, tenantId, {
       clienteId: payload.clienteId,
@@ -34,6 +50,12 @@ async function registrarCheque(prisma, payload) {
       const venda = await findVendaFinanceiraById(tx, payload.vendaId, tenantId);
       if (venda) {
         const saldoAberto = calcularSaldoAbertoVenda(venda);
+        if (saldoAberto < 0.01) {
+          throw new AppError("Esta venda já está quitada", {
+            code: "VENDA_QUITADA",
+            httpStatus: 409,
+          });
+        }
         if (payload.valor > saldoAberto) {
           if (!payload.trocoTipo) {
             throw new AppError(
@@ -113,11 +135,19 @@ async function registrarCheque(prisma, payload) {
       },
     });
 
-    return {
+    const resultado = {
       chequeId: novoCheque.id,
       trocoValor,
       trocoTipo: trocoValor > 0.0001 ? (payload.trocoTipo || "dinheiro") : null,
     };
+    await salvarResultado(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "cheque",
+      payload,
+      resultado,
+    });
+    return resultado;
   });
 
   const chequeCompleto = await findChequeById(prisma, result.chequeId, tenantId, {

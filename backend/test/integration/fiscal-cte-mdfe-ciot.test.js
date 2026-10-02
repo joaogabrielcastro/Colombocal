@@ -70,11 +70,11 @@ async function seedTransporteTenant(opts = {}) {
   const base = await seedBase({
     tenant: opts.tenant || { slug: "default", name: "Colombocal" },
   });
-  await prisma.emitenteFiscal.create({
+  const emitente = await prisma.emitenteFiscal.create({
     data: { tenantId: base.tenant.id, ...emitenteBody },
   });
   await enableFlags(base.tenant.id, opts.flags);
-  return base;
+  return { ...base, emitente };
 }
 
 async function createMember(tenantId, { email, navPermissions, password = "segredo123" }) {
@@ -127,6 +127,7 @@ test("CT-e emissão mock + isolamento + ACL", async () => {
     provider: createMockCteProvider(),
   });
   assert.equal(doc.status, CTE_STATUS.AUTORIZADA);
+  assert.equal(doc.emitenteFiscalId, a.emitente.id);
   assert.ok(doc.refProvedor.startsWith("cte-1-"));
 
   const lista = await agent.get("/api/fiscal/cte");
@@ -165,6 +166,11 @@ test("CT-e emissão mock + isolamento + ACL", async () => {
       .get("/api/fiscal/cte")
       .set("Authorization", `Bearer ${okLogin.body.token}`);
     assert.equal(ok.status, 200);
+    const deniedEmit = await agent
+      .post("/api/fiscal/cte")
+      .set("Authorization", `Bearer ${okLogin.body.token}`)
+      .send({ ...cteInput, emitenteFiscalId: a.emitente.id });
+    assert.equal(deniedEmit.status, 403);
 
     const noLogin = await agent
       .post("/api/auth/login")
@@ -194,6 +200,7 @@ test("MDF-e emissão + encerramento", async () => {
     provider,
   });
   assert.equal(doc.status, MDFE_STATUS.AUTORIZADA);
+  assert.equal(doc.emitenteFiscalId, base.emitente.id);
   assert.equal(doc.documentos.length, 1);
 
   const enc = await encerrarMdfe(prisma, {

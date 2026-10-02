@@ -9,6 +9,7 @@ import { reportApiError } from "@/lib/report-api-error";
 import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanner";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { toast } from "sonner";
+import { downloadFiscalFile } from "@/features/fiscal/services/download";
 
 type Doc = {
   id: number;
@@ -63,6 +64,14 @@ export default function FiscalMdfeDetailPage() {
     }
   };
 
+  const baixar = async (tipo: "xml" | "damdfe") => {
+    try {
+      await downloadFiscalFile(`/fiscal/mdfe/${id}/${tipo}`);
+    } catch (err) {
+      reportApiError(err, { title: `Falha ao baixar ${tipo.toUpperCase()}.` });
+    }
+  };
+
   if (!mdfeEnabled) return <p className="p-6 text-sm">Módulo MDF-e desabilitado.</p>;
   if (!doc) return <p className="p-6 text-sm">Carregando…</p>;
 
@@ -103,6 +112,22 @@ export default function FiscalMdfeDetailPage() {
             {!doc.documentos?.length ? <li>Nenhum</li> : null}
           </ul>
         </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {doc.xmlUrl ? (
+          <button type="button" className="btn-secondary text-sm" onClick={() => void baixar("xml")}>
+            XML
+          </button>
+        ) : (
+          <span className="text-xs text-gray-500 self-center">XML indisponível</span>
+        )}
+        {doc.damdfeUrl ? (
+          <button type="button" className="btn-secondary text-sm" onClick={() => void baixar("damdfe")}>
+            DAMDFE
+          </button>
+        ) : (
+          <span className="text-xs text-gray-500 self-center">DAMDFE indisponível</span>
+        )}
       </div>
       {doc.status === "autorizada" ? (
         <div className="card p-4 space-y-2">

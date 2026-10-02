@@ -2,6 +2,7 @@ const { STATUS, mapStatusFocus } = require("../../domain/mdfe/constants");
 const { AppError } = require("../../shared/errors/appError");
 const { INCONCLUSIVE_HTTP } = require("../../domain/nfe/refNfe");
 const { focusBaseUrl } = require("../nfe/focusNfeProvider");
+const { resolveFocusDownloadUrl } = require("../nfe/focusDownloadUrl");
 
 function authHeader(token) {
   return { Authorization: `Basic ${Buffer.from(`${token}:`).toString("base64")}` };
@@ -137,13 +138,12 @@ function createFocusMdfeProvider({ token, ambiente }) {
     },
     async baixarArquivo(caminhoRelativo) {
       if (!caminhoRelativo) return null;
-      const url = caminhoRelativo.startsWith("http")
-        ? caminhoRelativo
-        : `${baseURL}${caminhoRelativo.startsWith("/") ? "" : "/"}${caminhoRelativo}`;
+      const url = resolveFocusDownloadUrl(caminhoRelativo, baseURL);
       const res = await axios.get(url, {
         headers: authHeader(token),
         responseType: "arraybuffer",
         timeout: 30000,
+        maxRedirects: 0,
       });
       return {
         buffer: Buffer.from(res.data),
@@ -246,7 +246,7 @@ function createMdfeProvider({ emitente } = {}) {
   }
   const token =
     (tokenFromDb && String(tokenFromDb).trim()) ||
-    String(process.env.FOCUS_NFE_TOKEN || "").trim() ||
+    (!emitente ? String(process.env.FOCUS_NFE_TOKEN || "").trim() : "") ||
     null;
   const ambiente =
     emitente?.ambiente || process.env.FOCUS_NFE_AMBIENTE || "homologacao";

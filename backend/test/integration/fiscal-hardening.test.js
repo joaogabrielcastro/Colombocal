@@ -394,7 +394,7 @@ test("isolamento completo A vs B + ignore tenantId no request + job", async () =
   // Conteúdo do job processado com tenant B não inclui nota A
   const zipB = new AdmZip(Buffer.from(jobB.content, "base64"));
   const readmeB = zipB.readAsText(zipB.getEntries().find((e) => e.entryName.endsWith("README.txt")));
-  assert.match(readmeB, /NF-e autorizadas: 1/);
+  assert.match(readmeB, /Autorizadas: 1/);
 
   const startA = await agent
     .post("/api/fiscal/fechamento/pacote")
@@ -443,14 +443,14 @@ test("ZIP mock: estrutura, XLSX, README, XML; sem XML falso fora do mock", async
   assert.ok(names.some((n) => n.includes("/xml/nfe-125.xml")), names.join("\n"));
   assert.ok(names.some((n) => n.includes("/canceladas/nfe-126.xml")), names.join("\n"));
   assert.ok(
-    names.some((n) => n.includes("/canceladas/eventos/resumo-cancelamentos.txt")),
+    names.some((n) => n.includes("/relatorios/resumo-cancelamentos.txt")),
     names.join("\n"),
   );
 
   const readme = zip.readAsText(zip.getEntries().find((e) => e.entryName.endsWith("README.txt")));
   assert.match(readme, /HOMOLOGAÇÃO/);
-  assert.match(readme, /NF-e autorizadas: 1/);
-  assert.match(readme, /contabilidade/i);
+  assert.match(readme, /Autorizadas: 1/);
+  assert.match(readme, /contador/i);
 
   const xlsxEntry = zip.getEntries().find((e) => e.entryName.endsWith("relatorio-nfe.xlsx"));
   const wb = new ExcelJS.Workbook();
@@ -471,7 +471,7 @@ test("ZIP mock: estrutura, XLSX, README, XML; sem XML falso fora do mock", async
   const readmeProd = zipProd.readAsText(
     zipProd.getEntries().find((e) => e.entryName.endsWith("README.txt")),
   );
-  assert.match(readmeProd, /XMLs indisponíveis \(não incluídos\):/);
+  assert.match(readmeProd, /XMLs NF-e indisponíveis:/);
   process.env.NFE_PROVIDER = "mock";
 });
 
@@ -501,4 +501,51 @@ test("XML/DANFE disponíveis via mock; indisponível para rejeitada", async () =
 
   const danfeRej = await agent.get(`/api/fiscal/notas/${rej.id}/danfe`);
   assert.equal(danfeRej.status, 404);
+});
+
+test("pacote contábil separa emitentes por CNPJ, inclusive empresa sem movimento", async () => {
+  const base = await seedFiscalTenant();
+  const primeiro = await prisma.emitenteFiscal.findFirst({ where: { tenantId: base.tenant.id } });
+  const segundo = await prisma.emitenteFiscal.create({
+    data: {
+      tenantId: base.tenant.id,
+      ...emitenteBody,
+      cnpj: "22333444000199",
+      razaoSocial: "Segunda Empresa LTDA",
+      nomeFantasia: "Segunda Empresa",
+      padrao: false,
+    },
+  });
+  const terceiro = await prisma.emitenteFiscal.create({
+    data: {
+      tenantId: base.tenant.id,
+      ...emitenteBody,
+      cnpj: "33444555000177",
+      razaoSocial: "Empresa Sem Movimento LTDA",
+      nomeFantasia: "Sem Movimento",
+      padrao: false,
+    },
+  });
+  const one = await criarVendaComNota(base, { numero: 301 });
+  const two = await criarVendaComNota(base, { numero: 302 });
+  await prisma.notaFiscal.update({
+    where: { id: one.nota.id },
+    data: { emitenteFiscalId: primeiro.id },
+  });
+  await prisma.notaFiscal.update({
+    where: { id: two.nota.id },
+    data: { emitenteFiscalId: segundo.id },
+  });
+
+  const result = await processNfePacoteContabil(
+    { dataInicio: "2026-09-01", dataFim: "2026-09-30" },
+    base.tenant.id,
+  );
+  const zip = new AdmZip(Buffer.from(result.content, "base64"));
+  const names = zip.getEntries().map((entry) => entry.entryName);
+
+  assert.ok(names.some((name) => name.includes(`/cnpj-${primeiro.cnpj}/nfe/xml/nfe-301.xml`)));
+  assert.ok(names.some((name) => name.includes(`/cnpj-${segundo.cnpj}/nfe/xml/nfe-302.xml`)));
+  assert.ok(names.some((name) => name.includes(`/cnpj-${terceiro.cnpj}/README.txt`)));
+  assert.ok(names.some((name) => name.includes(`/cnpj-${terceiro.cnpj}/relatorios/relatorio-nfe.xlsx`)));
 });

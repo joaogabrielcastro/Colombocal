@@ -86,7 +86,7 @@ Timeout, 502/503 ou erro de rede **mantêm** a nota local em `processando` e **r
 O menu **Fiscal** (quando a feature NF-e está ligada e o usuário tem permissão `fiscal`) oferece:
 
 - **Notas fiscais** — histórico com filtros (período, status, número, série, cliente, documento, venda, chave), resumo do período e detalhe com XML/DANFE quando disponíveis.
-- **Fechamento fiscal** — resumo do mês/período, possíveis lacunas de numeração (apenas alerta para investigação, **não** classificação automática de erro), listagem de canceladas/rejeitadas, exportação Excel e **pacote contábil** (ZIP com `relatorio-nfe.xlsx`, XMLs disponíveis e `README.txt`).
+- **Fechamento fiscal** — resumo do mês/período, possíveis lacunas de numeração (apenas alerta para investigação, **não** classificação automática de erro), listagem de canceladas/rejeitadas, exportação Excel e **pacote contábil**. O ZIP cria uma pasta por CNPJ cadastrado, com XMLs obtidos usando a credencial daquele emitente, relatório e `README.txt`; documentos antigos sem vínculo ficam em `_sem-emitente` para conciliação.
 
 O fechamento reúne as NF-e do período e permite exportar os dados necessários para conferência e envio à contabilidade.
 

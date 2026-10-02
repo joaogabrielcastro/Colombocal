@@ -1,6 +1,7 @@
 const { z } = require("zod");
 
 const cteEmitirSchema = z.object({
+  emitenteFiscalId: z.coerce.number().int().positive(),
   remetenteNome: z.string().min(1).max(120),
   remetenteDoc: z.string().optional().nullable(),
   destinatarioNome: z.string().min(1).max(120),

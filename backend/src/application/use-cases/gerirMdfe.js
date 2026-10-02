@@ -11,9 +11,15 @@ const {
   isMdfeNaoEncontradoNoProvedor,
 } = require("../../domain/mdfe/refMdfe");
 const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+const { auditarSemFalhar } = require("../../services/fiscal/auditoriaFiscal");
 
-const emitenteMdfePadrao = (prisma, tenantId) =>
-  buscarEmitenteFiscal(prisma, { tenantId, recurso: "mdfe", obrigatorio: true });
+const emitenteDoMdfe = (prisma, tenantId, doc) =>
+  buscarEmitenteFiscal(prisma, {
+    tenantId,
+    emitenteFiscalId: doc?.emitenteFiscalId || undefined,
+    recurso: "mdfe",
+    obrigatorio: true,
+  });
 
 async function sincronizarMdfeSeProcessando(prisma, { doc, provider, emitente } = {}) {
   if (!doc || doc.status !== STATUS.PROCESSANDO) {
@@ -61,7 +67,7 @@ async function consultarMdfe(prisma, { tenantId, id, provider } = {}) {
     });
   }
   if (doc.status !== STATUS.PROCESSANDO) return doc;
-  const emitente = await emitenteMdfePadrao(prisma, tenantId);
+  const emitente = await emitenteDoMdfe(prisma, tenantId, doc);
   const sync = await sincronizarMdfeSeProcessando(prisma, { doc, provider, emitente });
   if (sync.kind === "ok") return sync.doc;
   if (sync.kind === "ausente") return doc;
@@ -91,7 +97,7 @@ async function cancelarMdfe(prisma, { tenantId, id, justificativa, provider, aud
       httpStatus: 400,
     });
   }
-  const emitente = await emitenteMdfePadrao(prisma, tenantId);
+  const emitente = await emitenteDoMdfe(prisma, tenantId, doc);
   const mdfeProvider = provider || createMdfeProvider({ emitente });
   if (!mdfeProvider.supports?.cancelar) {
     throw new AppError("Cancelamento de MDF-e não suportado pelo provedor.", {
@@ -117,14 +123,12 @@ async function cancelarMdfe(prisma, { tenantId, id, justificativa, provider, aud
     },
     include: { documentos: true },
   });
-  if (audit) {
-    await audit({
+  await auditarSemFalhar(audit, {
       tipo: "MDFE_CANCELADO",
       entidade: "ManifestoEletronico",
       entidadeId: atualizado.id,
       payload: { justificativa: justificativaTrim, status: atualizado.status },
-    });
-  }
+  });
   return atualizado;
 }
 
@@ -153,7 +157,7 @@ async function encerrarMdfe(
       httpStatus: 400,
     });
   }
-  const emitente = await emitenteMdfePadrao(prisma, tenantId);
+  const emitente = await emitenteDoMdfe(prisma, tenantId, doc);
   const mdfeProvider = provider || createMdfeProvider({ emitente });
   if (!mdfeProvider.supports?.encerrar) {
     throw new AppError("Encerramento de MDF-e não suportado pelo provedor.", {
@@ -182,8 +186,7 @@ async function encerrarMdfe(
     },
     include: { documentos: true },
   });
-  if (audit) {
-    await audit({
+  await auditarSemFalhar(audit, {
       tipo: "MDFE_ENCERRADO",
       entidade: "ManifestoEletronico",
       entidadeId: atualizado.id,
@@ -192,8 +195,7 @@ async function encerrarMdfe(
         uf: siglaUf,
         municipio: nomeMunicipio,
       },
-    });
-  }
+  });
   return atualizado;
 }
 

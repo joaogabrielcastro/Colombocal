@@ -39,6 +39,7 @@ const { clearTenantSlugCache } = require("../../src/utils/tenantRequest");
 
 const TABLES = [
   "FinanceiroEvento",
+  "FinanceiroOperacaoIdempotente",
   "ManifestoDocumento",
   "ManifestoEletronico",
   "ConhecimentoTransporte",

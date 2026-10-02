@@ -7,11 +7,16 @@ import api from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { toast } from "sonner";
+import { EmitenteFiscalSelect } from "@/features/fiscal/components/EmitenteFiscalSelect";
+import { fiscalAccessKeyError } from "@/features/fiscal/services/access-key";
+import { buildMdfeEmissionPayload } from "@/features/fiscal/services/transport-payload";
 
 export default function NovaMdfePage() {
   const router = useRouter();
   const { mdfeEnabled } = useTenantFeatures();
   const [saving, setSaving] = useState(false);
+  const [emitenteFiscalId, setEmitenteFiscalId] = useState("");
+  const [chaveError, setChaveError] = useState<string | null>(null);
   const [form, setForm] = useState({
     ufInicio: "",
     ufFim: "",
@@ -25,20 +30,18 @@ export default function NovaMdfePage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = fiscalAccessKeyError(form.chaveDoc);
+    setChaveError(validationError);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     setSaving(true);
     try {
-      const doc = await api.post<{ id: number }>("/fiscal/mdfe", {
-        ufInicio: form.ufInicio.toUpperCase(),
-        ufFim: form.ufFim.toUpperCase(),
-        veiculoPlaca: form.veiculoPlaca,
-        motoristaNome: form.motoristaNome || null,
-        documentos: [
-          {
-            tipo: form.tipoDoc,
-            chaveAcesso: form.chaveDoc.replace(/\D/g, "").padEnd(44, "0").slice(0, 44),
-          },
-        ],
-      });
+      const doc = await api.post<{ id: number }>(
+        "/fiscal/mdfe",
+        buildMdfeEmissionPayload(form, Number(emitenteFiscalId)),
+      );
       toast.success("MDF-e enviado ao provedor.");
       router.push(`/fiscal/mdfe/${doc.id}`);
     } catch (err) {
@@ -55,6 +58,12 @@ export default function NovaMdfePage() {
       </Link>
       <h1 className="text-xl font-semibold">Emitir MDF-e</h1>
       <form className="card p-4 space-y-3" onSubmit={(e) => void onSubmit(e)}>
+        <EmitenteFiscalSelect
+          recurso="mdfe"
+          value={emitenteFiscalId}
+          onChange={setEmitenteFiscalId}
+          disabled={saving}
+        />
         <input
           className="input w-full"
           placeholder="UF início"
@@ -98,10 +107,23 @@ export default function NovaMdfePage() {
           className="input w-full"
           placeholder="Chave de acesso (44 dígitos)"
           required
+          inputMode="numeric"
+          maxLength={44}
+          aria-invalid={Boolean(chaveError)}
+          aria-describedby={chaveError ? "mdfe-chave-error" : undefined}
           value={form.chaveDoc}
-          onChange={(e) => setForm((f) => ({ ...f, chaveDoc: e.target.value }))}
+          onChange={(e) => {
+            const chaveDoc = e.target.value.replace(/\D/g, "").slice(0, 44);
+            setForm((f) => ({ ...f, chaveDoc }));
+            if (chaveError) setChaveError(fiscalAccessKeyError(chaveDoc));
+          }}
         />
-        <button type="submit" className="btn-primary" disabled={saving}>
+        {chaveError ? (
+          <p id="mdfe-chave-error" className="text-sm text-red-700">
+            {chaveError}
+          </p>
+        ) : null}
+        <button type="submit" className="btn-primary" disabled={saving || !emitenteFiscalId}>
           {saving ? "Enviando…" : "Emitir"}
         </button>
       </form>

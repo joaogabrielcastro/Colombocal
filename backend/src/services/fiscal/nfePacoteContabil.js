@@ -34,6 +34,28 @@ function pastaNome(dataInicio) {
   return `fechamento-${nomeMes}-${y}`;
 }
 
+function pastaEmitente(emitente, emitenteFiscalId) {
+  const cnpj = String(emitente?.cnpj || "").replace(/\D/g, "");
+  if (cnpj.length === 14) return `cnpj-${cnpj}`;
+  return emitenteFiscalId ? `_emitente-${emitenteFiscalId}-sem-cnpj` : "_sem-emitente";
+}
+
+function providerCache(factory) {
+  const cache = new Map();
+  return (emitente) => {
+    if (!emitente) return null;
+    if (cache.has(emitente.id)) return cache.get(emitente.id);
+    let provider = null;
+    try {
+      provider = factory({ emitente });
+    } catch {
+      provider = null;
+    }
+    cache.set(emitente.id, provider);
+    return provider;
+  };
+}
+
 async function buildXlsxBuffer(rows) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("NF-e", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -122,22 +144,25 @@ async function processNfePacoteContabil(payload, jobTenantId) {
   );
   const resumo = resumoFiscal(notas);
 
-  const emitente = await prisma.emitenteFiscal.findFirst({
-    where: { tenantId, ativo: true },
-    orderBy: [{ padrao: "desc" }, { id: "asc" }],
+  const emitentes = await prisma.emitenteFiscal.findMany({
+    where: { tenantId },
+    orderBy: [{ padrao: "desc" }, { razaoSocial: "asc" }, { id: "asc" }],
   });
+  const emitentesById = new Map(emitentes.map((row) => [row.id, row]));
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { name: true, slug: true },
   });
-  let provider = null;
-  try {
-    provider = createNfeProvider({ emitente });
-  } catch {
-    provider = null;
-  }
+  const nfeProviderFor = providerCache(createNfeProvider);
   const pasta = pastaNome(dataInicio);
   const xlsxBuf = await buildXlsxBuffer(rows);
+  const notasPorPasta = new Map();
+  for (const nota of notas) {
+    const emitente = emitentesById.get(nota.emitenteFiscalId) || null;
+    const key = pastaEmitente(emitente, nota.emitenteFiscalId);
+    if (!notasPorPasta.has(key)) notasPorPasta.set(key, []);
+    notasPorPasta.get(key).push(nota);
+  }
 
   const xmlOk = [];
   const xmlFalha = [];
@@ -151,6 +176,9 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       continue;
     }
     const nome = `nfe-${nota.numero || nota.id}.xml`;
+    const emitente = emitentesById.get(nota.emitenteFiscalId) || null;
+    const pastaEmpresa = pastaEmitente(emitente, nota.emitenteFiscalId);
+    const provider = nfeProviderFor(emitente);
     let buffer = null;
     if (nota.xmlUrl && provider?.baixarArquivo) {
       try {
@@ -171,8 +199,8 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       xmlBuffers.push({
         path:
           nota.status === STATUS.CANCELADA
-            ? `${pasta}/canceladas/${nome}`
-            : `${pasta}/xml/${nome}`,
+            ? `${pasta}/${pastaEmpresa}/nfe/canceladas/${nome}`
+            : `${pasta}/${pastaEmpresa}/nfe/xml/${nome}`,
         buffer,
       });
     } else {
@@ -181,7 +209,8 @@ async function processNfePacoteContabil(payload, jobTenantId) {
   }
 
   const geradoEm = new Date().toLocaleString("pt-BR");
-  const ambiente = emitente?.ambiente || "homologacao";
+  const ambientes = [...new Set(emitentes.map((row) => row.ambiente).filter(Boolean))];
+  const ambiente = ambientes.length === 1 ? ambientes[0] : ambientes.length > 1 ? "misto" : "homologacao";
 
   const range = require("../../utils/dateRangeQuery").getDateRange(dataInicio, dataFim);
   const periodFilter = range.gte || range.lte ? range : undefined;
@@ -216,22 +245,15 @@ async function processNfePacoteContabil(payload, jobTenantId) {
 
   const { createCteProvider } = require("../../infra/cte/provider");
   const { createMdfeProvider } = require("../../infra/mdfe/provider");
-  let cteProvider = null;
-  let mdfeProvider = null;
-  try {
-    cteProvider = createCteProvider({ emitente });
-  } catch {
-    cteProvider = null;
-  }
-  try {
-    mdfeProvider = createMdfeProvider({ emitente });
-  } catch {
-    mdfeProvider = null;
-  }
+  const cteProviderFor = providerCache(createCteProvider);
+  const mdfeProviderFor = providerCache(createMdfeProvider);
 
   for (const doc of ctes) {
     if (doc.status !== "autorizada" && doc.status !== "cancelada") continue;
     const nome = `cte-${doc.numero || doc.id}.xml`;
+    const emitente = emitentesById.get(doc.emitenteFiscalId) || null;
+    const pastaEmpresa = pastaEmitente(emitente, doc.emitenteFiscalId);
+    const cteProvider = cteProviderFor(emitente);
     let buffer = null;
     if (doc.xmlUrl && cteProvider?.baixarArquivo) {
       try {
@@ -242,7 +264,7 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       }
     }
     if (buffer) {
-      xmlBuffers.push({ path: `${pasta}/cte/${nome}`, buffer });
+      xmlBuffers.push({ path: `${pasta}/${pastaEmpresa}/cte/${nome}`, buffer });
     } else {
       cteXmlFalha.push(doc.numero || doc.id);
     }
@@ -257,6 +279,9 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       continue;
     }
     const nome = `mdfe-${doc.numero || doc.id}.xml`;
+    const emitente = emitentesById.get(doc.emitenteFiscalId) || null;
+    const pastaEmpresa = pastaEmitente(emitente, doc.emitenteFiscalId);
+    const mdfeProvider = mdfeProviderFor(emitente);
     let buffer = null;
     if (doc.xmlUrl && mdfeProvider?.baixarArquivo) {
       try {
@@ -267,7 +292,7 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       }
     }
     if (buffer) {
-      xmlBuffers.push({ path: `${pasta}/mdfe/${nome}`, buffer });
+      xmlBuffers.push({ path: `${pasta}/${pastaEmpresa}/mdfe/${nome}`, buffer });
     } else {
       mdfeXmlFalha.push(doc.numero || doc.id);
     }
@@ -292,18 +317,21 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       .filter(Boolean)
       .join("\n");
     xmlBuffers.push({
-      path: `${pasta}/ciot/ciot-${doc.codigoCiot || doc.id}.txt`,
+      path: `${pasta}/_sem-emitente/ciot/ciot-${doc.codigoCiot || doc.id}.txt`,
       buffer: Buffer.from(txt, "utf8"),
     });
   }
 
   const readme = [
-    `Empresa: ${emitente?.razaoSocial || tenant?.name || ""}`,
-    `CNPJ: ${emitente?.cnpj || ""}`,
+    `Empresa/tenant: ${tenant?.name || ""}`,
     `Tenant: ${tenant?.slug || tenant?.name || tenantId}`,
+    `Emitentes configurados: ${emitentes.length}`,
+    ...emitentes.map((row) =>
+      `- ${row.razaoSocial} | CNPJ ${row.cnpj} | ${row.ambiente} | pasta ${pastaEmitente(row, row.id)}`,
+    ),
     `Período: ${dataInicio} a ${dataFim}`,
     `Data de geração: ${geradoEm}`,
-    `Ambiente: ${ambiente === "producao" ? "PRODUÇÃO" : "HOMOLOGAÇÃO / DEMONSTRAÇÃO"}`,
+    `Ambiente: ${ambiente === "producao" ? "PRODUÇÃO" : ambiente === "misto" ? "MISTO" : "HOMOLOGAÇÃO / DEMONSTRAÇÃO"}`,
     "",
     "=== NF-e ===",
     `Total: ${resumo.total} | Autorizadas: ${resumo.autorizadas} | Canceladas: ${resumo.canceladas} | Rejeitadas: ${resumo.rejeitadas}`,
@@ -337,6 +365,7 @@ async function processNfePacoteContabil(payload, jobTenantId) {
     "Valores de tipos diferentes NÃO devem ser somados em um único total contábil.",
     "XML/DACTE/DAMDFE só entram quando disponíveis no provedor — nenhum arquivo falso.",
     "Relatório para conferência. Não substitui obrigações acessórias do contador.",
+    "Documentos sem emitente vinculado ficam em _sem-emitente e exigem conciliação manual.",
     ambiente !== "producao"
       ? "DEMONSTRAÇÃO — SEM VALIDADE FISCAL (ambiente de homologação)."
       : "",
@@ -348,18 +377,42 @@ async function processNfePacoteContabil(payload, jobTenantId) {
   const zipPromise = streamToBuffer(archive);
 
   archive.append(xlsxBuf, { name: `${pasta}/relatorios/relatorio-nfe.xlsx` });
-  archive.append(xlsxBuf, { name: `${pasta}/nfe/relatorio-nfe.xlsx` });
   archive.append(readme, { name: `${pasta}/README.txt` });
+  for (const emitente of emitentes) {
+    const pastaEmpresa = pastaEmitente(emitente, emitente.id);
+    const notasEmpresa = notasPorPasta.get(pastaEmpresa) || [];
+    const rowsEmpresa = notasEmpresa.map((nota) =>
+      montarLinhaExport({ ...nota, motivoCancelamento: motivos.get(nota.id) || null }),
+    );
+    archive.append(await buildXlsxBuffer(rowsEmpresa), {
+      name: `${pasta}/${pastaEmpresa}/relatorios/relatorio-nfe.xlsx`,
+    });
+    archive.append(
+      [
+        `Razão social: ${emitente.razaoSocial}`,
+        `Nome fantasia: ${emitente.nomeFantasia || ""}`,
+        `CNPJ: ${emitente.cnpj}`,
+        `Ambiente: ${emitente.ambiente}`,
+        `NF-e no período: ${notasEmpresa.length}`,
+      ].join("\n"),
+      { name: `${pasta}/${pastaEmpresa}/README.txt` },
+    );
+  }
+  if (notasPorPasta.has("_sem-emitente") || ciots.length > 0) {
+    const notasSemEmitente = notasPorPasta.get("_sem-emitente") || [];
+    const rowsSemEmitente = notasSemEmitente.map((nota) =>
+      montarLinhaExport({ ...nota, motivoCancelamento: motivos.get(nota.id) || null }),
+    );
+    archive.append(await buildXlsxBuffer(rowsSemEmitente), {
+      name: `${pasta}/_sem-emitente/relatorios/relatorio-nfe.xlsx`,
+    });
+    archive.append(
+      "Documentos sem empresa emissora vinculada. Concilie antes de entregar o pacote contábil.",
+      { name: `${pasta}/_sem-emitente/README.txt` },
+    );
+  }
   for (const file of xmlBuffers) {
-    const path = file.path.includes("/cte/") ||
-      file.path.includes("/mdfe/") ||
-      file.path.includes("/ciot/")
-      ? file.path
-      : file.path.replace(`${pasta}/xml/`, `${pasta}/nfe/xml/`).replace(
-          `${pasta}/canceladas/`,
-          `${pasta}/nfe/canceladas/`,
-        );
-    archive.append(file.buffer, { name: path.startsWith(pasta) ? path : file.path });
+    archive.append(file.buffer, { name: file.path });
   }
   if (resumo.canceladas > 0) {
     const cancelMeta = notas
@@ -377,7 +430,7 @@ async function processNfePacoteContabil(payload, jobTenantId) {
       )
       .join("\n");
     archive.append(cancelMeta || "Sem detalhes.", {
-      name: `${pasta}/nfe/canceladas/eventos/resumo-cancelamentos.txt`,
+      name: `${pasta}/relatorios/resumo-cancelamentos.txt`,
     });
   }
 
@@ -394,4 +447,4 @@ async function processNfePacoteContabil(payload, jobTenantId) {
   };
 }
 
-module.exports = { processNfePacoteContabil, pastaNome, mesLabel };
+module.exports = { processNfePacoteContabil, pastaEmitente, pastaNome, mesLabel };

@@ -31,7 +31,7 @@ test.describe("auth do webhook NF-e", { concurrency: false }, () => {
     try {
       assert.equal(webhookSecretOk(fakeReq({ header: "hook-unit-secret" })), true);
       assert.equal(webhookSecretOk(fakeReq({ header: "errado" })), false);
-      assert.equal(webhookSecretOk(fakeReq({ query: "hook-unit-secret" })), true);
+      assert.equal(webhookSecretOk(fakeReq({ query: "hook-unit-secret" })), false);
     } finally {
       if (prevSecret === undefined) delete process.env.NFE_WEBHOOK_SECRET;
       else process.env.NFE_WEBHOOK_SECRET = prevSecret;

@@ -14,6 +14,7 @@ const { createNfeProvider } = require("../infra/nfe/provider");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const { assertNfeEnabled, xmlMockDanfe, htmlDanfeMock } = require("./nfeHelpers");
 const { STATUS } = require("../domain/nfe/constants");
+const { requireAdmin } = require("../middleware/auth");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -114,7 +115,7 @@ function registerVendaNfeRoutes(router) {
     }
   });
 
-  router.post("/:id/nfe", async (req, res) => {
+  router.post("/:id/nfe", requireAdmin, async (req, res) => {
     try {
       await assertNfeEnabled(req);
       const vendaId = parseIntField(req.params.id, "id", { min: 1 });
@@ -145,7 +146,7 @@ function registerVendaNfeRoutes(router) {
     }
   });
 
-  router.post("/:id/nfe/cancelar", async (req, res) => {
+  router.post("/:id/nfe/cancelar", requireAdmin, async (req, res) => {
     try {
       await assertNfeEnabled(req);
       const vendaId = parseIntField(req.params.id, "id", { min: 1 });

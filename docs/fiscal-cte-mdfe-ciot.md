@@ -90,15 +90,21 @@ ZIP (job `nfe_pacote_contabil` / alias `fiscal_pacote_contabil`):
 
 ```
 /fechamento-.../
-  /nfe/...
-  /cte/...
-  /mdfe/...
-  /ciot/...
+  /cnpj-00000000000000/
+    /nfe/xml/...
+    /cte/xml/...
+    /mdfe/xml/...
+    /relatorios/relatorio-nfe.xlsx
+    README.txt
+  /_sem-emitente/
+    /ciot/...
   /relatorios/
   README.txt
 ```
 
-Sem XML/DACTE/DAMDFE falso. Indisponíveis listados no README.
+O ZIP contém uma pasta para cada emitente cadastrado, mesmo quando a empresa não teve movimento no período. Cada documento fiscal usa o provider e a credencial do emitente ao qual está vinculado. Documentos antigos sem vínculo e CIOT (cujo modelo ainda não possui `emitenteFiscalId`) ficam em `_sem-emitente` para conciliação explícita, sem serem atribuídos ao CNPJ padrão.
+
+Sem XML/DACTE/DAMDFE falso. Indisponíveis são listados no README.
 
 ## Homologação
 

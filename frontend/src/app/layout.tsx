@@ -1,12 +1,9 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import ClientShell from '@/components/ClientShell';
 import AppProviders from '@/components/AppProviders';
 import PwaRegister from '@/components/PwaRegister';
 import { BRAND } from '@/lib/brand';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: {
@@ -36,7 +33,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className="font-sans">
         <PwaRegister />
         <AppProviders>
           <ClientShell>{children}</ClientShell>

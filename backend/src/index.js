@@ -104,6 +104,13 @@ const setupLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_WEBHOOK_PER_MIN ?? 120),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use("/api/cnpj", cnpjLimiter);
 app.use("/api/cep", cnpjLimiter);
 app.use("/api", apiLimiter);
@@ -152,10 +159,10 @@ app.use("/api/setup", setupLimiter, require("./routes/setup"));
 app.use("/api/auth", require("./routes/auth"));
 
 // Webhook do provedor NF-e (sem JWT; autenticado por NFE_WEBHOOK_SECRET)
-app.use("/api/webhooks/nfe", require("./routes/webhooksNfe"));
+app.use("/api/webhooks/nfe", webhookLimiter, require("./routes/webhooksNfe"));
 const { cteRouter, mdfeRouter } = require("./routes/webhooksFiscalTransporte");
-app.use("/api/webhooks/cte", cteRouter);
-app.use("/api/webhooks/mdfe", mdfeRouter);
+app.use("/api/webhooks/cte", webhookLimiter, cteRouter);
+app.use("/api/webhooks/mdfe", webhookLimiter, mdfeRouter);
 
 // API protegida: multi-tenant + JWT (ou AUTH_DISABLED=true em desenvolvimento)
 app.use("/api/clientes", requireTenantUser, requireNavKey("clientes"), require("./routes/clientes"));

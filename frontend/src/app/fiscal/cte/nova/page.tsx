@@ -7,11 +7,14 @@ import api from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { toast } from "sonner";
+import { EmitenteFiscalSelect } from "@/features/fiscal/components/EmitenteFiscalSelect";
+import { buildCteEmissionPayload } from "@/features/fiscal/services/transport-payload";
 
 export default function NovaCtePage() {
   const router = useRouter();
   const { cteEnabled } = useTenantFeatures();
   const [saving, setSaving] = useState(false);
+  const [emitenteFiscalId, setEmitenteFiscalId] = useState("");
   const [form, setForm] = useState({
     remetenteNome: "",
     remetenteDoc: "",
@@ -35,14 +38,10 @@ export default function NovaCtePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const doc = await api.post<{ id: number }>("/fiscal/cte", {
-        ...form,
-        origemUf: form.origemUf.toUpperCase(),
-        destinoUf: form.destinoUf.toUpperCase(),
-        valorServico: form.valorServico ? Number(form.valorServico) : null,
-        valorCarga: form.valorCarga ? Number(form.valorCarga) : null,
-        pesoKg: form.pesoKg ? Number(form.pesoKg) : null,
-      });
+      const doc = await api.post<{ id: number }>(
+        "/fiscal/cte",
+        buildCteEmissionPayload(form, Number(emitenteFiscalId)),
+      );
       toast.success("CT-e enviado ao provedor.");
       router.push(`/fiscal/cte/${doc.id}`);
     } catch (err) {
@@ -71,6 +70,12 @@ export default function NovaCtePage() {
       </Link>
       <h1 className="text-xl font-semibold">Emitir CT-e</h1>
       <form className="card p-4 space-y-3" onSubmit={(e) => void onSubmit(e)}>
+        <EmitenteFiscalSelect
+          recurso="cte"
+          value={emitenteFiscalId}
+          onChange={setEmitenteFiscalId}
+          disabled={saving}
+        />
         {field("remetenteNome", "Remetente", { required: true })}
         {field("remetenteDoc", "Doc. remetente")}
         {field("destinatarioNome", "Destinatário", { required: true })}
@@ -87,7 +92,7 @@ export default function NovaCtePage() {
           {field("pesoKg", "Peso kg")}
         </div>
         {field("observacoes", "Observações")}
-        <button type="submit" className="btn-primary" disabled={saving}>
+        <button type="submit" className="btn-primary" disabled={saving || !emitenteFiscalId}>
           {saving ? "Enviando…" : "Emitir"}
         </button>
       </form>

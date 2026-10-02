@@ -516,6 +516,11 @@ router.patch("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const body = parseBody(vendaPostSchema, req.body);
+    if (body.emitirNfe && req.authUser?.role !== "admin") {
+      return res.status(403).json({
+        error: "Apenas administradores podem emitir documentos fiscais.",
+      });
+    }
     const freteEnabled = await requestAllowsFrete(req);
 
     const vendaCompleta = await criarVenda(prisma, {

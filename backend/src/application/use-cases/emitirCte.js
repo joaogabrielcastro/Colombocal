@@ -14,8 +14,11 @@ const { sincronizarCteSeProcessando } = require("./gerirCte");
 const { onlyDigits } = require("../../domain/nfe/constants");
 const { randomUUID } = require("node:crypto");
 const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+const { validarVinculosOperacionais } = require("../../services/fiscal/validarVinculosTenant");
+const { auditarSemFalhar } = require("../../services/fiscal/auditoriaFiscal");
 
 async function emitirCte(prisma, { tenantId, input = {}, provider, audit } = {}) {
+  await validarVinculosOperacionais(prisma, { tenantId, input });
   const emitente = await buscarEmitenteFiscal(prisma, {
     tenantId,
     emitenteFiscalId: input.emitenteFiscalId,
@@ -76,6 +79,7 @@ async function emitirCte(prisma, { tenantId, input = {}, provider, audit } = {})
   const rascunho = await prisma.conhecimentoTransporte.create({
     data: {
       tenantId,
+      emitenteFiscalId: emitente.id,
       status: STATUS.RASCUNHO,
       ambiente: emitente.ambiente || "homologacao",
       refProvedor: provisionalRef,
@@ -148,15 +152,13 @@ async function emitirCte(prisma, { tenantId, input = {}, provider, audit } = {})
         erroTecnico: null,
       },
     });
-    if (audit) {
-      await audit({
+    await auditarSemFalhar(audit, {
         tipo: "CTE_EMITIDO",
         entidade: "ConhecimentoTransporte",
         entidadeId: atualizado.id,
         vendaId: atualizado.vendaId || undefined,
         payload: { status: atualizado.status, ref },
-      });
-    }
+    });
     return atualizado;
   } catch (err) {
     if (isErroInconclusivoCte(err)) {

@@ -20,7 +20,7 @@ function createNfeProvider({ emitente } = {}) {
   }
   const token =
     (tokenFromDb && String(tokenFromDb).trim()) ||
-    String(process.env.FOCUS_NFE_TOKEN || "").trim() ||
+    (!emitente ? String(process.env.FOCUS_NFE_TOKEN || "").trim() : "") ||
     null;
   const ambiente =
     emitente?.ambiente || process.env.FOCUS_NFE_AMBIENTE || "homologacao";

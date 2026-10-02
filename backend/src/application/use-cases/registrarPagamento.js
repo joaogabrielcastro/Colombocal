@@ -9,6 +9,12 @@ const {
   assertVendaDoTenant,
 } = require("../../utils/tenantOwnership");
 const { parseDateField } = require("../../utils/validation");
+const {
+  buscarReplay,
+  lockIdempotencyKey,
+  lockSaldoVenda,
+  salvarResultado,
+} = require("../../services/financeiroIdempotencia");
 
 async function registrarPagamento(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -28,6 +34,16 @@ async function registrarPagamento(prisma, payload) {
     : new Date();
 
   return prisma.$transaction(async (tx) => {
+    await lockIdempotencyKey(tx, payload.idempotencyKey);
+    await lockSaldoVenda(tx, tenantId, payload.vendaId, payload.clienteId);
+    const replay = await buscarReplay(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "pagamento",
+      payload,
+    });
+    if (replay) return replay;
+
     await assertClienteDoTenant(tx, payload.clienteId, tenantId);
     await assertVendaDoTenant(tx, payload.vendaId, tenantId, {
       clienteId: payload.clienteId,
@@ -39,6 +55,12 @@ async function registrarPagamento(prisma, payload) {
       const venda = await findVendaFinanceiraById(tx, payload.vendaId, tenantId);
       if (venda) {
         const saldoAberto = calcularSaldoAbertoVenda(venda);
+        if (saldoAberto < 0.01) {
+          throw new AppError("Esta venda já está quitada", {
+            code: "VENDA_QUITADA",
+            httpStatus: 409,
+          });
+        }
         const split = splitValorComTroco(payload.valor, saldoAberto);
         trocoValor = split.trocoValor;
       }
@@ -87,6 +109,14 @@ async function registrarPagamento(prisma, payload) {
       vendaId: payload.vendaId ?? null,
       valor: payload.valor,
       payload: { tipo: payload.tipo, trocoValor, trocoTipo: payload.trocoTipo || null },
+    });
+
+    await salvarResultado(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "pagamento",
+      payload,
+      resultado: novoPagamento,
     });
 
     return novoPagamento;

@@ -18,13 +18,12 @@ const { sanitizarCiot } = require("../domain/ciot/constants");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const { getDateRange } = require("../utils/dateRangeQuery");
 const { resolveCiotProviderName } = require("../infra/ciot/provider");
+const { requireAdmin } = require("../middleware/auth");
 
 function auditFromReq(req) {
   return (payload) =>
-    registrarAuditoria(prisma, {
+    registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
-      userId: req.user?.id,
-      userLabel: req.user?.email || req.user?.name,
       ...payload,
     });
 }
@@ -91,9 +90,8 @@ router.get("/:id", async (req, res) => {
       where: { id, tenantId: req.tenantId },
     });
     if (!doc) return res.status(404).json({ error: "CIOT não encontrado" });
-    await registrarAuditoria(prisma, {
+    await registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
-      userId: req.user?.id,
       tipo: "CIOT_VISUALIZADO",
       entidade: "OperacaoCiot",
       entidadeId: doc.id,
@@ -107,7 +105,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   try {
     await assertCiotEnabled(req);
     const parsed = ciotRegistrarSchema.safeParse(req.body || {});
@@ -139,7 +137,7 @@ router.post("/:id/consultar", async (req, res) => {
   }
 });
 
-router.post("/:id/cancelar", async (req, res) => {
+router.post("/:id/cancelar", requireAdmin, async (req, res) => {
   try {
     await assertCiotEnabled(req);
     const id = parseIntField(req.params.id, "id");

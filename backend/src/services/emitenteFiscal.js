@@ -33,10 +33,22 @@ async function buscarEmitenteFiscal(
       });
     }
   } else {
-    emitente = await prisma.emitenteFiscal.findFirst({
+    const candidatos = await prisma.emitenteFiscal.findMany({
       where,
       orderBy: [{ padrao: "desc" }, { id: "asc" }],
+      take: 2,
     });
+    const padrao = candidatos.find((item) => item.padrao);
+    if (padrao) {
+      emitente = padrao;
+    } else if (candidatos.length === 1) {
+      emitente = candidatos[0];
+    } else if (candidatos.length > 1) {
+      throw new AppError("Selecione explicitamente a empresa emissora.", {
+        code: "EMITENTE_FISCAL_SELECAO_OBRIGATORIA",
+        httpStatus: 400,
+      });
+    }
   }
   if (!emitente && obrigatorio) {
     throw new AppError("Nenhuma empresa emissora ativa e habilitada foi cadastrada.", {

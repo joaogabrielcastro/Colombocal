@@ -151,7 +151,7 @@ test("emitente-fiscal: token é criptografado e nunca retornado", async () => {
       .put("/api/config/emitente-fiscal")
       .set(headers)
       .send({
-        cnpj: "12345678000199",
+        cnpj: "11222333000181",
         inscricaoEstadual: "123",
         razaoSocial: "Emitente Teste",
         crt: 1,
@@ -165,7 +165,7 @@ test("emitente-fiscal: token é criptografado e nunca retornado", async () => {
         ambiente: "homologacao",
         provedorToken: "token-secreto-nao-vazar",
       });
-    assert.equal(put.status, 200);
+    assert.equal(put.status, 200, JSON.stringify(put.body));
     assert.equal(put.body.provedorToken, undefined);
     assert.equal(put.body.provedorTokenConfigurado, true);
     assert.ok(!JSON.stringify(put.body).includes("token-secreto-nao-vazar"));

@@ -12,6 +12,8 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { actorFromReq } = require("../services/financeiroEventos");
+const { idempotencyKeyFromRequest } = require("../services/financeiroIdempotencia");
+const { requireAdmin } = require("../middleware/auth");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -152,6 +154,7 @@ router.post("/", async (req, res) => {
       ...b,
       tenantId: req.tenantId,
       auditActor: actorFromReq(req),
+      idempotencyKey: idempotencyKeyFromRequest(req),
     });
     res.status(201).json(pagamento);
   } catch (error) {
@@ -160,7 +163,7 @@ router.post("/", async (req, res) => {
 });
 
 // DELETE /api/pagamentos/:id
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseIntField(req.params.id, "id", { min: 1 });
     await excluirPagamento(prisma, id, req.tenantId, actorFromReq(req));

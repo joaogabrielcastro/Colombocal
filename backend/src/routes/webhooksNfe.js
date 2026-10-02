@@ -15,11 +15,7 @@ function webhookSecretOk(req) {
     req.headers["x-webhook-token"] ||
     req.headers["x-nfe-token"] ||
     "";
-  const query = req.query?.token || "";
-  return (
-    timingSafeEqualString(String(header), expected) ||
-    timingSafeEqualString(String(query), expected)
-  );
+  return timingSafeEqualString(String(header), expected);
 }
 
 router.post("/", async (req, res) => {

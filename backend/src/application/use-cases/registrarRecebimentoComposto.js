@@ -10,6 +10,12 @@ const {
   assertVendaDoTenant,
 } = require("../../utils/tenantOwnership");
 const { parseDateField } = require("../../utils/validation");
+const {
+  buscarReplay,
+  lockIdempotencyKey,
+  lockSaldoVenda,
+  salvarResultado,
+} = require("../../services/financeiroIdempotencia");
 
 function toNumber(value) {
   const n = parseFloat(String(value ?? 0));
@@ -34,6 +40,16 @@ async function registrarRecebimentoComposto(prisma, payload) {
   const pix = payload.pix ?? null;
 
   return prisma.$transaction(async (tx) => {
+    await lockIdempotencyKey(tx, payload.idempotencyKey);
+    await lockSaldoVenda(tx, tenantId, vendaId, clienteId);
+    const replay = await buscarReplay(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "recebimento_composto",
+      payload,
+    });
+    if (replay) return replay;
+
     await assertClienteDoTenant(tx, clienteId, tenantId);
     await assertVendaDoTenant(tx, vendaId, tenantId, { clienteId });
 
@@ -55,6 +71,12 @@ async function registrarRecebimentoComposto(prisma, payload) {
     }
 
     const saldoAberto = calcularSaldoAbertoVenda(venda);
+    if (saldoAberto < 0.01) {
+      throw new AppError("Esta venda já está quitada", {
+        code: "VENDA_QUITADA",
+        httpStatus: 409,
+      });
+    }
     const excedente = Math.max(0, totalGeral - saldoAberto);
     if (excedente > 0.0001 && !payload.trocoTipo) {
       throw new AppError(
@@ -192,7 +214,7 @@ async function registrarRecebimentoComposto(prisma, payload) {
 
     await recalcularTitulos(tx, { clienteId, vendaId });
 
-    return {
+    const resultado = {
       chequesCriados: chequesCriados.length,
       pagamentosCriados,
       totalGeral,
@@ -205,6 +227,14 @@ async function registrarRecebimentoComposto(prisma, payload) {
         pix: totalPix,
       },
     };
+    await salvarResultado(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "recebimento_composto",
+      payload,
+      resultado,
+    });
+    return resultado;
   });
 }
 

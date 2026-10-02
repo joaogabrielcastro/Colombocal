@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -17,7 +17,7 @@ import {
 } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import { HelpCallout } from "@/components/ui/help-callout";
-import api from "@/lib/api";
+import api, { ApiError } from "@/lib/api";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
 import { toast } from "sonner";
@@ -65,6 +65,7 @@ function RegistrarRecebimentoForm() {
   const [buscandoOrdem, setBuscandoOrdem] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   const [chequeItens, setChequeItens] = useState<ChequeLinha[]>([]);
   const [dinheiro, setDinheiro] = useState({
@@ -302,11 +303,17 @@ function RegistrarRecebimentoForm() {
         };
       }
 
+      const idempotencyKey =
+        idempotencyKeyRef.current || globalThis.crypto.randomUUID();
+      idempotencyKeyRef.current = idempotencyKey;
       const resp = await api.post<{
         excedente?: number;
         trocoTipo?: string | null;
         resumo?: { cheques: number; dinheiro: number; pix: number };
-      }>("/recebimentos", body);
+      }>("/recebimentos", body, {
+        headers: { "Idempotency-Key": idempotencyKey },
+      });
+      idempotencyKeyRef.current = null;
 
       const partes: string[] = [];
       if ((resp.resumo?.cheques ?? 0) > 0) partes.push(`${formatMoney(resp.resumo!.cheques)} em cheques`);
@@ -337,6 +344,9 @@ function RegistrarRecebimentoForm() {
         router.push(`/vendas/${vendaId}`);
       }
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        idempotencyKeyRef.current = null;
+      }
       setErro(err instanceof Error ? err.message : "Erro ao registrar recebimento");
       setSalvando(false);
     }

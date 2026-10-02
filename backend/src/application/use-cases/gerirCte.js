@@ -7,9 +7,15 @@ const {
   isCteNaoEncontradoNoProvedor,
 } = require("../../domain/cte/refCte");
 const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+const { auditarSemFalhar } = require("../../services/fiscal/auditoriaFiscal");
 
-const emitenteCtePadrao = (prisma, tenantId) =>
-  buscarEmitenteFiscal(prisma, { tenantId, recurso: "cte", obrigatorio: true });
+const emitenteDoCte = (prisma, tenantId, doc) =>
+  buscarEmitenteFiscal(prisma, {
+    tenantId,
+    emitenteFiscalId: doc?.emitenteFiscalId || undefined,
+    recurso: "cte",
+    obrigatorio: true,
+  });
 
 async function sincronizarCteSeProcessando(prisma, { doc, provider, emitente } = {}) {
   if (!doc || doc.status !== STATUS.PROCESSANDO) {
@@ -54,7 +60,7 @@ async function consultarCte(prisma, { tenantId, id, provider } = {}) {
     });
   }
   if (doc.status !== STATUS.PROCESSANDO) return doc;
-  const emitente = await emitenteCtePadrao(prisma, tenantId);
+  const emitente = await emitenteDoCte(prisma, tenantId, doc);
   const sync = await sincronizarCteSeProcessando(prisma, { doc, provider, emitente });
   if (sync.kind === "ok") return sync.doc;
   if (sync.kind === "ausente") return doc;
@@ -84,7 +90,7 @@ async function cancelarCte(prisma, { tenantId, id, justificativa, provider, audi
       httpStatus: 400,
     });
   }
-  const emitente = await emitenteCtePadrao(prisma, tenantId);
+  const emitente = await emitenteDoCte(prisma, tenantId, doc);
   const cteProvider = provider || createCteProvider({ emitente });
   const resposta = await cteProvider.cancelar({
     ref: doc.refProvedor,
@@ -100,15 +106,13 @@ async function cancelarCte(prisma, { tenantId, id, justificativa, provider, audi
       canceladaEm: patch.status === STATUS.CANCELADA ? new Date() : undefined,
     },
   });
-  if (audit) {
-    await audit({
+  await auditarSemFalhar(audit, {
       tipo: "CTE_CANCELADO",
       entidade: "ConhecimentoTransporte",
       entidadeId: atualizado.id,
       vendaId: atualizado.vendaId || undefined,
       payload: { justificativa: justificativaTrim, status: atualizado.status },
-    });
-  }
+  });
   return atualizado;
 }
 

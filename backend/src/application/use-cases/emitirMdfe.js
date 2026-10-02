@@ -12,8 +12,14 @@ const {
 } = require("../../domain/mdfe/refMdfe");
 const { createMdfeProvider } = require("../../infra/mdfe/provider");
 const { buscarEmitenteFiscal } = require("../../services/emitenteFiscal");
+const {
+  validarVinculosOperacionais,
+  validarDocumentosMdfe,
+} = require("../../services/fiscal/validarVinculosTenant");
+const { auditarSemFalhar } = require("../../services/fiscal/auditoriaFiscal");
 
 async function emitirMdfe(prisma, { tenantId, input = {}, provider, audit } = {}) {
+  await validarVinculosOperacionais(prisma, { tenantId, input });
   const emitente = await buscarEmitenteFiscal(prisma, {
     tenantId,
     emitenteFiscalId: input.emitenteFiscalId,
@@ -21,6 +27,7 @@ async function emitirMdfe(prisma, { tenantId, input = {}, provider, audit } = {}
     obrigatorio: true,
   });
   const documentos = Array.isArray(input.documentos) ? input.documentos : [];
+  await validarDocumentosMdfe(prisma, { tenantId, documentos });
   const validacao = validarPreEmissaoMdfe({ emitente, input, documentos });
   if (!validacao.ok) {
     throw new AppError(validacao.erros.join(" "), {
@@ -36,6 +43,7 @@ async function emitirMdfe(prisma, { tenantId, input = {}, provider, audit } = {}
   const rascunho = await prisma.manifestoEletronico.create({
     data: {
       tenantId,
+      emitenteFiscalId: emitente.id,
       status: STATUS.RASCUNHO,
       ambiente: emitente?.ambiente || "homologacao",
       refProvedor: provisionalRef,
@@ -104,15 +112,13 @@ async function emitirMdfe(prisma, { tenantId, input = {}, provider, audit } = {}
       },
       include: { documentos: true },
     });
-    if (audit) {
-      await audit({
+    await auditarSemFalhar(audit, {
         tipo: "MDFE_EMITIDO",
         entidade: "ManifestoEletronico",
         entidadeId: atualizado.id,
         vendaId: atualizado.vendaId || undefined,
         payload: { status: atualizado.status, ref },
-      });
-    }
+    });
     return atualizado;
   } catch (err) {
     if (isErroInconclusivoMdfe(err)) {

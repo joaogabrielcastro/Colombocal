@@ -10,6 +10,12 @@ const {
   assertVendaDoTenant,
 } = require("../../utils/tenantOwnership");
 const { parseDateField } = require("../../utils/validation");
+const {
+  buscarReplay,
+  lockIdempotencyKey,
+  lockSaldoVenda,
+  salvarResultado,
+} = require("../../services/financeiroIdempotencia");
 
 async function registrarChequeLote(prisma, payload) {
   const tenantId = payload.tenantId;
@@ -21,6 +27,16 @@ async function registrarChequeLote(prisma, payload) {
   const vendaId = payload.vendaId;
 
   return prisma.$transaction(async (tx) => {
+    await lockIdempotencyKey(tx, payload.idempotencyKey);
+    await lockSaldoVenda(tx, tenantId, vendaId, clienteId);
+    const replay = await buscarReplay(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "cheque_lote",
+      payload,
+    });
+    if (replay) return replay;
+
     await assertClienteDoTenant(tx, clienteId, tenantId);
     await assertVendaDoTenant(tx, vendaId, tenantId, { clienteId });
 
@@ -31,6 +47,12 @@ async function registrarChequeLote(prisma, payload) {
 
     const totalLote = payload.itens.reduce((acc, item) => acc + Number(item.valor), 0);
     const saldoAberto = calcularSaldoAbertoVenda(venda);
+    if (saldoAberto < 0.01) {
+      throw new AppError("Esta venda já está quitada", {
+        code: "VENDA_QUITADA",
+        httpStatus: 409,
+      });
+    }
     const excedente = Math.max(0, totalLote - saldoAberto);
     if (excedente > 0.0001 && !payload.trocoTipo) {
       throw new AppError(
@@ -110,13 +132,21 @@ async function registrarChequeLote(prisma, payload) {
     }
 
     await recalcularTitulos(tx, { clienteId, vendaId });
-    return {
+    const resultado = {
       chequesCriados: criados.length,
       totalLote,
       saldoAbertoAntes: saldoAberto,
       excedente,
       trocoTipo: excedente > 0.0001 ? (payload.trocoTipo || "dinheiro") : null,
     };
+    await salvarResultado(tx, {
+      tenantId,
+      idempotencyKey: payload.idempotencyKey,
+      tipo: "cheque_lote",
+      payload,
+      resultado,
+    });
+    return resultado;
   });
 }
 

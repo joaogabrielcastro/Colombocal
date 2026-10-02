@@ -6,6 +6,7 @@ const { parseBody } = require("../utils/zodParse");
 const { recebimentoCompostoSchema } = require("../schemas/recebimento");
 const { handleRouteError } = require("../utils/api");
 const { actorFromReq } = require("../services/financeiroEventos");
+const { idempotencyKeyFromRequest } = require("../services/financeiroIdempotencia");
 
 // POST /api/recebimentos — cheques + dinheiro + PIX numa única operação
 router.post("/", async (req, res) => {
@@ -15,6 +16,7 @@ router.post("/", async (req, res) => {
       ...b,
       tenantId: req.tenantId,
       auditActor: actorFromReq(req),
+      idempotencyKey: idempotencyKeyFromRequest(req),
     });
     res.status(201).json(result);
   } catch (error) {

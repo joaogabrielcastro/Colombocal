@@ -18,13 +18,12 @@ const { sanitizarCte } = require("../domain/cte/montarPayload");
 const { createCteProvider } = require("../infra/cte/provider");
 const { registrarAuditoria } = require("../services/financeiroEventos");
 const { getDateRange } = require("../utils/dateRangeQuery");
+const { requireAdmin } = require("../middleware/auth");
 
 function auditFromReq(req) {
   return (payload) =>
-    registrarAuditoria(prisma, {
+    registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
-      userId: req.user?.id,
-      userLabel: req.user?.email || req.user?.name,
       ...payload,
     });
 }
@@ -94,10 +93,8 @@ router.get("/:id", async (req, res) => {
       where: { id, tenantId: req.tenantId },
     });
     if (!doc) return res.status(404).json({ error: "CT-e não encontrado" });
-    await registrarAuditoria(prisma, {
+    await registrarAuditoria(prisma, req, {
       tenantId: req.tenantId,
-      userId: req.user?.id,
-      userLabel: req.user?.email,
       tipo: "CTE_VISUALIZADO",
       entidade: "ConhecimentoTransporte",
       entidadeId: doc.id,
@@ -108,7 +105,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   try {
     await assertCteEnabled(req);
     const parsed = cteEmitirSchema.safeParse(req.body || {});
@@ -140,7 +137,7 @@ router.post("/:id/consultar", async (req, res) => {
   }
 });
 
-router.post("/:id/cancelar", async (req, res) => {
+router.post("/:id/cancelar", requireAdmin, async (req, res) => {
   try {
     await assertCteEnabled(req);
     const id = parseIntField(req.params.id, "id");
@@ -176,6 +173,7 @@ async function enviarArquivo(req, res, campo) {
   const { buscarEmitenteFiscal } = require("../services/emitenteFiscal");
   const emitente = await buscarEmitenteFiscal(prisma, {
     tenantId: req.tenantId,
+    emitenteFiscalId: doc.emitenteFiscalId || undefined,
     recurso: "cte",
     obrigatorio: true,
   });
@@ -184,15 +182,18 @@ async function enviarArquivo(req, res, campo) {
   if (!file) {
     return res.status(404).json({ error: "Arquivo indisponível no provedor" });
   }
-  await registrarAuditoria(prisma, {
+  await registrarAuditoria(prisma, req, {
     tenantId: req.tenantId,
-    userId: req.user?.id,
     tipo: "CTE_XML_DOWNLOAD",
     entidade: "ConhecimentoTransporte",
     entidadeId: doc.id,
     payload: { campo },
   });
   res.setHeader("Content-Type", file.contentType);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="cte-${doc.numero || doc.id}-${campo === "xmlUrl" ? "xml.xml" : "dacte.pdf"}"`,
+  );
   res.send(file.buffer);
 }
 

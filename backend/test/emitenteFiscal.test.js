@@ -34,9 +34,9 @@ test("buscarEmitenteFiscal usa padrão ativo quando id não é informado", async
   let recebido;
   const prisma = {
     emitenteFiscal: {
-      findFirst: async (args) => {
+      findMany: async (args) => {
         recebido = args;
-        return { id: 3, padrao: true };
+        return [{ id: 3, padrao: true }];
       },
     },
   };
@@ -47,6 +47,19 @@ test("buscarEmitenteFiscal usa padrão ativo quando id não é informado", async
     habilitaMdfe: true,
   });
   assert.deepEqual(recebido.orderBy, [{ padrao: "desc" }, { id: "asc" }]);
+  assert.equal(recebido.take, 2);
+});
+
+test("buscarEmitenteFiscal exige seleÃ§Ã£o quando hÃ¡ mÃºltiplas empresas sem padrÃ£o", async () => {
+  const prisma = {
+    emitenteFiscal: {
+      findMany: async () => [{ id: 3, padrao: false }, { id: 4, padrao: false }],
+    },
+  };
+  await assert.rejects(
+    buscarEmitenteFiscal(prisma, { tenantId: 2, recurso: "nfe", obrigatorio: true }),
+    (err) => err.code === "EMITENTE_FISCAL_SELECAO_OBRIGATORIA",
+  );
 });
 
 test("buscarEmitenteFiscal rejeita emitente de outro tenant ou desabilitado", async () => {

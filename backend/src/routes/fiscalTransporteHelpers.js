@@ -41,11 +41,7 @@ function fiscalWebhookSecretOk(req) {
     req.headers["x-nfe-token"] ||
     req.headers["x-fiscal-token"] ||
     "";
-  const query = req.query?.token || "";
-  return (
-    timingSafeEqualString(String(header), expected) ||
-    timingSafeEqualString(String(query), expected)
-  );
+  return timingSafeEqualString(String(header), expected);
 }
 
 module.exports = {

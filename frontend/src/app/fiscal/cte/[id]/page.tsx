@@ -9,6 +9,7 @@ import { reportApiError } from "@/lib/report-api-error";
 import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanner";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { toast } from "sonner";
+import { downloadFiscalFile } from "@/features/fiscal/services/download";
 
 type CteDetail = {
   id: number;
@@ -58,6 +59,14 @@ export default function FiscalCteDetailPage() {
       toast.success("Status atualizado.");
     } catch (err) {
       reportApiError(err, { title: "Falha ao consultar CT-e." });
+    }
+  };
+
+  const baixar = async (tipo: "xml" | "dacte") => {
+    try {
+      await downloadFiscalFile(`/fiscal/cte/${id}/${tipo}`);
+    } catch (err) {
+      reportApiError(err, { title: `Falha ao baixar ${tipo.toUpperCase()}.` });
     }
   };
 
@@ -126,16 +135,16 @@ export default function FiscalCteDetailPage() {
           Consultar status
         </button>
         {doc.xmlUrl ? (
-          <a className="btn-secondary text-sm" href={`/api/fiscal/cte/${id}/xml`}>
+          <button type="button" className="btn-secondary text-sm" onClick={() => void baixar("xml")}>
             XML
-          </a>
+          </button>
         ) : (
           <span className="text-xs text-gray-500 self-center">XML indisponível</span>
         )}
         {doc.dacteUrl ? (
-          <a className="btn-secondary text-sm" href={`/api/fiscal/cte/${id}/dacte`}>
+          <button type="button" className="btn-secondary text-sm" onClick={() => void baixar("dacte")}>
             DACTE
-          </a>
+          </button>
         ) : (
           <span className="text-xs text-gray-500 self-center">DACTE indisponível</span>
         )}

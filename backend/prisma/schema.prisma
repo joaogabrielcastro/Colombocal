@@ -25,6 +25,7 @@ model Tenant {
   vendas                  Venda[]
   cheques                 Cheque[]
   pagamentos              Pagamento[]
+  operacoesFinanceiras    FinanceiroOperacaoIdempotente[]
   titulos                 TituloReceber[]
   fretes                  FreteMovimento[]
   movimentacoes           MovimentacaoEstoque[]
@@ -40,6 +41,7 @@ model Tenant {
   condicoesPagamento      CondicaoPagamento[]
   configuracoesBancarias  ConfiguracaoBancaria[]
   cobrancasBancarias      CobrancaBancaria[]
+  cobrancasLembretes      CobrancaLembrete[]
 }
 
 model User {
@@ -53,10 +55,15 @@ model User {
   tokenVersion   Int      @default(0)
   /// Chaves de menu permitidas (JSON array). null = todas as abas do papel.
   navPermissions Json?
+  /// Estrutura legada preservada; MFA ainda não está habilitado na aplicação.
+  mfaEnabled        Boolean @default(false)
+  mfaSecretEnc      String?
+  mfaBackupCodesHash Json?
   createdAt      DateTime @default(now())
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   passwordResetTokens PasswordResetToken[]
+  cobrancasLembretes  CobrancaLembrete[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -365,6 +372,25 @@ model Pagamento {
   @@index([vendaId, data])
 }
 
+/// Resultado persistido de uma intenção financeira para tornar reenvios idempotentes.
+model FinanceiroOperacaoIdempotente {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  chave       String
+  tipo        String
+  requestHash String
+  clienteId   Int
+  vendaId     Int?
+  resposta    Json
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, chave])
+  @@index([tenantId, vendaId, createdAt])
+  @@index([tenantId, clienteId, createdAt])
+}
+
 model TituloReceber {
   id            Int      @id @default(autoincrement())
   tenantId      Int
@@ -386,6 +412,7 @@ model TituloReceber {
   cliente  Cliente           @relation(fields: [clienteId], references: [id])
   venda    Venda?            @relation(fields: [vendaId], references: [id], onDelete: SetNull)
   cobranca CobrancaBancaria?
+  cobrancasLembretes CobrancaLembrete[]
 
   @@index([tenantId, clienteId, status, vencimento])
   @@index([vendaId])
@@ -477,6 +504,27 @@ model CobrancaBancaria {
   @@index([tenantId, banco, status])
   @@index([tenantId, clienteId])
   @@index([vendaId])
+}
+
+/// Registro legado de lembretes de cobrança. A automação ainda não está ativa.
+model CobrancaLembrete {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  tituloId  Int
+  clienteId Int
+  userId    Int?
+  canal     String   @default("whatsapp")
+  mensagem  String?
+  enviadoEm DateTime @default(now())
+  status    String   @default("sent")
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  titulo TituloReceber  @relation(fields: [tituloId], references: [id], onDelete: Cascade)
+  user   User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, tituloId, enviadoEm])
+  @@index([tenantId, clienteId, enviadoEm])
+  @@index([tenantId, status, enviadoEm])
 }
 
 // Espelho/histórico de frete (listagem / legados sem venda). Não editar valor isolado sem passar pela Venda — ver sincronização em routes/vendas.js.
@@ -619,8 +667,10 @@ model EmitenteFiscal {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  notasFiscais NotaFiscal[]
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notasFiscais            NotaFiscal[]
+  conhecimentosTransporte ConhecimentoTransporte[]
+  manifestosEletronicos   ManifestoEletronico[]
 
   @@unique([tenantId, cnpj])
   @@index([tenantId, ativo, padrao])
@@ -646,6 +696,8 @@ model NotaFiscal {
   danfeUrl         String?
   /// Referência única no provedor (Focus `ref`)
   refProvedor      String
+  /// Token interno que garante que apenas um worker chama o provedor por tentativa.
+  claimEmissao     String?   @unique
   payloadEnviado   Json?
   payloadResposta  Json?
   emitidaEm        DateTime?
@@ -672,6 +724,7 @@ model NotaFiscal {
 model ConhecimentoTransporte {
   id                     Int       @id @default(autoincrement())
   tenantId               Int
+  emitenteFiscalId       Int?
   /// rascunho | processando | autorizada | rejeitada | cancelada | denegada | indisponivel
   status                 String    @default("rascunho")
   /// homologacao | producao
@@ -717,6 +770,7 @@ model ConhecimentoTransporte {
   updatedAt              DateTime  @updatedAt
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  emitenteFiscal    EmitenteFiscal?    @relation(fields: [emitenteFiscalId], references: [id], onDelete: SetNull)
   venda             Venda?             @relation(fields: [vendaId], references: [id], onDelete: SetNull)
   freteMovimento    FreteMovimento?    @relation(fields: [freteMovimentoId], references: [id], onDelete: SetNull)
   ordemCarregamento OrdemCarregamento? @relation(fields: [ordemCarregamentoId], references: [id], onDelete: SetNull)
@@ -724,6 +778,7 @@ model ConhecimentoTransporte {
 
   @@unique([tenantId, refProvedor])
   @@index([tenantId, status])
+  @@index([tenantId, emitenteFiscalId, createdAt])
   @@index([tenantId, emitidaEm])
   @@index([tenantId, autorizadaEm])
   @@index([tenantId, serie, numero])
@@ -737,6 +792,7 @@ model ConhecimentoTransporte {
 model ManifestoEletronico {
   id                    Int       @id @default(autoincrement())
   tenantId              Int
+  emitenteFiscalId      Int?
   /// rascunho | processando | autorizada | rejeitada | cancelada | encerrada | denegada | indisponivel
   status                String    @default("rascunho")
   ambiente              String    @default("homologacao")
@@ -771,6 +827,7 @@ model ManifestoEletronico {
   updatedAt             DateTime  @updatedAt
 
   tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  emitenteFiscal    EmitenteFiscal?      @relation(fields: [emitenteFiscalId], references: [id], onDelete: SetNull)
   venda             Venda?               @relation(fields: [vendaId], references: [id], onDelete: SetNull)
   freteMovimento    FreteMovimento?      @relation(fields: [freteMovimentoId], references: [id], onDelete: SetNull)
   ordemCarregamento OrdemCarregamento?   @relation(fields: [ordemCarregamentoId], references: [id], onDelete: SetNull)
@@ -779,6 +836,7 @@ model ManifestoEletronico {
 
   @@unique([tenantId, refProvedor])
   @@index([tenantId, status])
+  @@index([tenantId, emitenteFiscalId, createdAt])
   @@index([tenantId, emitidaEm])
   @@index([tenantId, autorizadaEm])
   @@index([tenantId, serie, numero])

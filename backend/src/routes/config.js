@@ -165,10 +165,9 @@ function publicEmitente(row) {
   const { provedorToken, ...rest } = row;
   return {
     ...rest,
-    provedorTokenConfigurado: !!(
-      hasFiscalTokenConfigured(provedorToken) ||
-      String(process.env.FOCUS_NFE_TOKEN || "").trim()
-    ),
+    // Em ambiente multiemitente, cada CNPJ precisa da própria credencial.
+    // O token global legado não deve fazer outra empresa parecer configurada.
+    provedorTokenConfigurado: hasFiscalTokenConfigured(provedorToken),
   };
 }
 
@@ -274,8 +273,16 @@ router.get("/emitentes-fiscais", requireAdmin, async (req, res) => {
 
 router.get("/emitentes-fiscais-opcoes", async (req, res) => {
   try {
+    const recurso = ["nfe", "cte", "mdfe"].includes(String(req.query.recurso || ""))
+      ? String(req.query.recurso)
+      : "nfe";
+    const habilitacao = {
+      nfe: "habilitaNfe",
+      cte: "habilitaCte",
+      mdfe: "habilitaMdfe",
+    }[recurso];
     const rows = await prisma.emitenteFiscal.findMany({
-      where: { tenantId: req.tenantId, ativo: true, habilitaNfe: true },
+      where: { tenantId: req.tenantId, ativo: true, [habilitacao]: true },
       select: {
         id: true,
         cnpj: true,
@@ -327,6 +334,12 @@ router.put("/emitentes-fiscais/:id", requireAdmin, async (req, res) => {
     });
     if (!atual) return res.status(404).json({ error: "Empresa emissora não encontrada" });
     const b = parseBody(emitenteFiscalSchema, req.body);
+    if (atual.padrao && (b.padrao === false || b.ativo === false)) {
+      return res.status(409).json({
+        error: "Defina outra empresa como padrÃ£o antes de desativar ou desmarcar esta emissora.",
+        code: "EMITENTE_PADRAO_OBRIGATORIO",
+      });
+    }
     const tokenNovo =
       b.provedorToken != null && String(b.provedorToken).trim()
         ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())

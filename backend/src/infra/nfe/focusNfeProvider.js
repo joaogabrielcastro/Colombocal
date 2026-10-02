@@ -2,6 +2,7 @@ const axios = require("axios");
 const { mapStatusFocus } = require("../../domain/nfe/montarPayload");
 const { AppError } = require("../../shared/errors/appError");
 const { INCONCLUSIVE_HTTP } = require("../../domain/nfe/refNfe");
+const { resolveFocusDownloadUrl } = require("./focusDownloadUrl");
 
 function mensagemFocus(data, fallback) {
   return (
@@ -147,13 +148,12 @@ function createFocusNfeProvider({ token, ambiente }) {
     },
     async baixarArquivo(caminhoRelativo) {
       if (!caminhoRelativo) return null;
-      const url = caminhoRelativo.startsWith("http")
-        ? caminhoRelativo
-        : `${baseURL}${caminhoRelativo.startsWith("/") ? "" : "/"}${caminhoRelativo}`;
+      const url = resolveFocusDownloadUrl(caminhoRelativo, baseURL);
       const res = await axios.get(url, {
         headers: authHeader(token),
         responseType: "arraybuffer",
         timeout: 30000,
+        maxRedirects: 0,
       });
       return {
         buffer: Buffer.from(res.data),

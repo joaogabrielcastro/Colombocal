@@ -6,8 +6,11 @@ const {
   validarRegistroCiot,
 } = require("../../domain/ciot/constants");
 const { createCiotProvider } = require("../../infra/ciot/provider");
+const { validarVinculosOperacionais } = require("../../services/fiscal/validarVinculosTenant");
+const { auditarSemFalhar } = require("../../services/fiscal/auditoriaFiscal");
 
 async function registrarCiot(prisma, { tenantId, input = {}, provider, audit } = {}) {
+  await validarVinculosOperacionais(prisma, { tenantId, input });
   const validacao = validarRegistroCiot(input);
   if (!validacao.ok) {
     throw new AppError(validacao.erros.join(" "), {
@@ -82,8 +85,7 @@ async function registrarCiot(prisma, { tenantId, input = {}, provider, audit } =
         erroTecnico: null,
       },
     });
-    if (audit) {
-      await audit({
+    await auditarSemFalhar(audit, {
         tipo: "CIOT_REGISTRADO",
         entidade: "OperacaoCiot",
         entidadeId: atualizado.id,
@@ -93,8 +95,7 @@ async function registrarCiot(prisma, { tenantId, input = {}, provider, audit } =
           codigoCiot: atualizado.codigoCiot,
           demonstracao: Boolean(resposta.demonstracao),
         },
-      });
-    }
+    });
     return atualizado;
   } catch (err) {
     if (err.code === "CIOT_NAO_IMPLEMENTADO") {
@@ -168,14 +169,12 @@ async function cancelarCiot(prisma, { tenantId, id, provider, audit } = {}) {
       canceladaEm: new Date(),
     },
   });
-  if (audit) {
-    await audit({
+  await auditarSemFalhar(audit, {
       tipo: "CIOT_CANCELADO",
       entidade: "OperacaoCiot",
       entidadeId: atualizado.id,
       payload: { status: atualizado.status },
-    });
-  }
+  });
   return atualizado;
 }
 
