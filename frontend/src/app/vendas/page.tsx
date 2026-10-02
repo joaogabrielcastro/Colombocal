@@ -404,42 +404,12 @@ function VendasPageContent() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-sm">
-            <colgroup>
-              {freteEnabled ? (
-                <>
-                  <col style={{ width: "4%" }} />
-                  <col style={{ width: "7%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "10%" }} />
-                  <col style={{ width: "9%" }} />
-                  <col style={{ width: "4%" }} />
-                  <col style={{ width: "7%" }} />
-                  <col style={{ width: "7%" }} />
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: "7%" }} />
-                  {nfeEnabled ? <col style={{ width: "9%" }} /> : null}
-                  <col style={{ width: nfeEnabled ? "14%" : "15%" }} />
-                </>
-              ) : (
-                <>
-                  <col style={{ width: "5%" }} />
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: nfeEnabled ? "20%" : "22%" }} />
-                  <col style={{ width: nfeEnabled ? "14%" : "16%" }} />
-                  <col style={{ width: "5%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "10%" }} />
-                  {nfeEnabled ? <col style={{ width: "10%" }} /> : null}
-                  <col style={{ width: nfeEnabled ? "16%" : "16%" }} />
-                </>
-              )}
-            </colgroup>
+          <div className="overflow-x-auto -mx-1 px-1">
+          <table className="w-full min-w-[72rem] text-sm">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="table-header whitespace-nowrap bg-slate-50 !px-2">Ordem</th>
-                <th className="table-header whitespace-nowrap !px-2">Data</th>
+                <th className="table-header whitespace-nowrap bg-slate-50 !px-2 min-w-[4.5rem]">Ordem</th>
+                <th className="table-header whitespace-nowrap !px-2 min-w-[5.5rem]">Data</th>
                 <th className="table-header !px-2">Cliente</th>
                 <th className="table-header !px-2">Vendedor</th>
                 {freteEnabled ? (
@@ -567,12 +537,21 @@ function VendasPageContent() {
                       >
                         Nova
                       </Link>
-                      <Link
-                        href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
-                        className="text-gray-600 hover:underline"
-                      >
-                        Receber
-                      </Link>
+                      {status === "quitado" ? (
+                        <span
+                          className="text-gray-400 cursor-not-allowed"
+                          title="Ordem já quitada"
+                        >
+                          Receber
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
+                          className="text-gray-600 hover:underline"
+                        >
+                          Receber
+                        </Link>
+                      )}
                     </div>
                   </td>
                 </tr>

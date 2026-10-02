@@ -247,7 +247,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
       .catch(() => {
         if (!cancelled) setSelectedCliente(null);
       });
-    setItens((prev) => prev.map(() => emptyItem()));
+    // Em edição, os itens vêm do load da venda — não zerar ao (re)carregar o cliente.
+    // Na criação, trocar o cliente limpa as linhas para aplicar a tabela de preços correta.
+    if (!isEdit) {
+      setItens((prev) => prev.map(() => emptyItem()));
+    }
     return () => {
       cancelled = true;
     };

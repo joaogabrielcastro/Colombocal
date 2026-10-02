@@ -243,23 +243,20 @@ function RegistrarRecebimentoForm() {
     !pix.valor.trim() &&
     chequeItens.length === 0;
 
+  const ordemQuitada = !!vendaSelecionada && saldoVenda < 0.01;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const dinheiroInformado =
-      dinheiro.valor.trim() !== "" || dinheiro.observacoes.trim() !== "";
-    const pixInformado = pix.valor.trim() !== "" || pix.observacoes.trim() !== "";
-    const podeCompletarSaldo =
-      !!vendaSelecionada &&
-      !chequeItens.length &&
-      ((dinheiroInformado && !pixInformado && valorDinheiro === 0) ||
-        (pixInformado && !dinheiroInformado && valorPix === 0));
-    const valorDinheiroFinal =
-      podeCompletarSaldo && dinheiroInformado ? saldoVenda : valorDinheiro;
-    const valorPixFinal = podeCompletarSaldo && pixInformado ? saldoVenda : valorPix;
+    const valorDinheiroFinal = valorDinheiro;
+    const valorPixFinal = valorPix;
     const totalGeralFinal = totalCheques + valorDinheiroFinal + valorPixFinal;
 
     if (!clienteId || !vendaId) {
       setErro(!clienteId ? "Selecione o cliente" : "Selecione a ordem da venda");
+      return;
+    }
+    if (ordemQuitada) {
+      setErro("Esta ordem já está quitada — não há saldo a receber.");
       return;
     }
     if (totalGeralFinal < 0.01) {
@@ -543,7 +540,8 @@ function RegistrarRecebimentoForm() {
           </div>
 
           {mostrarSugestaoSaldo ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm text-gray-600">Usar saldo restante:</span>
               <button
                 type="button"
                 className="btn-primary"
@@ -551,7 +549,7 @@ function RegistrarRecebimentoForm() {
                   setPix((p) => ({ ...p, valor: saldoVenda.toFixed(2) }))
                 }
               >
-                Receber saldo restante ({formatMoney(saldoVenda)}) em PIX
+                PIX ({formatMoney(saldoVenda)})
               </button>
               <button
                 type="button"
@@ -560,7 +558,7 @@ function RegistrarRecebimentoForm() {
                   setDinheiro((p) => ({ ...p, valor: saldoVenda.toFixed(2) }))
                 }
               >
-                em dinheiro
+                Dinheiro ({formatMoney(saldoVenda)})
               </button>
             </div>
           ) : null}
@@ -723,13 +721,29 @@ function RegistrarRecebimentoForm() {
           </div>
         )}
 
-        <div className="flex gap-3">
-          <button type="submit" disabled={salvando} className="btn-primary">
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            type="submit"
+            disabled={salvando || ordemQuitada || !vendaSelecionada}
+            className="btn-primary"
+            title={
+              ordemQuitada
+                ? "Ordem já quitada — não há nada a receber"
+                : !vendaSelecionada
+                  ? "Selecione a ordem da venda"
+                  : undefined
+            }
+          >
             {salvando ? "Registrando…" : "Receber pagamento"}
           </button>
           <Link href="/financeiro" className="btn-secondary">
             Cancelar
           </Link>
+          {ordemQuitada ? (
+            <span className="text-sm text-amber-900">
+              Ordem quitada — recebimento bloqueado.
+            </span>
+          ) : null}
         </div>
       </form>
     </div>

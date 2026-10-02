@@ -39,6 +39,8 @@ describe("filterMainNavForSidebar", () => {
       "/clientes",
       "/produtos",
       "/vendas",
+      "/financeiro/novo",
+      "/contas-a-receber",
       "/financeiro",
       "/fretes",
       "/carregamento",
@@ -48,8 +50,12 @@ describe("filterMainNavForSidebar", () => {
       "/usuarios",
     ]);
   });
-  it("rótulo Financeiro (não Recebimentos)", () => {
-    expect(MAIN_NAV.find((i) => i.navKey === "financeiro")?.label).toBe("Financeiro");
+  it("rótulos de operação financeira", () => {
+    expect(MAIN_NAV.find((i) => i.href === "/financeiro")?.label).toBe("Financeiro");
+    expect(MAIN_NAV.find((i) => i.href === "/financeiro/novo")?.label).toBe("Receber");
+    expect(MAIN_NAV.find((i) => i.href === "/contas-a-receber")?.label).toBe(
+      "Contas a receber",
+    );
   });
   it("esconde Fretes e Carregamento quando freteEnabled=false", () => {
     const out = filterMainNavForSidebar(MAIN_NAV, false, {
@@ -87,10 +93,11 @@ describe("advancedMainNavItems / advancedReportItems", () => {
   });
 });
 
-describe("REPORT_NAV Contas a receber unificado", () => {
-  it("tem uma entrada de contas a receber e nenhuma de títulos separada", () => {
-    expect(REPORT_NAV.filter((i) => i.navKey === "rel_financeiro")).toHaveLength(1);
+describe("REPORT_NAV sem Contas (agora na operação)", () => {
+  it("não duplica Contas a receber em Relatórios", () => {
+    expect(REPORT_NAV.filter((i) => i.navKey === "rel_financeiro")).toHaveLength(0);
     expect(REPORT_NAV.some((i) => i.href.includes("/titulos"))).toBe(false);
+    expect(MAIN_NAV.some((i) => i.navKey === "rel_financeiro")).toBe(true);
   });
   it("inclui fretes, carregamento e motoristas (com frete)", () => {
     expect(REPORT_NAV.some((i) => i.navKey === "rel_fretes" && i.requiresFrete)).toBe(true);
@@ -155,6 +162,8 @@ describe("canAccessPath / resolvePathNavAccess", () => {
     expect(resolvePathNavAccess("/fiscal/fechamento").navKey).toBe("fiscal");
     expect(resolvePathNavAccess("/relatorios/comissoes").navKey).toBe("rel_comissoes");
     expect(resolvePathNavAccess("/relatorios/titulos").navKey).toBe("rel_financeiro");
+    expect(resolvePathNavAccess("/contas-a-receber").navKey).toBe("rel_financeiro");
+    expect(resolvePathNavAccess("/financeiro/novo").navKey).toBe("financeiro");
     expect(resolvePathNavAccess("/usuarios").adminOnly).toBe(true);
   });
   it("bloqueia deep-link sem permissão", () => {

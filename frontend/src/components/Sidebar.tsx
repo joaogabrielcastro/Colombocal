@@ -16,6 +16,7 @@ import {
   UsersIcon,
   ArrowRightOnRectangleIcon,
   DocumentTextIcon,
+  DocumentChartBarIcon,
   MagnifyingGlassIcon,
   UserIcon,
   XMarkIcon,
@@ -58,6 +59,8 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   '/clientes': UserGroupIcon,
   '/produtos': CubeIcon,
   '/vendas': ShoppingCartIcon,
+  '/financeiro/novo': BanknotesIcon,
+  '/contas-a-receber': DocumentChartBarIcon,
   '/financeiro': BanknotesIcon,
   '/fretes': TruckIcon,
   '/carregamento': ClipboardDocumentListIcon,
@@ -142,6 +145,8 @@ export default function Sidebar({
     { href: '/clientes', label: 'Clientes' },
     { href: '/produtos', label: 'Produtos' },
     { href: '/vendas', label: 'Vendas' },
+    { href: '/financeiro/novo', label: 'Receber' },
+    { href: '/contas-a-receber', label: 'Contas a receber' },
     { href: '/financeiro', label: 'Financeiro' },
     ...(freteEnabled
       ? ([
@@ -178,7 +183,24 @@ export default function Sidebar({
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
-    return pathname.startsWith(href);
+    // Evita que "Financeiro" fique ativo em /financeiro/novo (Receber).
+    if (href === '/financeiro') {
+      return (
+        pathname === '/financeiro' || pathname.startsWith('/financeiro/cobrancas')
+      );
+    }
+    if (href === '/financeiro/novo') {
+      return pathname === '/financeiro/novo' || pathname.startsWith('/financeiro/novo/');
+    }
+    // Alias /contas-a-receber → /relatorios/financeiro
+    if (href === '/contas-a-receber') {
+      return (
+        pathname.startsWith('/contas-a-receber') ||
+        pathname.startsWith('/relatorios/financeiro') ||
+        pathname.startsWith('/relatorios/titulos')
+      );
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   const linkClass = (active: boolean) =>

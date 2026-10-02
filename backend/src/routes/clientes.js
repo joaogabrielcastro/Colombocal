@@ -242,6 +242,7 @@ router.get("/:id/conta", async (req, res) => {
         where: { clienteId: id, ...tw },
         select: {
           id: true,
+          vendaId: true,
           vencimento: true,
           valorOriginal: true,
           valorPago: true,
@@ -270,6 +271,24 @@ router.get("/:id/conta", async (req, res) => {
     const totalTitulosEmAberto =
       resumoFinanceiro.titulosReceber.emAberto;
 
+    /** Saldo em aberto por venda (títulos) — evita UI mostrar valorTotal como se fosse dívida. */
+    const saldoPorVenda = new Map();
+    for (const t of titulos) {
+      if (t.vendaId == null) continue;
+      const vo = parseFloat(String(t.valorOriginal ?? 0));
+      const vp = parseFloat(String(t.valorPago ?? 0));
+      if (Number.isNaN(vo) || Number.isNaN(vp)) continue;
+      const aberto = Math.max(0, vo - vp);
+      saldoPorVenda.set(
+        t.vendaId,
+        (saldoPorVenda.get(t.vendaId) || 0) + aberto,
+      );
+    }
+    const vendasComSaldo = vendas.map((v) => ({
+      ...v,
+      saldoEmAbertoTitulos: saldoPorVenda.get(v.id) ?? 0,
+    }));
+
     res.json({
       cliente,
       saldo,
@@ -277,7 +296,7 @@ router.get("/:id/conta", async (req, res) => {
       totalCreditos,
       totalTitulosEmAberto,
       resumoFinanceiro,
-      vendas,
+      vendas: vendasComSaldo,
       pagamentos,
       titulos,
     });

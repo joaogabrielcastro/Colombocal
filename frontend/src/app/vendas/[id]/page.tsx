@@ -53,6 +53,7 @@ export default function VendaDetailPage() {
     label: string;
   } | null>(null);
   const [gerandoOc, setGerandoOc] = useState(false);
+  const [confirmOcOpen, setConfirmOcOpen] = useState(false);
   const [imprimindoFrete, setImprimindoFrete] = useState(false);
 
   const carregar = () => api.get<Venda>(`/vendas/${id}`).then(setVenda);
@@ -124,8 +125,10 @@ export default function VendaDetailPage() {
   const handleCancelar = async () => {
     setConfirmCancelOpen(false);
     setCancelando(true);
+    const ordemLabel = venda ? vendaOrdemTexto(venda) : String(id);
     try {
       await api.delete(`/vendas/${id}`);
+      toast.success(`Venda ${ordemLabel} cancelada`);
       router.push("/vendas");
     } catch (e) {
       reportApiError(e, { title: "Não foi possível cancelar a venda" });
@@ -190,6 +193,7 @@ export default function VendaDetailPage() {
 
   const gerarOrdemCarregamento = async () => {
     if (!venda) return;
+    setConfirmOcOpen(false);
     setGerandoOc(true);
     try {
       const ordem = await api.post<{
@@ -216,12 +220,22 @@ export default function VendaDetailPage() {
       toast.success(
         `OC ${String(ordem.numeroOc).padStart(6, "0")} gerada`,
       );
+      await carregar();
       openOrdemCarregamentoPrint(ordem);
     } catch (e) {
       reportApiError(e, { title: "Não foi possível gerar a OC" });
     } finally {
       setGerandoOc(false);
     }
+  };
+
+  const solicitarGerarOc = () => {
+    if (!venda) return;
+    if ((venda.ordensCarregamento?.length ?? 0) > 0) {
+      setConfirmOcOpen(true);
+      return;
+    }
+    void gerarOrdemCarregamento();
   };
 
   if (loading) return <DetailPageSkeleton />;
@@ -327,7 +341,8 @@ export default function VendaDetailPage() {
           ) : null}
           {freteEnabled ? (
             <button
-              onClick={() => void gerarOrdemCarregamento()}
+              type="button"
+              onClick={solicitarGerarOc}
               className="btn-secondary"
               disabled={gerandoOc}
             >
@@ -384,6 +399,19 @@ export default function VendaDetailPage() {
         confirmText="Estornar"
         onCancel={() => setConfirmEstorno(null)}
         onConfirm={() => void executarEstorno()}
+      />
+      <ConfirmDialog
+        open={confirmOcOpen}
+        title="Gerar outra ordem de carregamento?"
+        description={
+          (venda.ordensCarregamento?.length ?? 0) > 0
+            ? `Esta venda já tem ${venda.ordensCarregamento!.length} OC. Deseja gerar outra mesmo assim?`
+            : undefined
+        }
+        busy={gerandoOc}
+        confirmText="Gerar outra OC"
+        onCancel={() => setConfirmOcOpen(false)}
+        onConfirm={() => void gerarOrdemCarregamento()}
       />
       <ConfirmDialog
         open={confirmCancelOpen}

@@ -29,6 +29,8 @@ export interface ContaData {
     numeroVenda?: number | null;
     dataVenda: string;
     valorTotal: number | string;
+    /** Saldo em aberto nos títulos desta venda (fonte oficial de cobrança). */
+    saldoEmAbertoTitulos?: number | string;
   }>;
   pagamentos: Array<{
     id: number;

@@ -558,7 +558,11 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
                         </div>
                         <div className="mt-0.5 print:hidden">
                           <Link
-                            href={`/financeiro/novo?clienteId=${t.cliente.id}`}
+                            href={
+                              t.venda
+                                ? `/financeiro/novo?clienteId=${t.cliente.id}&vendaId=${t.venda.id}&ordem=${t.venda.numeroVenda ?? t.venda.id}`
+                                : `/financeiro/novo?clienteId=${t.cliente.id}`
+                            }
                             className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
                           >
                             Receber

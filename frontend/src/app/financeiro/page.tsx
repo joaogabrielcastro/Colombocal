@@ -17,6 +17,10 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { ListScaffold } from "@/components/ui/list-scaffold";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagamentosQuery } from "@/features/financeiro/hooks/usePagamentosQuery";
+import {
+  CONTAS_EXPORT_MAX_ROWS,
+} from "@/features/contas-a-receber/constants";
+import { fetchTodasPaginas } from "@/features/contas-a-receber/services/fetchPaginas";
 import api from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
 import { toast } from "sonner";
@@ -65,6 +69,7 @@ function FinanceiroPageContent() {
   );
   const [pagamentoParaEstornar, setPagamentoParaEstornar] = useState<Pagamento | null>(null);
   const [estornando, setEstornando] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   const pagamentosQuery = usePagamentosQuery({
     dataInicio,
@@ -162,32 +167,84 @@ function FinanceiroPageContent() {
     router,
   ]);
 
-  const handleExportExcel = async () => {
-    const XLSX = await import("xlsx");
-    const rows = pagamentos.map((p) => ({
-      tipo: labelTipoPagamento(p.tipo),
-      cliente: p.cliente?.nomeFantasia || p.cliente?.razaoSocial || "",
-      venda: p.venda ? `Venda ${vendaOrdemTexto(p.venda)}` : "",
-      detalhe:
-        String(p.tipo).toLowerCase() === "cheque" && p.cheque
-          ? formatChequeDetalhe(p.cheque)
-          : p.observacoes || "",
-      valor: parseFloat(String(p.valor)),
-      data: formatDate(p.data),
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Recebimentos");
-    XLSX.writeFile(wb, `financeiro_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  const filtrosExportParams = () => {
+    const params = new URLSearchParams();
+    if (dataInicio) params.set("dataInicio", dataInicio);
+    if (dataFim) params.set("dataFim", dataFim);
+    if (clienteFiltro) params.set("cliente", clienteFiltro);
+    const ordemTrim = ordemFiltro.replace(/^#/, "").trim();
+    if (ordemTrim) params.set("ordem", ordemTrim);
+    if (tipoFiltro) params.set("tipo", tipoFiltro);
+    if (emitenteFiltro.trim()) params.set("emitente", emitenteFiltro.trim());
+    if (bancoFiltro.trim()) params.set("banco", bancoFiltro.trim());
+    if (numeroFiltro.trim()) params.set("numero", numeroFiltro.trim());
+    params.set("resumo", "1");
+    return params;
   };
 
-  const handleExportPdf = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+  const carregarPagamentosFiltrados = async () => {
+    type PagamentosPayload =
+      | Pagamento[]
+      | { items: Pagamento[]; resumo?: { count: number; total: number } };
+    const { items, truncated } = await fetchTodasPaginas<PagamentosPayload>({
+      path: "/pagamentos",
+      params: filtrosExportParams(),
+      pick: (data) => (Array.isArray(data) ? data : data.items ?? []),
+      totalFrom: (data, metaTotal) => {
+        if (metaTotal != null) return metaTotal;
+        if (!Array.isArray(data) && data.resumo?.count != null) return data.resumo.count;
+        return Array.isArray(data) ? data.length : (data.items?.length ?? 0);
+      },
+    });
+    if (truncated) {
+      toast.warning(
+        `Exportação limitada a ${CONTAS_EXPORT_MAX_ROWS.toLocaleString("pt-BR")} registros. Refine os filtros para exportar o restante.`,
+      );
+    }
+    return items as Pagamento[];
+  };
 
-    const rowsHtml = pagamentos
-      .map(
-        (p) => `
+  const handleExportExcel = async () => {
+    setExportando(true);
+    try {
+      const todos = await carregarPagamentosFiltrados();
+      const XLSX = await import("xlsx");
+      const rows = todos.map((p) => ({
+        tipo: labelTipoPagamento(p.tipo),
+        cliente: p.cliente?.nomeFantasia || p.cliente?.razaoSocial || "",
+        venda: p.venda ? `Venda ${vendaOrdemTexto(p.venda)}` : "",
+        detalhe:
+          String(p.tipo).toLowerCase() === "cheque" && p.cheque
+            ? formatChequeDetalhe(p.cheque)
+            : p.observacoes || "",
+        valor: parseFloat(String(p.valor)),
+        data: formatDate(p.data),
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Recebimentos");
+      XLSX.writeFile(wb, `financeiro_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`Excel gerado com ${todos.length} recebimento(s).`);
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível gerar o Excel" });
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportando(true);
+    try {
+      const todos = await carregarPagamentosFiltrados();
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        toast.error("Permita pop-ups para exportar o PDF.");
+        return;
+      }
+
+      const rowsHtml = todos
+        .map(
+          (p) => `
       <tr>
         <td>${escapeHtml(labelTipoPagamento(p.tipo))}</td>
         <td>${escapeHtml(p.cliente?.nomeFantasia || p.cliente?.razaoSocial || "-")}</td>
@@ -196,10 +253,10 @@ function FinanceiroPageContent() {
         <td>${escapeHtml(formatDate(p.data))}</td>
       </tr>
     `,
-      )
-      .join("");
+        )
+        .join("");
 
-    printWindow.document.write(`
+      printWindow.document.write(`
       <html>
         <head>
           <title>Relatório Financeiro</title>
@@ -214,7 +271,7 @@ function FinanceiroPageContent() {
         </head>
         <body>
           <h1>Recebimentos</h1>
-          <p>Gerado em ${escapeHtml(new Date().toLocaleString("pt-BR"))}</p>
+          <p>Gerado em ${escapeHtml(new Date().toLocaleString("pt-BR"))} · ${todos.length} registro(s) do filtro</p>
           <table>
             <thead>
               <tr>
@@ -230,9 +287,14 @@ function FinanceiroPageContent() {
         </body>
       </html>
     `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    } catch (e) {
+      reportApiError(e, { title: "Não foi possível gerar o PDF" });
+    } finally {
+      setExportando(false);
+    }
   };
 
   const totalValorFiltrado = resumo?.total != null ? resumo.total : null;
@@ -430,6 +492,7 @@ function FinanceiroPageContent() {
               </button>
               <div className="ml-auto">
                 <ExportActions
+                  busy={exportando}
                   onExportPdf={handleExportPdf}
                   onExportExcel={handleExportExcel}
                 />

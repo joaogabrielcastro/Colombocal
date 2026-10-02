@@ -78,14 +78,14 @@ export const NAV_PERMISSION_OPTIONS: { key: NavPermissionKey; label: string; gro
   { key: 'clientes', label: 'Clientes', group: 'Principal' },
   { key: 'produtos', label: 'Produtos', group: 'Principal' },
   { key: 'vendas', label: 'Vendas', group: 'Principal' },
-  { key: 'financeiro', label: 'Financeiro', group: 'Principal' },
+  { key: 'financeiro', label: 'Financeiro / Receber', group: 'Principal' },
+  { key: 'rel_financeiro', label: 'Contas a receber', group: 'Principal' },
   { key: 'fretes', label: 'Fretes', group: 'Avançado' },
   { key: 'carregamento', label: 'Carregamento', group: 'Avançado' },
   { key: 'motoristas', label: 'Motoristas', group: 'Avançado' },
   { key: 'vendedores', label: 'Vendedores', group: 'Avançado' },
   { key: 'fiscal', label: 'Fiscal', group: 'Principal' },
   { key: 'rel_vendas', label: 'Relatório de Vendas', group: 'Relatórios' },
-  { key: 'rel_financeiro', label: 'Contas a receber', group: 'Relatórios' },
   { key: 'rel_comissoes', label: 'Comissões', group: 'Relatórios' },
   { key: 'rel_fretes', label: 'Relatório de Fretes', group: 'Relatórios' },
   { key: 'rel_carregamento', label: 'Relatório de Carregamento', group: 'Relatórios' },
@@ -94,14 +94,26 @@ export const NAV_PERMISSION_OPTIONS: { key: NavPermissionKey; label: string; gro
 ];
 
 /**
- * Menu clássico: Dashboard, Clientes, Produtos, Vendas, Financeiro + avançados.
- * Relatórios em REPORT_NAV. Contas a receber unifica saldos e títulos (sem duplicar).
+ * Menu clássico: operação (Vendas, Receber, Contas, Financeiro) + cadastros + avançados.
+ * Contas a receber fica na operação (não em Relatórios) para cobrança diária.
  */
 export const MAIN_NAV: MainNavItem[] = [
   { href: '/', label: 'Dashboard', icon: HomeIcon, navKey: 'dashboard' },
   { href: '/clientes', label: 'Clientes', icon: UserGroupIcon, navKey: 'clientes' },
   { href: '/produtos', label: 'Produtos', icon: CubeIcon, navKey: 'produtos' },
   { href: '/vendas', label: 'Vendas', icon: ShoppingCartIcon, navKey: 'vendas' },
+  {
+    href: '/financeiro/novo',
+    label: 'Receber',
+    icon: BanknotesIcon,
+    navKey: 'financeiro',
+  },
+  {
+    href: '/contas-a-receber',
+    label: 'Contas a receber',
+    icon: DocumentChartBarIcon,
+    navKey: 'rel_financeiro',
+  },
   { href: '/financeiro', label: 'Financeiro', icon: BanknotesIcon, navKey: 'financeiro' },
   { href: '/fretes', label: 'Fretes', icon: TruckIcon, navKey: 'fretes', advancedOnly: true },
   {
@@ -142,7 +154,6 @@ export const MAIN_NAV: MainNavItem[] = [
 
 export const REPORT_NAV: ReportNavItem[] = [
   { href: '/relatorios/vendas', label: 'Relatório de Vendas', navKey: 'rel_vendas' },
-  { href: '/relatorios/financeiro', label: 'Contas a receber', navKey: 'rel_financeiro' },
   { href: '/relatorios/comissoes', label: 'Comissões', navKey: 'rel_comissoes' },
   {
     href: '/relatorios/fretes',

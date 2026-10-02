@@ -8,12 +8,35 @@ type Props = {
   clienteId: string;
 };
 
+function statusVenda(saldo: number, valorTotal: number) {
+  if (saldo < 0.01) return "quitado" as const;
+  if (saldo + 0.01 < valorTotal) return "parcial" as const;
+  return "aberto" as const;
+}
+
+function badgeClass(status: "quitado" | "parcial" | "aberto") {
+  if (status === "quitado") return "bg-green-100 text-green-800";
+  if (status === "parcial") return "bg-amber-100 text-amber-900";
+  return "bg-red-50 text-red-700";
+}
+
+function badgeLabel(status: "quitado" | "parcial" | "aberto") {
+  if (status === "quitado") return "Quitado";
+  if (status === "parcial") return "Parcial";
+  return "Aberto";
+}
+
 export function ClienteContaTab({ conta, clienteId }: Props) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div className="card">
         <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="font-semibold text-gray-900">Vendas ({conta.vendas.length})</h3>
+          <div>
+            <h3 className="font-semibold text-gray-900">Vendas ({conta.vendas.length})</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Cobrança oficial = títulos. Valores abaixo mostram o saldo em aberto.
+            </p>
+          </div>
           <Link
             href={`/vendas?clienteId=${clienteId}`}
             className="text-blue-600 text-xs hover:underline"
@@ -25,20 +48,43 @@ export function ClienteContaTab({ conta, clienteId }: Props) {
           {conta.vendas.length === 0 ? (
             <p className="p-4 text-gray-400 text-sm text-center">Nenhuma venda</p>
           ) : (
-            conta.vendas.map((v) => (
-              <div
-                key={v.id}
-                className="flex justify-between items-center px-5 py-3 hover:bg-gray-50"
-              >
-                <div>
-                  <VendaOrdem venda={v} size="sm" prefix="Venda" />
-                  <p className="text-xs text-gray-400 mt-0.5">{formatDate(v.dataVenda)}</p>
+            conta.vendas.map((v) => {
+              const total = parseFloat(String(v.valorTotal ?? 0));
+              const saldo = Math.max(
+                0,
+                parseFloat(String(v.saldoEmAbertoTitulos ?? 0)),
+              );
+              const status = statusVenda(saldo, total);
+              return (
+                <div
+                  key={v.id}
+                  className="flex justify-between items-center gap-3 px-5 py-3 hover:bg-gray-50"
+                >
+                  <div className="min-w-0">
+                    <VendaOrdem venda={v} size="sm" prefix="Venda" />
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {formatDate(v.dataVenda)} · total {formatMoney(total)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badgeClass(status)}`}
+                    >
+                      {badgeLabel(status)}
+                    </span>
+                    <p
+                      className={`text-sm font-semibold mt-1 ${
+                        status === "quitado" ? "text-green-700" : "text-amber-900"
+                      }`}
+                    >
+                      {status === "quitado"
+                        ? "Quitado"
+                        : `Em aberto ${formatMoney(saldo)}`}
+                    </p>
+                  </div>
                 </div>
-                <span className="text-sm font-semibold text-red-600">
-                  -{formatMoney(v.valorTotal)}
-                </span>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
