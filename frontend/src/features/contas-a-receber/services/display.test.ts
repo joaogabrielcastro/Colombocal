@@ -27,11 +27,13 @@ describe("display contas a receber", () => {
     expect(saldoAbertoTitulo({ valorOriginal: 50, valorPago: 80 })).toBe(0);
   });
 
-  it("formatPct e status não pintam aberto de vermelho", () => {
+  it("formatPct e glossário Quitado/Parcial/Aberto", () => {
     expect(formatPct(8.83)).toMatch(/8[,.]83\s*%/);
     expect(labelStatusTitulo("aberto")).toBe("Aberto");
-    expect(classStatusTitulo("aberto")).not.toMatch(/red/);
+    expect(labelStatusTitulo("quitado")).toBe("Quitado");
+    expect(classStatusTitulo("aberto")).toMatch(/red/);
     expect(classStatusTitulo("quitado")).toMatch(/green/);
+    expect(classStatusTitulo("parcial")).toMatch(/amber/);
   });
 
   it("prioriza diasAtraso da API", () => {

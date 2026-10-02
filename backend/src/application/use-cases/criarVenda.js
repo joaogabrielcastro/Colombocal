@@ -20,6 +20,11 @@ const { montarParcelas } = require("../../domain/financeiro/parcelamento");
 const {
   resolveCondicaoPagamento,
 } = require("../../services/condicaoPagamento");
+const {
+  buscarReplay,
+  lockIdempotencyKey,
+  salvarResultado,
+} = require("../../services/financeiroIdempotencia");
 
 function addDays(date, days) {
   return addDaysCalendar(date, days);
@@ -69,6 +74,7 @@ async function criarVenda(prisma, payload) {
     req = null,
     condicaoPagamentoId = null,
     bancoCobranca = null,
+    idempotencyKey = null,
   } = payload;
 
   if (tenantId == null) {
@@ -83,6 +89,23 @@ async function criarVenda(prisma, payload) {
     quantidade: Number(item.quantidade),
     precoUnitario: Number(item.precoUnitario),
   }));
+
+  const idempotencyPayload = {
+    clienteId,
+    vendedorId,
+    motoristaId: motoristaId ?? null,
+    fretePorSaco: fretePorSaco ?? null,
+    fretePorTonelada: fretePorTonelada ?? null,
+    freteRecibo: !!freteRecibo,
+    freteReciboNum: freteReciboNum ?? null,
+    freteReciboData: freteReciboData ?? null,
+    dataVenda: dataVenda ?? null,
+    observacoes: observacoes ?? null,
+    itens: itensValidos,
+    condicaoPagamentoId: condicaoPagamentoId ?? null,
+    bancoCobranca: bancoCobranca ?? null,
+    atualizarCliente: atualizarClienteBody ?? null,
+  };
 
   const valorTotal = itensValidos.reduce(
     (acc, item) => acc + item.quantidade * item.precoUnitario,
@@ -119,6 +142,18 @@ async function criarVenda(prisma, payload) {
             LOCK_NUMERO_VENDA,
             Number(tenantId),
           );
+          if (idempotencyKey) {
+            await lockIdempotencyKey(tx, idempotencyKey);
+            const replay = await buscarReplay(tx, {
+              tenantId,
+              idempotencyKey,
+              tipo: "criar_venda",
+              payload: idempotencyPayload,
+            });
+            if (replay && replay.id) {
+              return { id: Number(replay.id), __idempotentReplay: true };
+            }
+          }
     const cliente = await tx.cliente.findFirst({
       where: { id: clienteId, tenantId },
     });
@@ -338,6 +373,16 @@ async function criarVenda(prisma, payload) {
       });
     }
 
+    if (idempotencyKey) {
+      await salvarResultado(tx, {
+        tenantId,
+        idempotencyKey,
+        tipo: "criar_venda",
+        payload: idempotencyPayload,
+        resultado: { id: novaVenda.id },
+      });
+    }
+
     return novaVenda;
         },
         { timeout: 20000, maxWait: 20000 },
@@ -351,7 +396,7 @@ async function criarVenda(prisma, payload) {
     }
   }
 
-  return prisma.venda.findFirst({
+  const completa = await prisma.venda.findFirst({
     where: { id: venda.id, tenantId },
     include: {
       cliente: true,
@@ -363,6 +408,10 @@ async function criarVenda(prisma, payload) {
       fretes: true,
     },
   });
+  if (venda && venda.__idempotentReplay && completa) {
+    completa.__idempotentReplay = true;
+  }
+  return completa;
 }
 
 module.exports = {

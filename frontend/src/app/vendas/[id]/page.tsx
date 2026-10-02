@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -31,6 +31,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { VendaNfeActions } from "@/features/nfe/VendaNfeActions";
+import { badgeTipoPagamento } from "@/lib/status-badges";
 
 export default function VendaDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -55,6 +56,7 @@ export default function VendaDetailPage() {
   const [gerandoOc, setGerandoOc] = useState(false);
   const [confirmOcOpen, setConfirmOcOpen] = useState(false);
   const [imprimindoFrete, setImprimindoFrete] = useState(false);
+  const ocLockRef = useRef(false);
 
   const carregar = () => api.get<Venda>(`/vendas/${id}`).then(setVenda);
 
@@ -102,7 +104,7 @@ export default function VendaDetailPage() {
     if (!venda) return;
     const valor = parseFloat(freteForm.valor.replace(",", "."));
     if (Number.isNaN(valor) || valor < 0) {
-      alert("Valor de frete inválido");
+      toast.error("Valor de frete inválido");
       return;
     }
     setSalvandoFrete(true);
@@ -192,9 +194,11 @@ export default function VendaDetailPage() {
   };
 
   const gerarOrdemCarregamento = async () => {
-    if (!venda) return;
+    if (!venda || ocLockRef.current) return;
+    ocLockRef.current = true;
     setConfirmOcOpen(false);
     setGerandoOc(true);
+    const idempotencyKey = globalThis.crypto.randomUUID();
     try {
       const ordem = await api.post<{
         id: number;
@@ -216,7 +220,11 @@ export default function VendaDetailPage() {
           quantidade: number | string;
           unidade?: string | null;
         }[];
-      }>("/ordens-carregamento", { vendaId: venda.id });
+      }>(
+        "/ordens-carregamento",
+        { vendaId: venda.id },
+        { headers: { "Idempotency-Key": idempotencyKey } },
+      );
       toast.success(
         `OC ${String(ordem.numeroOc).padStart(6, "0")} gerada`,
       );
@@ -225,6 +233,7 @@ export default function VendaDetailPage() {
     } catch (e) {
       reportApiError(e, { title: "Não foi possível gerar a OC" });
     } finally {
+      ocLockRef.current = false;
       setGerandoOc(false);
     }
   };
@@ -827,17 +836,7 @@ export default function VendaDetailPage() {
                 isCheque && p.cheque
                   ? ` ${formatChequeDetalhe(p.cheque)}`
                   : "";
-              const tipo = String(p.tipo || "").toLowerCase();
-              const badgeClass =
-                tipo === "cheque"
-                  ? "bg-violet-100 text-violet-800"
-                  : tipo === "dinheiro"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : tipo === "transferencia"
-                      ? "bg-sky-100 text-sky-800"
-                      : tipo.startsWith("troco_")
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-gray-100 text-gray-700";
+              const badge = badgeTipoPagamento(String(p.tipo || ""));
               return (
                 <li
                   key={`pag-${p.id}`}
@@ -845,7 +844,7 @@ export default function VendaDetailPage() {
                 >
                   <span className="text-gray-700 flex items-center gap-2 flex-wrap">
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${badgeClass}`}
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${badge.className}`}
                     >
                       {labelTipoPagamento(p.tipo)}
                     </span>

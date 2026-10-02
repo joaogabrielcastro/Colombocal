@@ -13,6 +13,7 @@ import {
   type ClienteFormState,
   type TipoPessoa,
 } from '@/features/clientes/components/ClienteForm';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 
 interface CnpjData {
   cnpj: string;
@@ -67,6 +68,17 @@ export default function NovoClientePage() {
   const [condicoesPagamento, setCondicoesPagamento] = useState<
     { id: number; nome: string; diasParcelas: number[] }[]
   >([]);
+  const formDirty =
+    Boolean(
+      form.razaoSocial?.trim() ||
+        form.nomeFantasia?.trim() ||
+        form.cpf?.trim() ||
+        form.cnpj?.trim() ||
+        form.telefone?.trim() ||
+        form.cidade?.trim() ||
+        form.observacoes?.trim(),
+    ) || Boolean(cnpjBusca.trim());
+  const unsavedGuard = useUnsavedChanges(formDirty && !salvando);
 
   useEffect(() => {
     if (permiteCpf) setTipoPessoa('PF');
@@ -197,6 +209,7 @@ export default function NovoClientePage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
+      {unsavedGuard}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/clientes" className="btn-secondary py-1.5 px-2.5">
           <ArrowLeftIcon className="w-4 h-4" />

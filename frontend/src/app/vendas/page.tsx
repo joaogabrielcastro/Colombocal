@@ -25,6 +25,11 @@ import { FilterBar } from '@/components/ui/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 import { NfeStatusBadge } from '@/features/nfe/status';
+import {
+  classStatusTituloUi,
+  labelStatusTituloUi,
+  statusTituloFromSaldo,
+} from '@/lib/status-badges';
 
 const pageSize = 20;
 
@@ -441,12 +446,7 @@ function VendasPageContent() {
                   parseFloat(String(v.saldoEmAbertoTitulos ?? 0)),
                 );
                 const total = parseFloat(String(v.valorTotal ?? 0));
-                const status =
-                  saldo < 0.01
-                    ? "quitado"
-                    : saldo + 0.01 < total
-                      ? "parcial"
-                      : "em aberto";
+                const status = statusTituloFromSaldo(saldo, total);
                 const clienteNome =
                   v.cliente.nomeFantasia || v.cliente.razaoSocial;
                 const fretePagoCurto = (() => {
@@ -501,22 +501,16 @@ function VendasPageContent() {
                     {formatMoney(v.valorTotal)}
                   </td>
                   <td className="table-cell whitespace-nowrap !px-2 !py-2">
-                    {status === "quitado" ? (
-                      <span className="inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-800">
-                        Quitado
-                      </span>
-                    ) : status === "parcial" ? (
-                      <span
-                        className="inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900"
-                        title={`Parcial · ${formatMoney(saldo)}`}
-                      >
-                        Parcial
-                      </span>
-                    ) : (
-                      <span className="inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-700">
-                        Aberto
-                      </span>
-                    )}
+                    <span
+                      className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${classStatusTituloUi(status)}`}
+                      title={
+                        status === "parcial"
+                          ? `Parcial · ${formatMoney(saldo)}`
+                          : undefined
+                      }
+                    >
+                      {labelStatusTituloUi(status)}
+                    </span>
                   </td>
                   {nfeEnabled ? (
                     <td className="table-cell whitespace-nowrap !px-2 !py-2">

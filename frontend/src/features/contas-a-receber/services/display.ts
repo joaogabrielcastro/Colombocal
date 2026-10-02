@@ -18,15 +18,15 @@ export function formatPct(n: number) {
 }
 
 export function labelStatusTitulo(status: StatusTitulo) {
-  if (status === "quitado") return "Pago";
+  if (status === "quitado") return "Quitado";
   if (status === "parcial") return "Parcial";
   return "Aberto";
 }
 
 export function classStatusTitulo(status: StatusTitulo) {
   if (status === "quitado") return "bg-green-100 text-green-800";
-  if (status === "parcial") return "bg-amber-100 text-amber-800";
-  return "bg-slate-100 text-slate-700";
+  if (status === "parcial") return "bg-amber-100 text-amber-900";
+  return "bg-red-50 text-red-700";
 }
 
 export function atrasoDoTitulo(t: TituloItem, aberto: number) {

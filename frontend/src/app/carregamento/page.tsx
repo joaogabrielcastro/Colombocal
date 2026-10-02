@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PrinterIcon } from "@heroicons/react/24/outline";
@@ -17,6 +17,7 @@ import {
   type OrdemCarregamentoPrintData,
 } from "@/lib/ordem-carregamento-print";
 import { toast } from "sonner";
+import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
 
 type OcItem = {
   id: number;
@@ -43,7 +44,7 @@ function CarregamentoContent() {
 
   const [rows, setRows] = useState<OcRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
   const [loading, setLoading] = useState(true);
   const [clienteInput, setClienteInput] = useState(clienteQ);
   const [clienteFiltro, setClienteFiltro] = useState(clienteQ.trim());
@@ -54,6 +55,18 @@ function CarregamentoContent() {
   const [toDelete, setToDelete] = useState<OcRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const pageSize = 50;
+
+  useSyncListFiltersToUrl(
+    useMemo(
+      () => ({
+        page: page > 1 ? page : null,
+        cliente: clienteFiltro || null,
+        numeroOc: ocFiltro || null,
+        pedido: pedidoFiltro || null,
+      }),
+      [page, clienteFiltro, ocFiltro, pedidoFiltro],
+    ),
+  );
 
   const aplicarFiltro = () => {
     setClienteFiltro(clienteInput.trim());

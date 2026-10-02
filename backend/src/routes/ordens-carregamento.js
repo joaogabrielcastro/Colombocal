@@ -8,6 +8,12 @@ const {
   handleRouteError,
 } = require("../utils/api");
 const { quantidadeEmSacos } = require("../domain/frete/calcularFrete");
+const {
+  buscarReplay,
+  idempotencyKeyFromRequest,
+  lockIdempotencyKey,
+  salvarResultado,
+} = require("../services/financeiroIdempotencia");
 
 function tw(req) {
   return { tenantId: req.tenantId };
@@ -201,14 +207,39 @@ router.post("/", async (req, res) => {
 
     if (!(Number.isFinite(vendaId) && vendaId > 0)) vendaId = null;
 
+    const idempotencyKey = idempotencyKeyFromRequest(req);
+    const idempotencyPayload = {
+      clienteId: clienteId || 0,
+      vendaId: vendaId || null,
+      clienteNome,
+      pedido,
+      doct,
+      motoristaId: motoristaId || null,
+      itens: itensNorm,
+      // Só fixa data quando o cliente enviou; senão o relógio quebraria o replay.
+      dataEmissao: body.dataEmissao ? dataEmissao.toISOString() : null,
+      observacoes,
+    };
+
     const ordem = await prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        await lockIdempotencyKey(tx, idempotencyKey);
+        const replay = await buscarReplay(tx, {
+          tenantId,
+          idempotencyKey,
+          tipo: "criar_ordem_carregamento",
+          payload: idempotencyPayload,
+        });
+        if (replay) return replay;
+      }
+
       const ultima = await tx.ordemCarregamento.findFirst({
         where: { tenantId },
         orderBy: { numeroOc: "desc" },
         select: { numeroOc: true },
       });
       const numeroOc = (ultima?.numeroOc ?? 0) + 1;
-      return tx.ordemCarregamento.create({
+      const created = await tx.ordemCarregamento.create({
         data: {
           tenantId,
           numeroOc,
@@ -237,6 +268,16 @@ router.post("/", async (req, res) => {
         },
         include: { itens: true },
       });
+      if (idempotencyKey) {
+        await salvarResultado(tx, {
+          tenantId,
+          idempotencyKey,
+          tipo: "criar_ordem_carregamento",
+          payload: idempotencyPayload,
+          resultado: created,
+        });
+      }
+      return created;
     });
 
     res.status(201).json(ordem);

@@ -20,6 +20,7 @@ const {
   loadComissaoMapPorCliente,
 } = require("../services/comissaoCadastro");
 const { criarVenda } = require("../application/use-cases/criarVenda");
+const { idempotencyKeyFromRequest } = require("../services/financeiroIdempotencia");
 const { requestAllowsFrete, getTenantSlug } = require("../utils/tenantRequest");
 const { tenantFretePagoDefault } = require("../constants/tenantFeatures");
 const {
@@ -522,6 +523,7 @@ router.post("/", async (req, res) => {
       });
     }
     const freteEnabled = await requestAllowsFrete(req);
+    const idempotencyKey = idempotencyKeyFromRequest(req);
 
     const vendaCompleta = await criarVenda(prisma, {
       tenantId: req.tenantId,
@@ -540,11 +542,14 @@ router.post("/", async (req, res) => {
       atualizarClienteBody: body.atualizarCliente ?? null,
       condicaoPagamentoId: body.condicaoPagamentoId ?? null,
       bancoCobranca: body.bancoCobranca ?? null,
+      idempotencyKey,
       req,
     });
 
+    const replayed = !!vendaCompleta?.__idempotentReplay;
     const payload = { ...vendaCompleta };
-    if (body.emitirNfe) {
+    delete payload.__idempotentReplay;
+    if (body.emitirNfe && !replayed) {
       const slug = await getTenantSlug(req.tenantId);
       const features = await getTenantFeatures(prisma, req.tenantId, slug);
       if (!features.nfe) {

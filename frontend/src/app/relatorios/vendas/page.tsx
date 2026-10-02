@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { useRelatorioVendasLookups } from "@/features/relatorios-vendas/hooks/useRelatorioVendasLookups";
@@ -23,27 +24,34 @@ import { RelatorioVendasDetalhes } from "@/features/relatorios-vendas/components
 import { localDateInputValue } from "@/lib/utils";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
 
-export default function RelatorioVendasPage() {
+function RelatorioVendasPageContent() {
   const { freteEnabled } = useTenantFeatures();
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
-  const [busca, setBusca] = useState("");
-  const [vendedorId, setVendedorId] = useState("");
-  const [motoristaId, setMotoristaId] = useState("");
-  const [clienteId, setClienteId] = useState("");
-  const [produtoId, setProdutoId] = useState("");
-  const [produtoBusca, setProdutoBusca] = useState("");
+  const searchParams = useSearchParams();
+  const hoje = new Date();
+  const defaultIni = localDateInputValue(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  const defaultFim = localDateInputValue(hoje);
+  const [dataInicio, setDataInicio] = useState(
+    () => searchParams.get("dataInicio") || defaultIni,
+  );
+  const [dataFim, setDataFim] = useState(() => searchParams.get("dataFim") || defaultFim);
+  const [busca, setBusca] = useState(() => searchParams.get("busca") || "");
+  const [vendedorId, setVendedorId] = useState(() => searchParams.get("vendedorId") || "");
+  const [motoristaId, setMotoristaId] = useState(() => searchParams.get("motoristaId") || "");
+  const [clienteId, setClienteId] = useState(() => searchParams.get("clienteId") || "");
+  const [produtoId, setProdutoId] = useState(() => searchParams.get("produtoId") || "");
+  const [produtoBusca, setProdutoBusca] = useState(() => searchParams.get("produtoBusca") || "");
   const [exportando, setExportando] = useState(false);
   const [filtrosAplicados, setFiltrosAplicados] = useState({
-    dataInicio: "",
-    dataFim: "",
-    busca: "",
-    vendedorId: "",
-    motoristaId: "",
-    clienteId: "",
-    produtoId: "",
-    produtoBusca: "",
+    dataInicio: searchParams.get("dataInicio") || defaultIni,
+    dataFim: searchParams.get("dataFim") || defaultFim,
+    busca: searchParams.get("busca") || "",
+    vendedorId: searchParams.get("vendedorId") || "",
+    motoristaId: searchParams.get("motoristaId") || "",
+    clienteId: searchParams.get("clienteId") || "",
+    produtoId: searchParams.get("produtoId") || "",
+    produtoBusca: searchParams.get("produtoBusca") || "",
   });
   const { vendedores, clientes, produtos, motoristas } = useRelatorioVendasLookups();
   const {
@@ -59,14 +67,21 @@ export default function RelatorioVendasPage() {
   );
   const data = dataRaw ?? null;
 
-  useEffect(() => {
-    const hoje = new Date();
-    const ini = localDateInputValue(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
-    const fim = localDateInputValue(hoje);
-    setDataInicio(ini);
-    setDataFim(fim);
-    setFiltrosAplicados((prev) => ({ ...prev, dataInicio: ini, dataFim: fim }));
-  }, []);
+  useSyncListFiltersToUrl(
+    useMemo(
+      () => ({
+        dataInicio: filtrosAplicados.dataInicio || null,
+        dataFim: filtrosAplicados.dataFim || null,
+        busca: filtrosAplicados.busca || null,
+        vendedorId: filtrosAplicados.vendedorId || null,
+        motoristaId: filtrosAplicados.motoristaId || null,
+        clienteId: filtrosAplicados.clienteId || null,
+        produtoId: filtrosAplicados.produtoId || null,
+        produtoBusca: filtrosAplicados.produtoBusca || null,
+      }),
+      [filtrosAplicados],
+    ),
+  );
 
   const { resumoRepresentantes, resumoClientes, resumoProdutos, resumoClienteProdutos } = useMemo(
     () => montarResumoRelatorioVendas(data),
@@ -328,5 +343,13 @@ export default function RelatorioVendasPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function RelatorioVendasPage() {
+  return (
+    <Suspense fallback={<TableListSkeleton />}>
+      <RelatorioVendasPageContent />
+    </Suspense>
   );
 }

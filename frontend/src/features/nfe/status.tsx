@@ -1,17 +1,18 @@
-export function nfeStatusLabel(status?: string | null) {
+export function nfeStatusLabel(status?: string | null, opts?: { short?: boolean }) {
+  const short = opts?.short;
   switch (status) {
     case "autorizada":
-      return "NF-e autorizada";
+      return short ? "Autorizada" : "NF-e autorizada";
     case "processando":
-      return "NF-e processando";
+      return short ? "Processando" : "NF-e processando";
     case "rejeitada":
-      return "NF-e rejeitada";
+      return short ? "Rejeitada" : "NF-e rejeitada";
     case "cancelada":
-      return "NF-e cancelada";
+      return short ? "Cancelada" : "NF-e cancelada";
     case "denegada":
-      return "NF-e denegada";
+      return short ? "Denegada" : "NF-e denegada";
     default:
-      return "Sem nota";
+      return short ? status || "Sem nota" : "Sem nota";
   }
 }
 
@@ -31,12 +32,18 @@ export function nfeStatusClass(status?: string | null) {
   }
 }
 
-export function NfeStatusBadge({ status }: { status?: string | null }) {
+export function NfeStatusBadge({
+  status,
+  short = false,
+}: {
+  status?: string | null;
+  short?: boolean;
+}) {
   return (
     <span
       className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${nfeStatusClass(status)}`}
     >
-      {nfeStatusLabel(status)}
+      {nfeStatusLabel(status, { short })}
     </span>
   );
 }

@@ -1,6 +1,7 @@
-import type { Dispatch, FormEvent, SetStateAction } from 'react';
+import { useRef, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import type { Cliente } from '@/features/clientes/types';
 import { ClienteForm, type ClienteFormState } from '@/features/clientes/components/ClienteForm';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 
 type Props = {
   form: Partial<Cliente>;
@@ -27,19 +28,26 @@ export function ClienteEditForm({
   loadVendedorLabelById,
   condicoesPagamento = [],
 }: Props) {
+  const baselineRef = useRef(JSON.stringify(form));
+  const dirty = JSON.stringify(form) !== baselineRef.current;
+  const unsavedGuard = useUnsavedChanges(dirty && !salvando);
+
   return (
-    <ClienteForm
-      mode="edit"
-      form={form as ClienteFormState}
-      setForm={setForm as Dispatch<SetStateAction<ClienteFormState>>}
-      freteEnabled={freteEnabled}
-      nfeEnabled={nfeEnabled}
-      loadVendedorOptions={loadVendedorOptions}
-      loadVendedorLabelById={loadVendedorLabelById}
-      condicoesPagamento={condicoesPagamento}
-      erro={erro}
-      salvando={salvando}
-      onSubmit={onSubmit}
-    />
+    <>
+      {unsavedGuard}
+      <ClienteForm
+        mode="edit"
+        form={form as ClienteFormState}
+        setForm={setForm as Dispatch<SetStateAction<ClienteFormState>>}
+        freteEnabled={freteEnabled}
+        nfeEnabled={nfeEnabled}
+        loadVendedorOptions={loadVendedorOptions}
+        loadVendedorLabelById={loadVendedorLabelById}
+        condicoesPagamento={condicoesPagamento}
+        erro={erro}
+        salvando={salvando}
+        onSubmit={onSubmit}
+      />
+    </>
   );
 }

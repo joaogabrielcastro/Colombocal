@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowPathIcon,
   PrinterIcon,
@@ -15,6 +16,7 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { toast } from "sonner";
 import { reportApiError } from "@/lib/report-api-error";
+import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
 import { CONTAS_PAGE_SIZE } from "../constants";
 import { downloadXlsx, nomeArquivoExcel } from "../services/exportExcel";
 import { fetchTodasPaginas } from "../services/fetchPaginas";
@@ -24,20 +26,47 @@ import { ContasKpiCards, kpisCarteiraClientes } from "./ContasKpiCards";
 import { ContasPrintMeta } from "./ContasPrintMeta";
 import type { ContaCliente, FinanceiroData, OrdenarClientes } from "../types";
 
+function parseOrdenar(raw: string | null): OrdenarClientes {
+  if (raw === "atraso" || raw === "titulos") return raw;
+  return "saldo";
+}
+
 export function ContasPorClientePanel() {
+  const searchParams = useSearchParams();
   const [dados, setDados] = useState<FinanceiroData | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
   const [totalAba, setTotalAba] = useState(0);
-  const [buscaDraft, setBuscaDraft] = useState("");
-  const [busca, setBusca] = useState("");
-  const [vendedorId, setVendedorId] = useState("");
-  const [ordenar, setOrdenar] = useState<OrdenarClientes>("saldo");
+  const [buscaDraft, setBuscaDraft] = useState(() => searchParams.get("busca") || "");
+  const [busca, setBusca] = useState(() => searchParams.get("busca") || "");
+  const [vendedorId, setVendedorId] = useState(() => searchParams.get("vendedorId") || "");
+  const [ordenar, setOrdenar] = useState<OrdenarClientes>(() =>
+    parseOrdenar(searchParams.get("ordenar")),
+  );
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [exportando, setExportando] = useState(false);
   const pageSize = CONTAS_PAGE_SIZE;
   const filtrado = Boolean(busca || vendedorId);
+
+  const urlUpdates = useMemo(
+    () => ({
+      visao: null,
+      busca: busca || null,
+      vendedorId: vendedorId || null,
+      ordenar: ordenar === "saldo" ? null : ordenar,
+      page: page > 1 ? page : null,
+      clienteId: null,
+      vendaId: null,
+      status: null,
+      situacao: null,
+      dataVencInicio: null,
+      dataVencFim: null,
+      somenteEmAberto: null,
+    }),
+    [busca, vendedorId, ordenar, page],
+  );
+  useSyncListFiltersToUrl(urlUpdates);
 
   useEffect(() => {
     api
@@ -160,8 +189,8 @@ export function ContasPorClientePanel() {
   return (
     <div className="space-y-5">
       <p className="text-sm text-gray-600 leading-relaxed max-w-3xl print:hidden">
-        Saldo em aberto por cliente (valor original − pago nos títulos). Cheques
-        cadastrados já entram como pagamento e abatem o saldo.
+        Cobrança oficial = títulos (valor original − pago). Cheques cadastrados já
+        entram como pagamento e abatem o saldo.
       </p>
 
       <ContasPrintMeta

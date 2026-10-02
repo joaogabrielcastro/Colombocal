@@ -2,29 +2,16 @@ import Link from "next/link";
 import { VendaOrdem } from "@/components/VendaOrdem";
 import { formatDate, formatMoney } from "@/lib/utils";
 import type { ContaData } from "@/features/clientes/types";
+import {
+  classStatusTituloUi,
+  labelStatusTituloUi,
+  statusTituloFromSaldo,
+} from "@/lib/status-badges";
 
 type Props = {
   conta: ContaData;
   clienteId: string;
 };
-
-function statusVenda(saldo: number, valorTotal: number) {
-  if (saldo < 0.01) return "quitado" as const;
-  if (saldo + 0.01 < valorTotal) return "parcial" as const;
-  return "aberto" as const;
-}
-
-function badgeClass(status: "quitado" | "parcial" | "aberto") {
-  if (status === "quitado") return "bg-green-100 text-green-800";
-  if (status === "parcial") return "bg-amber-100 text-amber-900";
-  return "bg-red-50 text-red-700";
-}
-
-function badgeLabel(status: "quitado" | "parcial" | "aberto") {
-  if (status === "quitado") return "Quitado";
-  if (status === "parcial") return "Parcial";
-  return "Aberto";
-}
 
 export function ClienteContaTab({ conta, clienteId }: Props) {
   return (
@@ -54,7 +41,7 @@ export function ClienteContaTab({ conta, clienteId }: Props) {
                 0,
                 parseFloat(String(v.saldoEmAbertoTitulos ?? 0)),
               );
-              const status = statusVenda(saldo, total);
+              const status = statusTituloFromSaldo(saldo, total);
               return (
                 <div
                   key={v.id}
@@ -68,9 +55,9 @@ export function ClienteContaTab({ conta, clienteId }: Props) {
                   </div>
                   <div className="text-right shrink-0">
                     <span
-                      className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badgeClass(status)}`}
+                      className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${classStatusTituloUi(status)}`}
                     >
-                      {badgeLabel(status)}
+                      {labelStatusTituloUi(status)}
                     </span>
                     <p
                       className={`text-sm font-semibold mt-1 ${

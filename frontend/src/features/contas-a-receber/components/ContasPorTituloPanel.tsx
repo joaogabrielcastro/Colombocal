@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { formatDate, formatMoney, type Cliente, type Vendedor } from "@/lib/utils";
 import { VendaOrdem, vendaOrdemTexto } from "@/components/VendaOrdem";
 import api, { apiFetchWithMeta } from "@/lib/api";
@@ -12,6 +13,7 @@ import SearchableSelect from "@/components/SearchableSelect";
 import { ArrowDownTrayIcon, PrinterIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { reportApiError } from "@/lib/report-api-error";
+import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
 import { CONTAS_PAGE_SIZE } from "../constants";
 import { downloadXlsx, nomeArquivoExcel } from "../services/exportExcel";
 import { fetchTodasPaginas } from "../services/fetchPaginas";
@@ -34,25 +36,68 @@ type Props = {
   initialClienteId?: string;
 };
 
+function parseSituacao(raw: string | null): SituacaoFiltro {
+  if (raw === "vencidos" || raw === "a_vencer") return raw;
+  return "";
+}
+
 export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
+  const searchParams = useSearchParams();
   const [dados, setDados] = useState<TitulosResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
   const [total, setTotal] = useState(0);
   const pageSize = CONTAS_PAGE_SIZE;
 
-  const [clienteId, setClienteId] = useState(initialClienteId);
-  const [vendedorId, setVendedorId] = useState("");
+  const [clienteId, setClienteId] = useState(
+    () => initialClienteId || searchParams.get("clienteId") || "",
+  );
+  const [vendedorId, setVendedorId] = useState(() => searchParams.get("vendedorId") || "");
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [vendaIdFiltro, setVendaIdFiltro] = useState("");
-  const [status, setStatus] = useState("");
-  const [dataVencInicio, setDataVencInicio] = useState("");
-  const [dataVencFim, setDataVencFim] = useState("");
-  const [somenteEmAberto, setSomenteEmAberto] = useState(true);
-  const [situacao, setSituacao] = useState<SituacaoFiltro>("");
+  const [vendaIdFiltro, setVendaIdFiltro] = useState(() => searchParams.get("vendaId") || "");
+  const [status, setStatus] = useState(() => searchParams.get("status") || "");
+  const [dataVencInicio, setDataVencInicio] = useState(
+    () => searchParams.get("dataVencInicio") || "",
+  );
+  const [dataVencFim, setDataVencFim] = useState(() => searchParams.get("dataVencFim") || "");
+  const [somenteEmAberto, setSomenteEmAberto] = useState(
+    () => searchParams.get("somenteEmAberto") !== "false",
+  );
+  const [situacao, setSituacao] = useState<SituacaoFiltro>(() =>
+    parseSituacao(searchParams.get("situacao")),
+  );
   const [ordenarMaiorAtraso, setOrdenarMaiorAtraso] = useState(true);
   const [exportando, setExportando] = useState(false);
+
+  const urlUpdates = useMemo(
+    () => ({
+      visao: "titulos",
+      clienteId: clienteId || null,
+      vendedorId: vendedorId || null,
+      vendaId: vendaIdFiltro.replace(/^#/, "").trim() || null,
+      status: status || null,
+      dataVencInicio: dataVencInicio || null,
+      dataVencFim: dataVencFim || null,
+      somenteEmAberto: somenteEmAberto ? null : "false",
+      situacao: situacao || null,
+      page: page > 1 ? page : null,
+      busca: null,
+      ordenar: null,
+    }),
+    [
+      clienteId,
+      vendedorId,
+      vendaIdFiltro,
+      status,
+      dataVencInicio,
+      dataVencFim,
+      somenteEmAberto,
+      situacao,
+      page,
+    ],
+  );
+  useSyncListFiltersToUrl(urlUpdates);
 
   useEffect(() => {
     api
@@ -283,8 +328,8 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
   return (
     <div className="space-y-5">
       <p className="text-sm text-gray-600 leading-relaxed max-w-3xl print:hidden">
-        Parcelas em aberto por título (aging). O valor de uma linha pode diferir do
-        saldo global da conta corrente do cliente.
+        Cobrança oficial = títulos (parcelas / aging). O extrato de conta corrente do
+        cliente é complementar e pode diferir até a reconciliação.
       </p>
 
       <ContasPrintMeta

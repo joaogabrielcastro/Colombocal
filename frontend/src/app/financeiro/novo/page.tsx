@@ -22,6 +22,7 @@ import { FormPageSkeleton } from "@/components/ui/skeletons";
 import SearchableSelect from "@/components/SearchableSelect";
 import { toast } from "sonner";
 import { useVendasEmAberto } from "@/features/financeiro/hooks/useVendasEmAberto";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 type ChequeLinha = {
   emitenteNome: string;
@@ -244,6 +245,12 @@ function RegistrarRecebimentoForm() {
     chequeItens.length === 0;
 
   const ordemQuitada = !!vendaSelecionada && saldoVenda < 0.01;
+  const formDirty =
+    Boolean(clienteId || vendaId) ||
+    chequeItens.length > 0 ||
+    Boolean(dinheiro.valor.trim() || dinheiro.observacoes.trim()) ||
+    Boolean(pix.valor.trim() || pix.observacoes.trim());
+  const unsavedGuard = useUnsavedChanges(formDirty && !salvando);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -355,6 +362,7 @@ function RegistrarRecebimentoForm() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto" data-enter-nav-group>
+      {unsavedGuard}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/financeiro" className="btn-secondary py-1.5 px-2.5">
           <ArrowLeftIcon className="w-4 h-4" />
@@ -577,7 +585,9 @@ function RegistrarRecebimentoForm() {
 
           {chequeItens.length === 0 ? (
             <p className="text-sm text-gray-500">
-              Nenhum cheque adicionado. Clique em &quot;Adicionar cheque&quot; se houver cheques neste recebimento.
+              Nenhum cheque adicionado. Clique em &quot;Adicionar cheque&quot; se houver cheques neste
+              recebimento. O cheque abate o saldo na hora (sem compensação). Para corrigir,
+              estorne e registre de novo.
             </p>
           ) : (
             <div className="space-y-3">
@@ -586,43 +596,80 @@ function RegistrarRecebimentoForm() {
                   key={index}
                   className="grid grid-cols-1 md:grid-cols-6 gap-2 border rounded-lg border-gray-100 p-2"
                 >
-                  <input
-                    className="input-field md:col-span-2"
-                    placeholder="Emitente *"
-                    value={item.emitenteNome}
-                    onChange={(e) => updateCheque(index, { emitenteNome: e.target.value })}
-                  />
-                  <input
-                    className="input-field"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="Valor *"
-                    value={item.valor}
-                    onChange={(e) => updateCheque(index, { valor: e.target.value })}
-                  />
-                  <input
-                    className="input-field"
-                    placeholder="Banco"
-                    value={item.banco}
-                    onChange={(e) => updateCheque(index, { banco: e.target.value })}
-                  />
-                  <input
-                    className="input-field"
-                    placeholder="Nº cheque"
-                    value={item.numero}
-                    onChange={(e) => updateCheque(index, { numero: e.target.value })}
-                  />
-                  <div className="flex gap-2">
+                  <div className="md:col-span-2">
+                    <label
+                      className="block text-xs text-gray-500 mb-1"
+                      htmlFor={`chq-emit-${index}`}
+                    >
+                      Emitente *
+                    </label>
                     <input
+                      id={`chq-emit-${index}`}
                       className="input-field"
-                      type="date"
-                      value={item.dataRecebimento}
-                      onChange={(e) => updateCheque(index, { dataRecebimento: e.target.value })}
+                      placeholder="Nome do emitente"
+                      value={item.emitenteNome}
+                      onChange={(e) => updateCheque(index, { emitenteNome: e.target.value })}
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1" htmlFor={`chq-val-${index}`}>
+                      Valor *
+                    </label>
+                    <input
+                      id={`chq-val-${index}`}
+                      className="input-field"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="0,00"
+                      value={item.valor}
+                      onChange={(e) => updateCheque(index, { valor: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1" htmlFor={`chq-banco-${index}`}>
+                      Banco
+                    </label>
+                    <input
+                      id={`chq-banco-${index}`}
+                      className="input-field"
+                      placeholder="Banco"
+                      value={item.banco}
+                      onChange={(e) => updateCheque(index, { banco: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1" htmlFor={`chq-num-${index}`}>
+                      Nº cheque
+                    </label>
+                    <input
+                      id={`chq-num-${index}`}
+                      className="input-field"
+                      placeholder="Número"
+                      value={item.numero}
+                      onChange={(e) => updateCheque(index, { numero: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label
+                        className="block text-xs text-gray-500 mb-1"
+                        htmlFor={`chq-data-${index}`}
+                      >
+                        Data
+                      </label>
+                      <input
+                        id={`chq-data-${index}`}
+                        className="input-field"
+                        type="date"
+                        value={item.dataRecebimento}
+                        onChange={(e) => updateCheque(index, { dataRecebimento: e.target.value })}
+                      />
+                    </div>
                     <button
                       type="button"
                       className="btn-secondary px-2"
+                      aria-label={`Remover cheque ${index + 1}`}
                       onClick={() => setChequeItens((prev) => prev.filter((_, i) => i !== index))}
                     >
                       <TrashIcon className="w-4 h-4 text-red-500" />
@@ -639,8 +686,11 @@ function RegistrarRecebimentoForm() {
             <p className="text-sm font-medium text-gray-800 mb-3">Dinheiro — preencha junto com o cheque</p>
             <div className="grid grid-cols-1 gap-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Valor (R$)</label>
+                <label className="block text-xs text-gray-500 mb-1" htmlFor="recv-dinheiro-valor">
+                  Valor (R$)
+                </label>
                 <input
+                  id="recv-dinheiro-valor"
                   type="number"
                   step="0.01"
                   min="0"
@@ -651,8 +701,11 @@ function RegistrarRecebimentoForm() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Data</label>
+                <label className="block text-xs text-gray-500 mb-1" htmlFor="recv-dinheiro-data">
+                  Data
+                </label>
                 <input
+                  id="recv-dinheiro-data"
                   type="date"
                   className="input-field"
                   value={dinheiro.data}
@@ -660,8 +713,11 @@ function RegistrarRecebimentoForm() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Observações</label>
+                <label className="block text-xs text-gray-500 mb-1" htmlFor="recv-dinheiro-obs">
+                  Observações
+                </label>
                 <input
+                  id="recv-dinheiro-obs"
                   className="input-field"
                   value={dinheiro.observacoes}
                   onChange={(e) => setDinheiro((p) => ({ ...p, observacoes: e.target.value }))}
@@ -674,8 +730,11 @@ function RegistrarRecebimentoForm() {
             <p className="text-sm font-medium text-gray-800 mb-3">PIX / transferência</p>
             <div className="grid grid-cols-1 gap-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Valor (R$)</label>
+                <label className="block text-xs text-gray-500 mb-1" htmlFor="recv-pix-valor">
+                  Valor (R$)
+                </label>
                 <input
+                  id="recv-pix-valor"
                   type="number"
                   step="0.01"
                   min="0"
@@ -686,8 +745,11 @@ function RegistrarRecebimentoForm() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Data</label>
+                <label className="block text-xs text-gray-500 mb-1" htmlFor="recv-pix-data">
+                  Data
+                </label>
                 <input
+                  id="recv-pix-data"
                   type="date"
                   className="input-field"
                   value={pix.data}
@@ -695,8 +757,11 @@ function RegistrarRecebimentoForm() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Observações</label>
+                <label className="block text-xs text-gray-500 mb-1" htmlFor="recv-pix-obs">
+                  Observações
+                </label>
                 <input
+                  id="recv-pix-obs"
                   className="input-field"
                   value={pix.observacoes}
                   onChange={(e) => setPix((p) => ({ ...p, observacoes: e.target.value }))}
@@ -709,8 +774,14 @@ function RegistrarRecebimentoForm() {
 
         {excedente > 0 && (
           <div className="card p-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Devolver troco em</label>
+            <label
+              className="block text-sm font-medium text-gray-700 mb-1"
+              htmlFor="recv-troco-tipo"
+            >
+              Devolver troco em
+            </label>
             <select
+              id="recv-troco-tipo"
               className="input-field max-w-xs"
               value={trocoTipo}
               onChange={(e) => setTrocoTipo(e.target.value as "dinheiro" | "transferencia")}

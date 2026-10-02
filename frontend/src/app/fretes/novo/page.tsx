@@ -12,6 +12,8 @@ import FreteFeatureGuard from "@/components/FreteFeatureGuard";
 import SearchableSelect from "@/components/SearchableSelect";
 import { openFreteAvulsoPrint } from "@/lib/frete-avulso-print";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { toast } from "sonner";
 
 type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; fretePadraoSaco?: number; fretePadraoTonelada?: number };
 type Motorista = { id: number; nome: string };
@@ -39,6 +41,10 @@ export default function NovoFretePage() {
     reciboNumero: "",
   });
   const [itens, setItens] = useState<FreteItemForm[]>([{ produtoId: "", quantidade: "" }]);
+  const formDirty =
+    Boolean(form.clienteId || form.motoristaId || form.observacao.trim()) ||
+    itens.some((i) => i.produtoId || i.quantidade.trim());
+  const unsavedGuard = useUnsavedChanges(formDirty && !salvando && !imprimindo);
 
   useEffect(() => {
     if (fretePagoDefault) {
@@ -119,7 +125,9 @@ export default function NovoFretePage() {
       }))
       .filter((item) => item.produtoId > 0 && Number.isFinite(item.quantidade) && item.quantidade > 0);
     if (!clienteId || !motoristaId || itensValidos.length === 0 || valorFinal <= 0) {
-      alert("Preencha cliente, motorista, pelo menos um item e confira as tarifas (total > 0).");
+      toast.error(
+        "Preencha cliente, motorista, pelo menos um item e confira as tarifas (total > 0).",
+      );
       return;
     }
     printAfter ? setImprimindo(true) : setSalvando(true);
@@ -208,6 +216,7 @@ export default function NovoFretePage() {
   return (
     <FreteFeatureGuard>
     <div className="p-6 w-full max-w-[90rem] mx-auto">
+      {unsavedGuard}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/fretes" className="btn-secondary py-1.5 px-2.5">
           <ArrowLeftIcon className="w-4 h-4" />

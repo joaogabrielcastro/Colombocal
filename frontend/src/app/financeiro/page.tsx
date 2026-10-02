@@ -25,15 +25,12 @@ import api from "@/lib/api";
 import { reportApiError } from "@/lib/report-api-error";
 import { toast } from "sonner";
 import { escapeHtml } from "@/lib/html";
+import { badgeTipoPagamento } from "@/lib/status-badges";
 
 function labelTipoPagamento(tipo: string) {
-  const t = tipo.toLowerCase();
-  if (t === "dinheiro") return "Dinheiro";
-  if (t === "transferencia") return "PIX";
-  if (t === "cheque") return "Cheque";
-  if (t.startsWith("troco_dinheiro")) return "Troco (dinheiro)";
-  if (t.startsWith("troco_transferencia")) return "Troco (PIX)";
-  return tipo;
+  const badge = badgeTipoPagamento(tipo);
+  if (badge.label === "PIX / transferência") return "PIX";
+  return badge.label;
 }
 
 function FinanceiroPageContent() {
@@ -559,19 +556,12 @@ function FinanceiroPageContent() {
                     {pagamentos.map((p) => {
                       const tipo = String(p.tipo || "").toLowerCase();
                       const isCheque = tipo === "cheque";
+                      const badge = badgeTipoPagamento(p.tipo);
                       return (
                         <tr key={p.id} className="table-row">
                           <td className="table-cell">
                             <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                                isCheque
-                                  ? "bg-violet-100 text-violet-800"
-                                  : tipo === "dinheiro"
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : tipo === "transferencia"
-                                      ? "bg-sky-100 text-sky-800"
-                                      : "bg-gray-100 text-gray-700"
-                              }`}
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${badge.className}`}
                             >
                               {labelTipoPagamento(p.tipo)}
                             </span>
@@ -680,7 +670,11 @@ function FinanceiroPageContent() {
                 pagamentoParaEstornar.venda
                   ? ` · ${vendaOrdemTexto(pagamentoParaEstornar.venda)}`
                   : ""
-              }\n\nO valor volta para o saldo em aberto da venda.`
+              }\n\nO valor volta para o saldo em aberto da venda.${
+                String(pagamentoParaEstornar.tipo || "").toLowerCase() === "cheque"
+                  ? "\n\nCheque: para corrigir número/banco, estorne e registre de novo."
+                  : ""
+              }`
             : undefined
         }
         confirmText={estornando ? "Estornando…" : "Estornar"}

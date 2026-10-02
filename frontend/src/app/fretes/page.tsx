@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatMoney, formatDate } from "@/lib/utils";
@@ -18,6 +18,7 @@ import {
 import { PrinterIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
 
 type FreteListRow = FreteMovimento & {
   cliente: {
@@ -34,7 +35,7 @@ function FretesContent() {
 
   const [rows, setRows] = useState<FreteListRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10) || 1);
   const [loading, setLoading] = useState(true);
   const [imprimindoId, setImprimindoId] = useState<number | null>(null);
   const [toDelete, setToDelete] = useState<FreteListRow | null>(null);
@@ -45,6 +46,17 @@ function FretesContent() {
   const [clienteInput, setClienteInput] = useState(clienteQ);
   const [clienteFiltro, setClienteFiltro] = useState(clienteQ.trim());
   const pageSize = 50;
+
+  useSyncListFiltersToUrl(
+    useMemo(
+      () => ({
+        page: page > 1 ? page : null,
+        reciboEmitido: reciboEmitido || null,
+        cliente: clienteFiltro || null,
+      }),
+      [page, reciboEmitido, clienteFiltro],
+    ),
+  );
 
   const carregar = async () => {
     const params = new URLSearchParams();

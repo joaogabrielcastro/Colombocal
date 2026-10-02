@@ -18,7 +18,7 @@ import {
   type Motorista,
   type Venda,
 } from "@/lib/utils";
-import api from "@/lib/api";
+import api, { ApiError } from "@/lib/api";
 import { VendaOrdem } from "@/components/VendaOrdem";
 import { FormPageSkeleton } from "@/components/ui/skeletons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -34,6 +34,7 @@ import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { freteLinha } from "@/lib/frete";
 import { toast } from "sonner";
 import { nfeStatusLabel } from "@/features/nfe/status";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 interface ItemForm {
   produtoId: string;
@@ -96,6 +97,12 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const submitLockRef = useRef(false);
+  const formDirty =
+    Boolean(clienteId || vendedorId || observacoes.trim()) ||
+    itens.some((i) => i.produtoId || i.quantidade.trim() || i.precoUnitario.trim());
+  const unsavedGuard = useUnsavedChanges(formDirty && !salvando);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(isEdit);
   const [emissaoNfe, setEmissaoNfe] = useState<"sem" | "com">("sem");
   const [emitentesFiscais, setEmitentesFiscais] = useState<
@@ -507,6 +514,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   }, [itens, fretePorSacoVal, fretePorTonVal, freteEnabled]);
 
   const salvarVenda = async (atualizarCliente?: ClienteCadastroDiff | null) => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
     const itensValidos = itens.filter(
       (i) => i.produtoId && i.quantidade && i.precoUnitario,
     );
@@ -535,43 +544,61 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         : {}),
     };
 
-    if (isEdit && editId) {
-      const venda = await api.put<Venda>(`/vendas/${editId}`, payload);
-      router.push(`/vendas/${venda.id}`);
-    } else {
-      const venda = await api.post<
-        Venda & {
-          nfeErro?: { message: string; details?: string[] | null };
+    try {
+      if (isEdit && editId) {
+        const venda = await api.put<Venda>(`/vendas/${editId}`, payload);
+        router.push(`/vendas/${venda.id}`);
+      } else {
+        const idempotencyKey =
+          idempotencyKeyRef.current || globalThis.crypto.randomUUID();
+        idempotencyKeyRef.current = idempotencyKey;
+        const venda = await api.post<
+          Venda & {
+            nfeErro?: { message: string; details?: string[] | null };
+          }
+        >(
+          "/vendas",
+          {
+            ...payload,
+            frete: freteVal,
+            clienteId,
+            vendedorId,
+            motoristaId: motoristaId || undefined,
+            itens: itensValidos,
+            emitirNfe: nfeEnabled && emissaoNfe === "com",
+            emitenteFiscalId:
+              nfeEnabled && emissaoNfe === "com" && emitenteFiscalId
+                ? Number(emitenteFiscalId)
+                : undefined,
+          },
+          { headers: { "Idempotency-Key": idempotencyKey } },
+        );
+        idempotencyKeyRef.current = null;
+        if (venda.nfeErro) {
+          const extra = Array.isArray(venda.nfeErro.details)
+            ? venda.nfeErro.details.filter(Boolean).join("\n")
+            : "";
+          toast.error("Venda registrada, mas a NF-e não foi emitida", {
+            description: extra
+              ? `${venda.nfeErro.message}\n${extra}`
+              : venda.nfeErro.message,
+            duration: 9000,
+          });
+        } else if (venda.notaFiscal?.status === "autorizada") {
+          toast.success("Venda registrada e NF-e autorizada");
+        } else if (venda.notaFiscal?.status) {
+          toast.message(
+            `Venda registrada. NF-e: ${nfeStatusLabel(venda.notaFiscal.status)}`,
+          );
         }
-      >("/vendas", {
-        ...payload,
-        frete: freteVal,
-        clienteId,
-        vendedorId,
-        motoristaId: motoristaId || undefined,
-        itens: itensValidos,
-        emitirNfe: nfeEnabled && emissaoNfe === "com",
-        emitenteFiscalId:
-          nfeEnabled && emissaoNfe === "com" && emitenteFiscalId
-            ? Number(emitenteFiscalId)
-            : undefined,
-      });
-      if (venda.nfeErro) {
-        const extra = Array.isArray(venda.nfeErro.details)
-          ? venda.nfeErro.details.filter(Boolean).join("\n")
-          : "";
-        toast.error("Venda registrada, mas a NF-e não foi emitida", {
-          description: extra
-            ? `${venda.nfeErro.message}\n${extra}`
-            : venda.nfeErro.message,
-          duration: 9000,
-        });
-      } else if (venda.notaFiscal?.status === "autorizada") {
-        toast.success("Venda registrada e NF-e autorizada");
-      } else if (venda.notaFiscal?.status) {
-        toast.message(`Venda registrada. NF-e: ${nfeStatusLabel(venda.notaFiscal.status)}`);
+        router.push(`/vendas/${venda.id}`);
       }
-      router.push(`/vendas/${venda.id}`);
+    } catch (e) {
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
+        idempotencyKeyRef.current = null;
+      }
+      submitLockRef.current = false;
+      throw e;
     }
   };
 
@@ -667,6 +694,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      {unsavedGuard}
       <div className="flex items-center gap-3 mb-6">
         <Link
           href={isEdit && editId ? `/vendas/${editId}` : "/vendas"}

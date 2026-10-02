@@ -1,6 +1,14 @@
 'use client';
 
-import type { Dispatch, FormEvent, ReactNode, SetStateAction } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  useId,
+  type Dispatch,
+  type FormEvent,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import SearchableSelect from '@/components/SearchableSelect';
 
@@ -59,15 +67,25 @@ function Field({
   label,
   className,
   children,
+  htmlFor,
 }: {
   label: string;
   className?: string;
   children: ReactNode;
+  htmlFor?: string;
 }) {
+  const autoId = useId();
+  const id = htmlFor || autoId;
+  const child =
+    isValidElement<{ id?: string }>(children) && !children.props.id
+      ? cloneElement(children, { id })
+      : children;
   return (
     <div className={className}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
+      {child}
     </div>
   );
 }
