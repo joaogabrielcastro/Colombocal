@@ -168,7 +168,7 @@ async function ensureDatabaseCompat() {
       "telefone" TEXT,
       "serieNfe" INTEGER NOT NULL DEFAULT 1,
       "ambiente" TEXT NOT NULL DEFAULT 'homologacao',
-      "provedor" TEXT NOT NULL DEFAULT 'focusnfe',
+      "provedor" TEXT NOT NULL DEFAULT 'notaas',
       "provedorToken" TEXT,
       "naturezaOperacao" TEXT NOT NULL DEFAULT 'Venda de mercadoria',
       "modalidadeFrete" INTEGER NOT NULL DEFAULT 9,

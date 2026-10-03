@@ -19,6 +19,21 @@ Frete da venda **não entra** na NF-e (permanece no recibo interno).
 
 ## 2. Provedor
 
+### Nôtaas (provedor atual)
+
+1. Crie um projeto separado para cada CNPJ no painel da Nôtaas.
+2. Configure no projeto o certificado A1 e o ambiente de homologação ou produção.
+3. Em **Configurações → Empresas emissoras**, selecione **Nôtaas** e salve a `x-api-key`
+   do projeto correspondente. Nunca reutilize a chave de outro CNPJ.
+4. A emissão usa `POST /api/v1/nfe/emitir`; o `invoiceId` retornado é persistido para
+   status, cancelamento, XML e DANFE.
+5. A API pública não documenta idempotência por referência do cliente. Se a conexão cair
+   antes do `invoiceId`, o Colombocal mantém a nota em processamento e bloqueia uma nova
+   emissão até conciliação, evitando duplicidade fiscal.
+
+O adaptador Focus permanece disponível para compatibilidade, mas novas empresas usam
+Nôtaas por padrão.
+
 1. Abrir conta na [Focus NFe](https://focusnfe.com.br) (outro provedor exige um adapter próprio).
 2. Cadastrar cada CNPJ no painel e enviar o respectivo **certificado A1**.
 3. Copiar o token de homologação/produção de cada empresa.

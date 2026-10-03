@@ -1,6 +1,6 @@
 const { AppError } = require("../../shared/errors/appError");
 const { validarPreEmissaoNfe } = require("../../domain/nfe/validarPreEmissao");
-const { montarPayloadFocus, aplicarRespostaProvedor } = require("../../domain/nfe/montarPayload");
+const { montarPayloadFocus, montarPayloadNotaas, aplicarRespostaProvedor } = require("../../domain/nfe/montarPayload");
 const {
   STATUS,
   statusPermiteReemissao,
@@ -79,13 +79,14 @@ async function emitirNfe(
     vendaId,
     emitenteFiscalId,
   });
-  if (resolveProviderName() !== "mock") {
+  const providerName = resolveProviderName(ctx.emitente);
+  if (providerName !== "mock") {
     const quantidadeEmitentes = await prisma.emitenteFiscal.count({
       where: { tenantId, ativo: true, habilitaNfe: true },
     });
     if (quantidadeEmitentes > 1 && !hasFiscalTokenConfigured(ctx.emitente.provedorToken)) {
       throw new AppError(
-        "Configure o token Focus específico desta empresa antes de emitir.",
+        "Configure a credencial do provedor específica desta empresa antes de emitir.",
         { code: "NFE_TOKEN_EMITENTE_OBRIGATORIO", httpStatus: 400 },
       );
     }
@@ -169,7 +170,8 @@ async function emitirNfe(
     });
   }
 
-  const payload = montarPayloadFocus({
+  const montarPayload = providerName === "notaas" ? montarPayloadNotaas : montarPayloadFocus;
+  const payload = montarPayload({
     emitente: ctx.emitente,
     cliente: ctx.venda.cliente,
     itens: ctx.venda.itens,
@@ -248,6 +250,7 @@ async function emitirNfe(
       where: { id: nota.id },
       data: {
         status: patch.status || STATUS.PROCESSANDO,
+        refProvedor: patch.refProvedor ?? undefined,
         serie: patch.serie ?? undefined,
         numero: patch.numero ?? undefined,
         chaveAcesso: patch.chaveAcesso ?? undefined,

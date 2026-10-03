@@ -206,6 +206,7 @@ function emitenteDataFromBody(b, tokenNovo) {
     ambiente: b.ambiente,
     naturezaOperacao: b.naturezaOperacao || "Venda de mercadoria",
     modalidadeFrete: b.modalidadeFrete ?? 9,
+    provedor: b.provedor ?? "notaas",
     ativo: b.ativo ?? true,
     padrao: b.padrao ?? false,
     habilitaNfe: b.habilitaNfe ?? true,
@@ -235,10 +236,11 @@ router.put("/emitente-fiscal", requireAdmin, async (req, res) => {
       tenantId: req.tenantId,
       recurso: null,
     });
-    const tokenNovo =
+    let tokenNovo =
       b.provedorToken != null && String(b.provedorToken).trim()
         ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
         : undefined;
+    if (atual && b.provedor !== atual.provedor && tokenNovo === undefined) tokenNovo = null;
     const data = emitenteDataFromBody(b, tokenNovo);
     data.padrao = b.padrao ?? atual?.padrao ?? true;
     let row = atual
@@ -340,10 +342,11 @@ router.put("/emitentes-fiscais/:id", requireAdmin, async (req, res) => {
         code: "EMITENTE_PADRAO_OBRIGATORIO",
       });
     }
-    const tokenNovo =
+    let tokenNovo =
       b.provedorToken != null && String(b.provedorToken).trim()
         ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
         : undefined;
+    if (b.provedor !== atual.provedor && tokenNovo === undefined) tokenNovo = null;
     let row = await prisma.emitenteFiscal.update({
       where: { id },
       data: emitenteDataFromBody(b, tokenNovo),

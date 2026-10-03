@@ -120,6 +120,52 @@ function montarPayloadFocus({ emitente, cliente, venda, itens, produtosPorId, mo
   return payload;
 }
 
+/** Converte os dados fiscais validados para o contrato público da Nôtaas. */
+function montarPayloadNotaas({ emitente, cliente, venda, itens, produtosPorId, motorista }) {
+  const focus = montarPayloadFocus({ emitente, cliente, venda, itens, produtosPorId, motorista });
+  const dest = {
+    nome: focus.nome_destinatario,
+    indicadorIE: Number(focus.indicador_inscricao_estadual_destinatario),
+    endereco: {
+      logradouro: focus.logradouro_destinatario,
+      numero: focus.numero_destinatario,
+      bairro: focus.bairro_destinatario,
+      codigoMunicipio: Number(focus.codigo_municipio_destinatario),
+      cidade: focus.municipio_destinatario,
+      uf: focus.uf_destinatario,
+      cep: focus.cep_destinatario,
+    },
+  };
+  if (focus.cnpj_destinatario) dest.cnpj = focus.cnpj_destinatario;
+  if (focus.cpf_destinatario) dest.cpf = focus.cpf_destinatario;
+  if (focus.inscricao_estadual_destinatario) dest.ie = focus.inscricao_estadual_destinatario;
+
+  return {
+    modelo: 55,
+    naturezaOperacao: focus.natureza_operacao,
+    dataEmissao: focus.data_emissao,
+    tipoOperacao: 1,
+    finalidade: 1,
+    dest,
+    items: focus.items.map((item) => ({
+      codigo: item.codigo_produto,
+      descricao: item.descricao,
+      ncm: item.codigo_ncm,
+      cfop: item.cfop,
+      unidade: item.unidade_comercial,
+      quantidade: Number(item.quantidade_comercial),
+      valorUnitario: Number(item.valor_unitario_comercial),
+      valorTotal: Number(item.valor_bruto),
+      ...(Number(emitente.crt) === 1 || Number(emitente.crt) === 2
+        ? { csosn: item.icms_situacao_tributaria }
+        : { cst: item.icms_situacao_tributaria }),
+    })),
+    transporte: { modalidadeFrete: focus.modalidade_frete },
+    pagamentos: [{ tipoPagamento: "99", valor: Number(focus.formas_pagamento[0].valor_pagamento) }],
+    infCpl: focus.informacoes_adicionais_contribuinte,
+  };
+}
+
 function mapStatusFocus(statusRaw) {
   const s = String(statusRaw || "").toLowerCase();
   if (s === "autorizado") return "autorizada";
@@ -147,6 +193,7 @@ function aplicarRespostaProvedor(resposta) {
     motivoRejeicao: resposta.motivoRejeicao || undefined,
     xmlUrl: resposta.xmlUrl || undefined,
     danfeUrl: resposta.danfeUrl || undefined,
+    refProvedor: resposta.refProvedor || undefined,
     payloadResposta: resposta.raw != null ? resposta.raw : undefined,
     autorizadaEm: resposta.status === "autorizada" ? new Date() : undefined,
     canceladaEm: resposta.status === "cancelada" ? new Date() : undefined,
@@ -155,6 +202,7 @@ function aplicarRespostaProvedor(resposta) {
 
 module.exports = {
   montarPayloadFocus,
+  montarPayloadNotaas,
   mapStatusFocus,
   aplicarRespostaProvedor,
 };

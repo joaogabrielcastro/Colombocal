@@ -28,6 +28,7 @@ export type EmitenteFiscal = {
   ambiente: "homologacao" | "producao";
   naturezaOperacao?: string;
   modalidadeFrete: number;
+  provedor: "notaas" | "focusnfe";
   provedorTokenConfigurado?: boolean;
   ativo?: boolean;
   padrao?: boolean;
@@ -58,6 +59,7 @@ const empty: EmitenteFiscal = {
   ambiente: "homologacao",
   naturezaOperacao: "Venda de mercadoria",
   modalidadeFrete: 9,
+  provedor: "notaas",
   ativo: true,
   padrao: false,
   habilitaNfe: true,
@@ -334,6 +336,21 @@ export function EmitenteFiscalForm() {
             <option value="producao">Produção</option>
           </select>
         </label>
+        <label className="text-sm">
+          <span className="block text-gray-700 mb-1">Provedor fiscal</span>
+          <select
+            className="input-field"
+            value={form.provedor}
+            onChange={(e) => {
+              setForm((p) => ({ ...p, provedor: e.target.value as EmitenteFiscal["provedor"] }));
+              setToken("");
+              setTokenOk(false);
+            }}
+          >
+            <option value="notaas">Nôtaas</option>
+            <option value="focusnfe">Focus NFe</option>
+          </select>
+        </label>
         <label className="text-sm md:col-span-2">
           <span className="block text-gray-700 mb-1">Logradouro *</span>
           <input required value={form.logradouro} onChange={set("logradouro")} className="input-field" />
@@ -393,7 +410,7 @@ export function EmitenteFiscalForm() {
         </label>
         <label className="text-sm md:col-span-2">
           <span className="block text-gray-700 mb-1">
-            Token Focus NFe {tokenOk ? "(já configurado — deixe em branco para manter)" : ""}
+            {form.provedor === "notaas" ? "Chave de API Nôtaas" : "Token Focus NFe"} {tokenOk ? "(já configurado — deixe em branco para manter)" : ""}
           </span>
           <input
             type="password"
@@ -406,7 +423,7 @@ export function EmitenteFiscalForm() {
         </label>
       </div>
       <p className="text-xs text-gray-500">
-        O certificado A1 fica no provedor, não neste sistema. Frete da venda não entra na NF-e.
+        O certificado A1 e o ambiente ficam configurados no projeto do provedor. O frete da venda não entra na NF-e.
       </p>
       <button type="submit" className="btn-primary" disabled={salvando}>
         {salvando ? "Salvando…" : selectedId ? "Salvar empresa" : "Cadastrar empresa"}

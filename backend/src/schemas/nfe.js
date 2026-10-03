@@ -63,6 +63,7 @@ const emitenteFiscalSchema = z.object({
   ambiente: z.enum(["homologacao", "producao"]).default("homologacao"),
   naturezaOperacao: z.string().max(60).optional(),
   modalidadeFrete: z.coerce.number().int().min(0).max(9).default(9),
+  provedor: z.enum(["focusnfe", "notaas"]).default("notaas"),
   provedorToken: z.string().nullable().optional(),
   ativo: z.boolean().optional(),
   padrao: z.boolean().optional(),

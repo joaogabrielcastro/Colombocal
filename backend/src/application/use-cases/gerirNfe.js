@@ -21,6 +21,7 @@ async function emitenteDaNota(prisma, nota) {
 function patchFromConsulta(nota, patch) {
   return {
     status: patch.status || nota.status,
+    refProvedor: patch.refProvedor ?? undefined,
     serie: patch.serie ?? undefined,
     numero: patch.numero ?? undefined,
     chaveAcesso: patch.chaveAcesso ?? undefined,
