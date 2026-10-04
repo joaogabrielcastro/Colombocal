@@ -70,9 +70,10 @@ test.describe("E2E cobrança bancária / condições", () => {
 
     await loginUi(page, ADMIN);
     await page.goto(`/vendas/${venda.id}`);
-    await expect(page.getByText(/1\/3|2\/3|3\/3/)).toBeVisible({
-      timeout: 15000,
-    });
+    // Texto da parcela é "1/3 VENDA-… • …" — exact "1/3" não casa; regex global
+    // /1\/3|2\/3|3\/3/ casa as 3 de uma vez (strict mode).
+    await expect(page.getByText(/^1\/3\b/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/^3\/3\b/)).toBeVisible();
 
     await page.goto("/financeiro/cobrancas");
     await expect(page.getByText("Cobranças / Boletos")).toBeVisible();

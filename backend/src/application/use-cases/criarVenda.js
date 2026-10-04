@@ -15,6 +15,10 @@ const { parseDateField, addDaysCalendar } = require("../../utils/validation");
 const {
   calcularFreteAutomatico,
 } = require("../../domain/frete/calcularFrete");
+const {
+  loadPesoFreteMap,
+  aplicarPesoFreteNoMap,
+} = require("../../domain/frete/pesoFreteCliente");
 const { tenantFretePagoDefault } = require("../../constants/tenantFeatures");
 const { montarParcelas } = require("../../domain/financeiro/parcelamento");
 const {
@@ -126,6 +130,12 @@ async function criarVenda(prisma, payload) {
       });
     }
   }
+  const pesoFreteMap = await loadPesoFreteMap(prisma, {
+    tenantId,
+    clienteId,
+    produtoIds,
+  });
+  aplicarPesoFreteNoMap(produtosPorId, pesoFreteMap);
 
   // YYYY-MM-DD / meia-noite UTC → meio-dia UTC (não virar dia anterior no Brasil).
   const dataVendaDate = dataVenda

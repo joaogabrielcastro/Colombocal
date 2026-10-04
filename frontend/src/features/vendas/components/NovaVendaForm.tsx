@@ -60,6 +60,8 @@ const emptyItem = (): ItemForm => ({
 interface ProdutoPreco extends Produto {
   precoEspecial: number | null;
   precoAplicado: number;
+  pesoKgFrete?: number | null;
+  pesoKgFreteAplicado?: number | null;
 }
 
 export function NovaVendaForm({ editId }: { editId?: string }) {
@@ -166,7 +168,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     setCarregandoVenda(true);
     api
       .get<Venda & { podeEditar?: boolean }>(`/vendas/${editId}`)
-      .then((v) => {
+      .then(async (v) => {
         if (!alive) return;
         if (!v.podeEditar) {
           router.replace(`/vendas/${editId}`);
@@ -191,6 +193,27 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
         if (v.bancoCobranca) {
           setBancoCobranca(String(v.bancoCobranca));
         }
+        let pesoPorProduto = new Map<number, string>();
+        try {
+          const precos = await api.get<ProdutoPreco[]>(
+            `/clientes/${v.clienteId}/precos`,
+          );
+          if (!alive) return;
+          pesoPorProduto = new Map(
+            precos.map((p) => {
+              const peso =
+                p.pesoKgFreteAplicado != null
+                  ? String(p.pesoKgFreteAplicado)
+                  : p.pesoKg != null
+                    ? String(p.pesoKg)
+                    : "";
+              return [p.id, peso];
+            }),
+          );
+        } catch {
+          /* usa peso do cadastro do item */
+        }
+        if (!alive) return;
         setItens(
           v.itens.map((item) => ({
             produtoId: String(item.produtoId),
@@ -200,9 +223,8 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
             precoReferencia: String(item.precoUnitario),
             unidade: String(item.produto.unidade || ""),
             pesoKg:
-              item.produto.pesoKg != null
-                ? String(item.produto.pesoKg)
-                : "",
+              pesoPorProduto.get(item.produtoId) ||
+              (item.produto.pesoKg != null ? String(item.produto.pesoKg) : ""),
           })),
         );
         setFreteRefSaco(String(v.freteTarifaSaco ?? 0));
@@ -412,10 +434,13 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
           precoReferencia = preco;
           unidade = String(pc.unidade || "");
           produtoNome = pc.nome;
-          pesoKg =
-            pc.pesoKg != null && String(pc.pesoKg).trim() !== ""
-              ? String(pc.pesoKg)
-              : "";
+          const pesoFrete =
+            pc.pesoKgFreteAplicado != null && String(pc.pesoKgFreteAplicado).trim() !== ""
+              ? String(pc.pesoKgFreteAplicado)
+              : pc.pesoKg != null && String(pc.pesoKg).trim() !== ""
+                ? String(pc.pesoKg)
+                : "";
+          pesoKg = pesoFrete;
         }
       } catch {
         if (clienteIdRef.current !== cidSnapshot) return;

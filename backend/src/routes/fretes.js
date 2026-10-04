@@ -16,6 +16,10 @@ const { recalcularTodosTitulosCliente } = require("../services/recebiveis");
 const { requestAllowsFrete, getTenantSlug } = require("../utils/tenantRequest");
 const { tenantFretePagoDefault } = require("../constants/tenantFeatures");
 const { freteLinha, roundMoney } = require("../domain/frete/calcularFrete");
+const {
+  loadPesoFreteMap,
+  produtoComPesoFrete,
+} = require("../domain/frete/pesoFreteCliente");
 const { parseBody } = require("../utils/zodParse");
 const { freteAvulsoSchema } = require("../schemas/freteExport");
 
@@ -88,10 +92,11 @@ async function carregarItensFreteAvulso(tx, tenantId, body) {
   return itens;
 }
 
-function montarItensCalculados(itens, precoSaco, precoTonelada) {
+function montarItensCalculados(itens, precoSaco, precoTonelada, pesoFreteMap) {
   return itens.map((it) => {
+    const produtoFrete = produtoComPesoFrete(it.produto, pesoFreteMap);
     const subtotal = freteLinha({
-      produto: it.produto,
+      produto: produtoFrete,
       quantidade: it.quantidade,
       fretePorSaco: precoSaco,
       fretePorTonelada: precoTonelada,
@@ -100,8 +105,14 @@ function montarItensCalculados(itens, precoSaco, precoTonelada) {
       produtoId: it.produto.id,
       produtoNome: it.produto.nome,
       unidade: it.produto.unidade || "",
+      // pesoKg do cadastro (OC/físico); pesoKgFrete = peso usado no cálculo, se diferente
       pesoKg:
         it.produto.pesoKg != null ? parseFloat(String(it.produto.pesoKg)) : null,
+      pesoKgFrete:
+        produtoFrete.pesoKg != null &&
+        String(produtoFrete.pesoKg) !== String(it.produto.pesoKg ?? "")
+          ? parseFloat(String(produtoFrete.pesoKg))
+          : null,
       quantidade: it.quantidade,
       subtotal,
     };
@@ -231,42 +242,28 @@ router.post("/avulso", async (req, res) => {
         throw err;
       }
 
-      const itensCalculados = itens.map((it) => {
-        const subtotal = freteLinha({
-          produto: it.produto,
-          quantidade: it.quantidade,
-          fretePorSaco: precoSaco,
-          fretePorTonelada: precoTonelada,
-        });
-        return {
-          produtoId: it.produto.id,
-          produtoNome: it.produto.nome,
-          unidade: it.produto.unidade || "",
-          pesoKg:
-            it.produto.pesoKg != null
-              ? parseFloat(String(it.produto.pesoKg))
-              : null,
-          quantidade: it.quantidade,
-          subtotal,
-        };
+      const pesoFreteMap = await loadPesoFreteMap(tx, {
+        tenantId,
+        clienteId,
+        produtoIds: itens.map((it) => it.produto.id),
       });
+      const itensCalculados = montarItensCalculados(
+        itens,
+        precoSaco,
+        precoTonelada,
+        pesoFreteMap,
+      );
       const valorCalculado = roundMoney(
         itensCalculados.reduce((acc, item) => acc + item.subtotal, 0),
       );
       const valorFinal =
         valorTotalInformado != null ? roundMoney(valorTotalInformado) : valorCalculado;
 
-      const observacao = [
-        "Frete avulso",
-        `Motorista: ${motorista.nome}`,
-        ...itensCalculados.map(
-          (item) =>
-            `${item.produtoNome}: ${item.quantidade} ${item.unidade} (${formatMoneyBr(item.subtotal)})`,
-        ),
+      const observacao = montarObservacaoAvulso(
+        motorista.nome,
+        itensCalculados,
         observacaoLivre,
-      ]
-        .filter(Boolean)
-        .join(" · ");
+      );
 
       const frete = await tx.freteMovimento.create({
         data: {
@@ -617,7 +614,17 @@ router.patch("/:id", async (req, res) => {
         }
 
         const itens = await carregarItensFreteAvulso(tx, tenantId, body);
-        const itensCalculados = montarItensCalculados(itens, precoSaco, precoTonelada);
+        const pesoFreteMap = await loadPesoFreteMap(tx, {
+          tenantId,
+          clienteId,
+          produtoIds: itens.map((it) => it.produto.id),
+        });
+        const itensCalculados = montarItensCalculados(
+          itens,
+          precoSaco,
+          precoTonelada,
+          pesoFreteMap,
+        );
         const valorCalculado = roundMoney(
           itensCalculados.reduce((acc, item) => acc + item.subtotal, 0),
         );

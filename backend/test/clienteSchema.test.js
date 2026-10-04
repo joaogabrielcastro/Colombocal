@@ -91,6 +91,23 @@ test("precos: exige ao menos um item", () => {
   assert.equal(ok.success, true);
 });
 
+test("precos: null em preco/pesoKgFrete permanece null (não vira 0)", () => {
+  const ok = clientePrecosSchema.safeParse({
+    precos: [{ produtoId: 1, preco: null, pesoKgFrete: null }],
+  });
+  assert.equal(ok.success, true);
+  assert.equal(ok.data.precos[0].preco, null);
+  assert.equal(ok.data.precos[0].pesoKgFrete, null);
+});
+
+test("precos: aceita só pesoKgFrete sem preço especial", () => {
+  const ok = clientePrecosSchema.safeParse({
+    precos: [{ produtoId: 1, preco: null, pesoKgFrete: 10 }],
+  });
+  assert.equal(ok.success, true);
+  assert.equal(ok.data.precos[0].pesoKgFrete, 10);
+});
+
 test("comissoes: exige item e coage null para 0", () => {
   assert.equal(clienteComissoesSchema.safeParse({ comissoes: [] }).success, false);
   const ok = clienteComissoesSchema.safeParse({

@@ -23,6 +23,7 @@ export function useClienteDetail(id: string, _freteEnabled: boolean, options: Op
   const [erro, setErro] = useState("");
   const [salvandoForm, setSalvandoForm] = useState(false);
   const [precosEdit, setPrecosEdit] = useState<Record<number, string>>({});
+  const [pesosFreteEdit, setPesosFreteEdit] = useState<Record<number, string>>({});
   const [salvandoPrecos, setSalvandoPrecos] = useState(false);
   const [comissoesData, setComissoesData] = useState<ComissoesData | null>(null);
   const [comissoesEdit, setComissoesEdit] = useState<Record<number, string>>({});
@@ -56,10 +57,15 @@ export function useClienteDetail(id: string, _freteEnabled: boolean, options: Op
       });
       setProdutos(prodData);
       const mapa: Record<number, string> = {};
+      const mapaPeso: Record<number, string> = {};
       prodData.forEach((p) => {
-        if (p.precoEspecial) mapa[p.id] = String(p.precoEspecial);
+        if (p.precoEspecial != null) mapa[p.id] = String(p.precoEspecial);
+        if (p.pesoKgFrete != null && Number(p.pesoKgFrete) > 0) {
+          mapaPeso[p.id] = String(p.pesoKgFrete);
+        }
       });
       setPrecosEdit(mapa);
+      setPesosFreteEdit(mapaPeso);
     } catch (e) {
       setConta(null);
       reportApiError(e, {
@@ -122,9 +128,30 @@ export function useClienteDetail(id: string, _freteEnabled: boolean, options: Op
   const handleSalvarPrecos = async () => {
     setSalvandoPrecos(true);
     try {
-      await api.put(`/clientes/${id}/precos`, { precos: produtos.map((p) => ({ produtoId: p.id, preco: precosEdit[p.id] ? parseFloat(precosEdit[p.id]) : null })) });
-      setProdutos(await api.get<ProdutoPreco[]>(`/clientes/${id}/precos`));
-      toast.success("Preços salvos");
+      await api.put(`/clientes/${id}/precos`, {
+        precos: produtos.map((p) => {
+          const precoRaw = (precosEdit[p.id] || "").trim();
+          const pesoRaw = (pesosFreteEdit[p.id] || "").trim();
+          return {
+            produtoId: p.id,
+            preco: precoRaw !== "" ? parseFloat(precoRaw.replace(",", ".")) : null,
+            pesoKgFrete: pesoRaw !== "" ? parseFloat(pesoRaw.replace(",", ".")) : null,
+          };
+        }),
+      });
+      const prodData = await api.get<ProdutoPreco[]>(`/clientes/${id}/precos`);
+      setProdutos(prodData);
+      const mapa: Record<number, string> = {};
+      const mapaPeso: Record<number, string> = {};
+      prodData.forEach((p) => {
+        if (p.precoEspecial != null) mapa[p.id] = String(p.precoEspecial);
+        if (p.pesoKgFrete != null && Number(p.pesoKgFrete) > 0) {
+          mapaPeso[p.id] = String(p.pesoKgFrete);
+        }
+      });
+      setPrecosEdit(mapa);
+      setPesosFreteEdit(mapaPeso);
+      toast.success("Preços e pesos de frete salvos");
     } catch (e) {
       reportApiError(e, { title: "Erro ao salvar preços" });
     } finally {
@@ -169,10 +196,10 @@ export function useClienteDetail(id: string, _freteEnabled: boolean, options: Op
   };
 
   return {
-    conta, produtos, cheques, loading, form, erro, salvandoForm, precosEdit, salvandoPrecos,
+    conta, produtos, cheques, loading, form, erro, salvandoForm, precosEdit, pesosFreteEdit, salvandoPrecos,
     comissoesData, comissoesEdit, salvandoComissoes, filtroChqIni, filtroChqFim, buscaChq,
     reconciliando, condicoesPagamento,
-    setForm, setPrecosEdit, setComissoesEdit, setFiltroChqIni, setFiltroChqFim, setBuscaChq,
+    setForm, setPrecosEdit, setPesosFreteEdit, setComissoesEdit, setFiltroChqIni, setFiltroChqFim, setBuscaChq,
     carregarPrincipal, carregarCheques, carregarComissoes,
     handleReconciliarRecebiveis, handleSalvarPrecos,
     handleSalvarComissoes, handleSalvarCliente, loadVendedorOptions, loadVendedorLabelById,

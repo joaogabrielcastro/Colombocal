@@ -146,12 +146,24 @@ const clienteUpdateSchema = z
   })
   .merge(clienteFiscalFieldsSchema);
 
+/** null/"" → null; evita z.coerce.number(null) → 0. */
+function nullableNonNegNumber(minExclusive = false) {
+  return z.preprocess((v) => {
+    if (v === "" || v === undefined || v === null) return null;
+    return v;
+  }, minExclusive
+    ? z.union([z.null(), z.coerce.number().positive()])
+    : z.union([z.null(), z.coerce.number().nonnegative()]));
+}
+
 const clientePrecosSchema = z.object({
   precos: z
     .array(
       z.object({
         produtoId: z.coerce.number().int().positive(),
-        preco: z.union([z.coerce.number().nonnegative(), z.null()]),
+        preco: nullableNonNegNumber(false),
+        /** Peso (kg) só para frete; null = usa pesoKg do produto. */
+        pesoKgFrete: nullableNonNegNumber(true).optional(),
       }),
     )
     .min(1, "Informe ao menos um preço"),
