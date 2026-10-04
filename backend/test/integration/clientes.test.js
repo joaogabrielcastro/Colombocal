@@ -190,14 +190,32 @@ test("PUT /api/clientes/:id/precos faz upsert e remoção", async () => {
   let rows = await prisma.precoClienteProduto.findMany({ where: { clienteId: cli.id } });
   assert.equal(rows.length, 1);
 
-  // null é coagido para 0 pelo schema (z.coerce.number) => vira upsert de 0
-  const zero = await agent
+  // null limpa preço e remove a linha quando não há pesoKgFrete
+  const limpar = await agent
     .put(`/api/clientes/${cli.id}/precos`)
-    .send({ precos: [{ produtoId: prod.id, preco: null }] });
-  assert.equal(zero.status, 200);
+    .send({ precos: [{ produtoId: prod.id, preco: null, pesoKgFrete: null }] });
+  assert.equal(limpar.status, 200);
   rows = await prisma.precoClienteProduto.findMany({ where: { clienteId: cli.id } });
+  assert.equal(rows.length, 0);
+});
+
+test("PUT /api/clientes/:id/precos grava pesoKgFrete sem preço especial", async () => {
+  const cli = await seedCliente(ctx.tenant.id);
+  const prod = await seedProduto(ctx.tenant.id, { pesoKg: 8, unidade: "saco" });
+  const up = await agent.put(`/api/clientes/${cli.id}/precos`).send({
+    precos: [{ produtoId: prod.id, preco: null, pesoKgFrete: 10 }],
+  });
+  assert.equal(up.status, 200);
+  const rows = await prisma.precoClienteProduto.findMany({ where: { clienteId: cli.id } });
   assert.equal(rows.length, 1);
-  assert.equal(Number(rows[0].preco), 0);
+  assert.equal(rows[0].preco, null);
+  assert.equal(Number(rows[0].pesoKgFrete), 10);
+
+  const get = await agent.get(`/api/clientes/${cli.id}/precos`).query({ produtoId: prod.id });
+  assert.equal(get.status, 200);
+  assert.equal(get.body[0].pesoKgFrete, 10);
+  assert.equal(get.body[0].pesoKgFreteAplicado, 10);
+  assert.equal(Number(get.body[0].pesoKg), 8);
 });
 
 test("PUT /api/clientes/:id/precos 404 cliente inexistente", async () => {

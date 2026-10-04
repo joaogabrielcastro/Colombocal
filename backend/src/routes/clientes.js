@@ -132,19 +132,35 @@ router.get("/:id/precos", async (req, res) => {
     const precosEspeciais = await prisma.precoClienteProduto.findMany({
       where: { tenantId: req.tenantId, clienteId: id },
     });
-    const precoMap = new Map(
-      precosEspeciais.map((row) => [row.produtoId, row.preco]),
+    const especialMap = new Map(
+      precosEspeciais.map((row) => [row.produtoId, row]),
     );
 
     const result = produtos.map((p) => {
-      const rawEsp = precoMap.get(p.id);
+      const row = especialMap.get(p.id);
       const padrao = toMoneyNumber(p.precoPadrao) ?? 0;
-      const espNum = rawEsp != null ? toMoneyNumber(rawEsp) : null;
+      const espNum = row?.preco != null ? toMoneyNumber(row.preco) : null;
       const aplicado = espNum != null ? espNum : padrao;
+      const pesoPadrao =
+        p.pesoKg != null ? parseFloat(String(p.pesoKg)) : null;
+      const pesoKgFreteRaw =
+        row?.pesoKgFrete != null ? parseFloat(String(row.pesoKgFrete)) : null;
+      const pesoKgFrete =
+        pesoKgFreteRaw != null && Number.isFinite(pesoKgFreteRaw) && pesoKgFreteRaw > 0
+          ? pesoKgFreteRaw
+          : null;
+      const pesoKgFreteAplicado =
+        pesoKgFrete != null
+          ? pesoKgFrete
+          : pesoPadrao != null && Number.isFinite(pesoPadrao) && pesoPadrao > 0
+            ? pesoPadrao
+            : null;
       return {
         ...p,
         precoEspecial: espNum,
         precoAplicado: aplicado,
+        pesoKgFrete,
+        pesoKgFreteAplicado,
       };
     });
     res.json(result);
@@ -525,22 +541,48 @@ router.put("/:id/precos", async (req, res) => {
 
     const { precos } = parseBody(clientePrecosSchema, req.body);
     for (const p of precos) {
-      if (p.preco === null || p.preco === "") {
-        await prisma.precoClienteProduto.deleteMany({
-          where: { tenantId: req.tenantId, clienteId, produtoId: p.produtoId },
-        });
-      } else {
-        await prisma.precoClienteProduto.upsert({
-          where: { clienteId_produtoId: { clienteId, produtoId: p.produtoId } },
-          update: { preco: p.preco, tenantId: req.tenantId },
-          create: {
-            tenantId: req.tenantId,
-            clienteId,
-            produtoId: p.produtoId,
-            preco: p.preco,
-          },
-        });
+      const preco = p.preco == null ? null : p.preco;
+      const pesoInformado = Object.prototype.hasOwnProperty.call(p, "pesoKgFrete");
+      const pesoKgFrete = pesoInformado
+        ? p.pesoKgFrete == null
+          ? null
+          : p.pesoKgFrete
+        : undefined;
+
+      const existente = await prisma.precoClienteProduto.findUnique({
+        where: { clienteId_produtoId: { clienteId, produtoId: p.produtoId } },
+      });
+      const nextPeso =
+        pesoKgFrete !== undefined
+          ? pesoKgFrete
+          : existente?.pesoKgFrete != null
+            ? parseFloat(String(existente.pesoKgFrete))
+            : null;
+      const temPeso = nextPeso != null && Number.isFinite(nextPeso) && nextPeso > 0;
+
+      if (preco == null && !temPeso) {
+        if (existente) {
+          await prisma.precoClienteProduto.deleteMany({
+            where: { tenantId: req.tenantId, clienteId, produtoId: p.produtoId },
+          });
+        }
+        continue;
       }
+
+      const update = { tenantId: req.tenantId, preco };
+      if (pesoKgFrete !== undefined) update.pesoKgFrete = pesoKgFrete;
+
+      await prisma.precoClienteProduto.upsert({
+        where: { clienteId_produtoId: { clienteId, produtoId: p.produtoId } },
+        update,
+        create: {
+          tenantId: req.tenantId,
+          clienteId,
+          produtoId: p.produtoId,
+          preco,
+          pesoKgFrete: pesoKgFrete === undefined ? null : pesoKgFrete,
+        },
+      });
     }
     res.json({ success: true });
   } catch (error) {

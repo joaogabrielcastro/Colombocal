@@ -19,6 +19,10 @@ type Cliente = { id: number; razaoSocial: string; nomeFantasia?: string | null; 
 type Motorista = { id: number; nome: string };
 type Produto = { id: number; nome: string; unidade: string; pesoKg?: number | null };
 type FreteItemForm = { produtoId: string; quantidade: string };
+type ProdutoPrecoCliente = Produto & {
+  pesoKgFrete?: number | null;
+  pesoKgFreteAplicado?: number | null;
+};
 
 export default function NovoFretePage() {
   const router = useRouter();
@@ -41,6 +45,7 @@ export default function NovoFretePage() {
     reciboNumero: "",
   });
   const [itens, setItens] = useState<FreteItemForm[]>([{ produtoId: "", quantidade: "" }]);
+  const [pesoFretePorProduto, setPesoFretePorProduto] = useState<Record<number, number>>({});
   const formDirty =
     Boolean(form.clienteId || form.motoristaId || form.observacao.trim()) ||
     itens.some((i) => i.produtoId || i.quantidade.trim());
@@ -89,14 +94,48 @@ export default function NovoFretePage() {
     }));
   }, [clienteSelecionado]);
 
+  useEffect(() => {
+    if (!form.clienteId) {
+      setPesoFretePorProduto({});
+      return;
+    }
+    let active = true;
+    api
+      .get<ProdutoPrecoCliente[]>(`/clientes/${form.clienteId}/precos`)
+      .then((rows) => {
+        if (!active) return;
+        const mapa: Record<number, number> = {};
+        for (const p of rows) {
+          const peso =
+            p.pesoKgFreteAplicado != null
+              ? Number(p.pesoKgFreteAplicado)
+              : p.pesoKg != null
+                ? Number(p.pesoKg)
+                : NaN;
+          if (Number.isFinite(peso) && peso > 0) mapa[p.id] = peso;
+        }
+        setPesoFretePorProduto(mapa);
+      })
+      .catch(() => {
+        if (active) setPesoFretePorProduto({});
+      });
+    return () => {
+      active = false;
+    };
+  }, [form.clienteId]);
+
   const precoSaco = Number(String(form.precoSaco).replace(",", ".")) || 0;
   const precoTonelada = Number(String(form.precoTonelada).replace(",", ".")) || 0;
   const subtotais = itens.map((item) => {
     const produto = produtos.find((p) => String(p.id) === item.produtoId);
     const quantidade = Number(String(item.quantidade).replace(",", ".")) || 0;
+    const pesoKg =
+      produto != null && pesoFretePorProduto[produto.id] != null
+        ? pesoFretePorProduto[produto.id]
+        : produto?.pesoKg;
     const subtotal = freteLinha({
       unidade: produto?.unidade,
-      pesoKg: produto?.pesoKg,
+      pesoKg,
       quantidade,
       fretePorSaco: precoSaco,
       fretePorTonelada: precoTonelada,

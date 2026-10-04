@@ -52,6 +52,10 @@ export interface ContaData {
 export interface ProdutoPreco extends Produto {
   precoEspecial: number | null;
   precoAplicado: number;
+  /** Override de peso (kg) só para frete; null = usa pesoKg do produto. */
+  pesoKgFrete?: number | null;
+  /** Peso efetivo no frete (especial ou cadastro). */
+  pesoKgFreteAplicado?: number | null;
 }
 
 export interface ProdutoComissao extends Produto {
