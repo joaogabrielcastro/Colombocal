@@ -59,7 +59,7 @@ const empty: EmitenteFiscal = {
   ambiente: "homologacao",
   naturezaOperacao: "Venda de mercadoria",
   modalidadeFrete: 9,
-  provedor: "notaas",
+  provedor: "focusnfe",
   ativo: true,
   padrao: false,
   habilitaNfe: true,
@@ -347,8 +347,8 @@ export function EmitenteFiscalForm() {
               setTokenOk(false);
             }}
           >
-            <option value="notaas">Nôtaas</option>
             <option value="focusnfe">Focus NFe</option>
+            <option value="notaas">Nôtaas</option>
           </select>
         </label>
         <label className="text-sm md:col-span-2">

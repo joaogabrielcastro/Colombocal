@@ -26,6 +26,7 @@
     "db:seed": "node scripts/seed.js",
     "fiscal:encrypt-existing-tokens": "node scripts/encrypt-existing-fiscal-tokens.js",
     "go-live:backup-restore-check": "node scripts/go-live-backup-restore-check.js",
+    "go-live:preflight": "node scripts/go-live-preflight-check.js",
     "tenant:create": "node scripts/create-tenant.js",
     "tenant:diagnose": "node scripts/diagnose-tenants.js",
     "seed:deploy": "prisma migrate deploy && node scripts/seed.js",

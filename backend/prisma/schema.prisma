@@ -654,7 +654,7 @@ model EmitenteFiscal {
   serieMdfe         Int      @default(1)
   /// homologacao | producao
   ambiente          String   @default("homologacao")
-  provedor          String   @default("notaas")
+  provedor          String   @default("focusnfe")
   provedorToken     String?
   naturezaOperacao  String   @default("Venda de mercadoria")
   /// 9 = sem ocorrência de transporte (frete da venda não entra na NF)

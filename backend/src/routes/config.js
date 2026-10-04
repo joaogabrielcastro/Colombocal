@@ -206,7 +206,7 @@ function emitenteDataFromBody(b, tokenNovo) {
     ambiente: b.ambiente,
     naturezaOperacao: b.naturezaOperacao || "Venda de mercadoria",
     modalidadeFrete: b.modalidadeFrete ?? 9,
-    provedor: b.provedor ?? "notaas",
+    provedor: b.provedor ?? "focusnfe",
     ativo: b.ativo ?? true,
     padrao: b.padrao ?? false,
     habilitaNfe: b.habilitaNfe ?? true,
@@ -240,7 +240,14 @@ router.put("/emitente-fiscal", requireAdmin, async (req, res) => {
       b.provedorToken != null && String(b.provedorToken).trim()
         ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
         : undefined;
-    if (atual && b.provedor !== atual.provedor && tokenNovo === undefined) tokenNovo = null;
+    // Não apaga token ao trocar provedor sem chave nova — isso derrubaria a NF-e em produção.
+    if (atual && b.provedor !== atual.provedor && tokenNovo === undefined) {
+      return res.status(400).json({
+        error:
+          "Ao trocar o provedor fiscal, informe o novo token/chave. O token atual foi preservado.",
+        code: "PROVEDOR_TOKEN_OBRIGATORIO",
+      });
+    }
     const data = emitenteDataFromBody(b, tokenNovo);
     data.padrao = b.padrao ?? atual?.padrao ?? true;
     let row = atual
@@ -346,7 +353,13 @@ router.put("/emitentes-fiscais/:id", requireAdmin, async (req, res) => {
       b.provedorToken != null && String(b.provedorToken).trim()
         ? prepareProvedorTokenForStorage(String(b.provedorToken).trim())
         : undefined;
-    if (b.provedor !== atual.provedor && tokenNovo === undefined) tokenNovo = null;
+    if (b.provedor !== atual.provedor && tokenNovo === undefined) {
+      return res.status(400).json({
+        error:
+          "Ao trocar o provedor fiscal, informe o novo token/chave. O token atual foi preservado.",
+        code: "PROVEDOR_TOKEN_OBRIGATORIO",
+      });
+    }
     let row = await prisma.emitenteFiscal.update({
       where: { id },
       data: emitenteDataFromBody(b, tokenNovo),

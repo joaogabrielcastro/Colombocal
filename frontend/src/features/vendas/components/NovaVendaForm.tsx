@@ -99,10 +99,6 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [erro, setErro] = useState("");
   const idempotencyKeyRef = useRef<string | null>(null);
   const submitLockRef = useRef(false);
-  const formDirty =
-    Boolean(clienteId || vendedorId || observacoes.trim()) ||
-    itens.some((i) => i.produtoId || i.quantidade.trim() || i.precoUnitario.trim());
-  const unsavedGuard = useUnsavedChanges(formDirty && !salvando);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(isEdit);
   const [emissaoNfe, setEmissaoNfe] = useState<"sem" | "com">("sem");
   const [emitentesFiscais, setEmitentesFiscais] = useState<
@@ -114,6 +110,12 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
   const [condicoesPagamento, setCondicoesPagamento] = useState<
     { id: number; nome: string; diasParcelas: number[] }[]
   >([]);
+  // Não marca dirty só pelo vendedor auto-selecionado (evita falso positivo ao abrir a tela).
+  const formDirty =
+    Boolean(clienteId || observacoes.trim()) ||
+    itens.some((i) => i.produtoId || i.quantidade.trim() || i.precoUnitario.trim()) ||
+    Boolean(condicaoPagamentoId || bancoCobranca);
+  const unsavedGuard = useUnsavedChanges(formDirty && !salvando);
 
   useEffect(() => {
     void api

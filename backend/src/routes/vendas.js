@@ -805,7 +805,7 @@ router.put("/:id", async (req, res) => {
         });
       }
 
-      // Regenera parcelas se nenhum título tiver pagamento e sem cobrança registrada.
+      // Regenera parcelas só quando valor/vencimentos mudam — preserva IDs de títulos legados.
       const titulosExistentes = existente.titulos || [];
       for (const titulo of titulosExistentes) {
         const vp = parseFloat(String(titulo.valorPago ?? 0));
@@ -819,20 +819,15 @@ router.put("/:id", async (req, res) => {
         where: {
           vendaId: id,
           tenantId,
-          status: { in: ["REGISTRADA", "DISPONIVEL", "PROCESSANDO"] },
+          status: { in: ["REGISTRADA", "DISPONIVEL", "PROCESSANDO", "PENDENTE"] },
         },
         select: { id: true },
         take: 1,
       });
       if (cobrancasReg.length > 0) {
         throw new Error(
-          "Venda com cobrança bancária registrada não pode regenerar parcelas",
+          "Venda com cobrança bancária vinculada não pode regenerar parcelas",
         );
-      }
-      if (titulosExistentes.length > 0) {
-        await tx.tituloReceber.deleteMany({
-          where: { vendaId: id, tenantId },
-        });
       }
       const parcelas = montarParcelas({
         valorTotal,
@@ -840,21 +835,48 @@ router.put("/:id", async (req, res) => {
         dataBase: dataEfetivaVenda,
         numeroVenda,
       });
-      for (const p of parcelas) {
-        await tx.tituloReceber.create({
-          data: {
-            tenantId,
-            clienteId: clienteIdNum,
-            vendaId: id,
-            numero: p.numero,
-            vencimento: p.vencimento,
-            valorOriginal: p.valor,
-            status: "aberto",
-            parcelaNumero: p.parcelaNumero,
-            parcelaTotal: p.parcelaTotal,
-            observacoes: `Titulo gerado na edicao da venda #${numeroVenda} (${p.parcelaNumero}/${p.parcelaTotal})`,
-          },
+      const sameDay = (a, b) => {
+        const da = new Date(a);
+        const db = new Date(b);
+        return (
+          da.getUTCFullYear() === db.getUTCFullYear() &&
+          da.getUTCMonth() === db.getUTCMonth() &&
+          da.getUTCDate() === db.getUTCDate()
+        );
+      };
+      const sortedExist = [...titulosExistentes].sort(
+        (a, b) => Number(a.parcelaNumero || 0) - Number(b.parcelaNumero || 0),
+      );
+      const titulosEquivalentes =
+        sortedExist.length === parcelas.length &&
+        parcelas.every((p, i) => {
+          const t = sortedExist[i];
+          const valorOk =
+            Math.abs(parseFloat(String(t.valorOriginal ?? 0)) - p.valor) < 0.009;
+          return valorOk && sameDay(t.vencimento, p.vencimento);
         });
+      if (!titulosEquivalentes) {
+        if (titulosExistentes.length > 0) {
+          await tx.tituloReceber.deleteMany({
+            where: { vendaId: id, tenantId },
+          });
+        }
+        for (const p of parcelas) {
+          await tx.tituloReceber.create({
+            data: {
+              tenantId,
+              clienteId: clienteIdNum,
+              vendaId: id,
+              numero: p.numero,
+              vencimento: p.vencimento,
+              valorOriginal: p.valor,
+              status: "aberto",
+              parcelaNumero: p.parcelaNumero,
+              parcelaTotal: p.parcelaTotal,
+              observacoes: `Titulo gerado na edicao da venda #${numeroVenda} (${p.parcelaNumero}/${p.parcelaTotal})`,
+            },
+          });
+        }
       }
 
       const rd =
