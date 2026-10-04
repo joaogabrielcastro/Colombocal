@@ -935,40 +935,43 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                         placeholder="Ex.: 120,00"
                       />
                     </div>
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Pagamento do frete
                       </label>
-                      <label
-                        className={`flex items-center gap-2 mt-2 ${
-                          fretePagoDefault ? "cursor-default" : "cursor-pointer"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={fretePagoDefault ? true : freteRecibo}
-                          disabled={fretePagoDefault}
-                          onChange={(e) => setFreteRecibo(e.target.checked)}
-                          className="w-4 h-4 rounded"
-                        />
-                        <span className="text-sm text-gray-700">
-                          Frete pago
-                          {fretePagoDefault ? (
-                            <span className="text-gray-400 font-normal">
-                              {" "}
-                              (padrão Colombocal)
-                            </span>
-                          ) : null}
-                        </span>
-                      </label>
-                      {(fretePagoDefault || freteRecibo) && (
-                        <input
-                          type="date"
-                          value={freteReciboData}
-                          onChange={(e) => setFreteReciboData(e.target.value)}
-                          className="input-field mt-2"
-                        />
-                      )}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <label
+                          className={`flex items-center gap-2 ${
+                            fretePagoDefault ? "cursor-default" : "cursor-pointer"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={fretePagoDefault ? true : freteRecibo}
+                            disabled={fretePagoDefault}
+                            onChange={(e) => setFreteRecibo(e.target.checked)}
+                            className="w-4 h-4 rounded"
+                          />
+                          <span className="text-sm text-gray-700 whitespace-nowrap">
+                            Frete pago
+                            {fretePagoDefault ? (
+                              <span className="text-gray-400 font-normal">
+                                {" "}
+                                (padrão Colombocal)
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                        {(fretePagoDefault || freteRecibo) && (
+                          <input
+                            type="date"
+                            value={freteReciboData}
+                            onChange={(e) => setFreteReciboData(e.target.value)}
+                            className="input-field w-auto"
+                            aria-label="Data do pagamento do frete"
+                          />
+                        )}
+                      </div>
                     </div>
                   </>
                 ) : null}
