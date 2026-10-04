@@ -36,8 +36,15 @@ test.describe("E2E nova venda pela UI", () => {
 
     const produtoInput = page.getByTestId("nova-venda-produto-input");
     await produtoInput.click();
-    await produtoInput.fill(String(produto.nome || produto.codigo).slice(0, 8));
-    await page.getByRole("option").first().click();
+    const produtoBusca = String(produto.nome || produto.codigo).slice(0, 8);
+    await produtoInput.fill(produtoBusca);
+    // Escopo no listbox do produto — page.getByRole("option") pega <option>
+    // nativo do select de condição ("Padrão (30 dias)"), que não é clicável.
+    await page
+      .getByTestId("nova-venda-produto")
+      .getByRole("option", { name: new RegExp(produtoBusca.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") })
+      .first()
+      .click();
 
     await page.getByTestId("nova-venda-quantidade").fill("2");
     await expect(page.getByTestId("nova-venda-total")).not.toHaveText("R$ 0,00");
