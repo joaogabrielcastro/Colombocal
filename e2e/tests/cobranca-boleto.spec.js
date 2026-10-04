@@ -70,11 +70,10 @@ test.describe("E2E cobrança bancária / condições", () => {
 
     await loginUi(page, ADMIN);
     await page.goto(`/vendas/${venda.id}`);
-    // Evita strict mode: /1\/3|2\/3|3\/3/ casa as 3 parcelas ao mesmo tempo.
-    await expect(page.getByText("1/3", { exact: true })).toBeVisible({
-      timeout: 15000,
-    });
-    await expect(page.getByText("3/3", { exact: true })).toBeVisible();
+    // Texto da parcela é "1/3 VENDA-… • …" — exact "1/3" não casa; regex global
+    // /1\/3|2\/3|3\/3/ casa as 3 de uma vez (strict mode).
+    await expect(page.getByText(/^1\/3\b/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/^3\/3\b/)).toBeVisible();
 
     await page.goto("/financeiro/cobrancas");
     await expect(page.getByText("Cobranças / Boletos")).toBeVisible();

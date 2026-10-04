@@ -53,7 +53,9 @@ test.describe("E2E nova venda pela UI", () => {
     await page.waitForURL(/\/vendas\/\d+/, { timeout: 45_000 });
 
     await expect(page.getByText(cliente.razaoSocial)).toBeVisible();
-    await expect(page.getByText(/Títulos desta venda/i)).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Títulos \/ parcelas desta venda/i }),
+    ).toBeVisible();
 
     const vendaId = Number(page.url().match(/\/vendas\/(\d+)/)?.[1]);
     expect(vendaId).toBeGreaterThan(0);
