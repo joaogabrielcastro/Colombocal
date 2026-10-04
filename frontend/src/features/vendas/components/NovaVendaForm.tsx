@@ -8,6 +8,7 @@ import {
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import {
+  formatDate,
   formatMoney,
   localDateInputValue,
   toInputDate,
@@ -480,15 +481,17 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
     const totalCentavos = Math.round(subtotal * 100);
     const base = Math.floor(totalCentavos / n);
     const resto = totalCentavos - base * n;
+    const baseYmd = dataVenda || localDateInputValue();
+    const [ano, mes, dia] = baseYmd.split("-").map(Number);
     return diasParcelasPreview.map((dias, i) => {
       const centavos = i === n - 1 ? base + resto : base;
-      const venc = new Date(dataVenda || new Date());
+      const venc = new Date(ano, (mes || 1) - 1, dia || 1);
       venc.setDate(venc.getDate() + dias);
       return {
         parcela: `${i + 1}/${n}`,
         dias,
         valor: centavos / 100,
-        vencimento: venc.toISOString().slice(0, 10),
+        vencimento: formatDate(venc),
       };
     });
   })();
