@@ -122,6 +122,7 @@ function NovaOcForm() {
                 quantidade: qtdRaw,
                 unidade: produto.unidade,
                 pesoKg: produto.pesoKg,
+                nome: produto.nome,
               })
             : 0;
         return { produto, qtdRaw, sacos };

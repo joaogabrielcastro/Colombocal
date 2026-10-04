@@ -27,6 +27,19 @@ function normalizarUnidade(unidadeRaw) {
 }
 
 /**
+ * Produto ensacado (ex.: "DOLOMITA M-325 ENSACADA"): no pátio a quantidade
+ * de carregamento é em sacos. Se o cadastro ficou em ton/kg por engano,
+ * a OC não deve converter ton→sacos (isso inflava 416 → 20.800 SAC).
+ */
+function produtoEnsacado(produtoOrNome) {
+  const nome =
+    typeof produtoOrNome === "string"
+      ? produtoOrNome
+      : produtoOrNome?.nome || "";
+  return /\bENSACAD[AO]S?\b/i.test(String(nome));
+}
+
+/**
  * Frete unitário quando o produto é contado por unidade (ex.: saco) e tem pesoKg.
  * Prioriza frete/saco (uso típico Colombocal): tarifaSaco × (pesoKg / 20).
  * Só usa frete/ton se frete/saco estiver zerado: pesoKg × (tarifaTon / 1000).
@@ -88,10 +101,13 @@ function calcularFreteAutomatico(itens, produtosPorId, fretePorSaco, fretePorTon
 /**
  * Converte quantidade para sacos (ordem de carregamento).
  * Aceita produto+quantidade ou campos soltos.
+ * Nome com ENSACADA/ENSACADO → quantidade já é em sacos (não converte).
  */
 function quantidadeEmSacos(params) {
   const qtd = toNum(params.quantidade);
   if (qtd <= 0) return 0;
+  const nome = params.nome ?? params.produto?.nome;
+  if (produtoEnsacado(nome)) return qtd;
   const unidade = normalizarUnidade(params.unidade ?? params.produto?.unidade);
   if (unidade === "saco") return qtd;
   const pesoFromProduto = pesoKgProduto(params.produto);
@@ -109,6 +125,7 @@ module.exports = {
   roundMoney,
   pesoKgProduto,
   normalizarUnidade,
+  produtoEnsacado,
   freteUnitarioPorPeso,
   freteLinha,
   calcularFreteAutomatico,

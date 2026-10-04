@@ -83,4 +83,31 @@ describe("quantidadeEmSacos (ordem de carregamento)", () => {
     expect(quantidadeEmSacos({ quantidade: -10, unidade: "ton" })).toBe(0);
     expect(quantidadeEmSacos({ quantidade: "abc", unidade: "saco" })).toBe(0);
   });
+
+  it("ENSACADA não converte ton→sacos (cenário dolomita do pátio)", () => {
+    expect(
+      quantidadeEmSacos({
+        quantidade: 416,
+        unidade: "ton",
+        nome: "DOLOMITA M-325 ENSACADA",
+      }),
+    ).toBe(416);
+    expect(
+      quantidadeEmSacos({
+        quantidade: 64,
+        unidade: "ton",
+        nome: "DOLOMITA M-040 ENSACADA",
+      }),
+    ).toBe(64);
+  });
+
+  it("dolomita a granel (sem ENSACADA) ainda converte ton→sacos", () => {
+    expect(
+      quantidadeEmSacos({
+        quantidade: 160,
+        unidade: "ton",
+        nome: "DOLOMITA M-325",
+      }),
+    ).toBe(8000);
+  });
 });
