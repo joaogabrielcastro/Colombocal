@@ -15,6 +15,7 @@ import { ListPageSkeleton, TableListSkeleton } from "@/components/ui/skeletons";
 import { ExportActions } from "@/components/ui/export-actions";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { ListScaffold } from "@/components/ui/list-scaffold";
+import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagamentosQuery } from "@/features/financeiro/hooks/usePagamentosQuery";
 import {
@@ -627,35 +628,12 @@ function FinanceiroPageContent() {
           </>
         }
         footer={
-          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-            <p>
-              {total > 0
-                ? `${total} registro${total === 1 ? "" : "s"}${
-                    totalValorFiltrado != null && totalValorFiltrado > 0
-                      ? ` · ${formatMoney(totalValorFiltrado)}`
-                      : ""
-                  }`
-                : "Nenhum registro nos filtros"}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                className="btn-secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Anterior
-              </button>
-              <span>
-                Página {page} de {totalPages}
-              </span>
-              <button
-                className="btn-secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Próxima
-              </button>
-            </div>
+          <div>
+            {totalValorFiltrado != null && totalValorFiltrado > 0 ? (
+              <p className="mt-4 text-sm text-slate-600">Total filtrado: <span className="font-semibold tabular-nums text-slate-900">{formatMoney(totalValorFiltrado)}</span></p>
+            ) : null}
+            <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize}
+              noun="recebimento" onPageChange={setPage} />
           </div>
         }
       />

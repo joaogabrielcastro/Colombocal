@@ -140,10 +140,8 @@ export default function Sidebar({
 
   const has = (href: string) => allMain.some((i) => i.href === href);
 
-  const primary: NavLink[] = [
+  const operation: NavLink[] = [
     { href: '/', label: 'Início' },
-    { href: '/clientes', label: 'Clientes' },
-    { href: '/produtos', label: 'Produtos' },
     { href: '/vendas', label: 'Vendas' },
     { href: '/financeiro/novo', label: 'Receber' },
     { href: '/contas-a-receber', label: 'Contas a receber' },
@@ -152,10 +150,16 @@ export default function Sidebar({
       ? ([
           { href: '/fretes', label: 'Fretes' },
           { href: '/carregamento', label: 'Carregamento' },
-          { href: '/motoristas', label: 'Motoristas' },
         ] as NavLink[])
       : []),
   ].filter((l) => has(l.href) || l.href === '/');
+
+  const records: NavLink[] = [
+    { href: '/clientes', label: 'Clientes' },
+    { href: '/produtos', label: 'Produtos' },
+    ...(freteEnabled ? [{ href: '/motoristas', label: 'Motoristas' }] : []),
+    { href: '/vendedores', label: 'Vendedores' },
+  ].filter((l) => has(l.href));
 
   const reports = filterReportsForSidebar(REPORT_NAV, false, {
     ...navOpts,
@@ -172,7 +176,6 @@ export default function Sidebar({
   });
 
   const mais: NavLink[] = [
-    { href: '/vendedores', label: 'Vendedores' },
     { href: '/auditoria', label: 'Auditoria' },
   ].filter((l) => {
     const item = MAIN_NAV.find((m) => m.href === l.href);
@@ -239,8 +242,11 @@ export default function Sidebar({
         ) : null}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {primary.map(({ href, label }) => {
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1" aria-label="Navegação principal">
+        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Operação
+        </p>
+        {operation.map(({ href, label }) => {
           const Icon = getIcon(href);
           return (
             <Link
@@ -254,6 +260,23 @@ export default function Sidebar({
             </Link>
           );
         })}
+
+        {records.length > 0 && (
+          <div className="pt-4">
+            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Cadastros
+            </p>
+            {records.map(({ href, label }) => {
+              const Icon = getIcon(href);
+              return (
+                <Link key={href} href={href} className={linkClass(isActive(href))} onClick={closeMobile}>
+                  <Icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
 
         {fiscalItems.length > 0 && (
           <div className="pt-3">

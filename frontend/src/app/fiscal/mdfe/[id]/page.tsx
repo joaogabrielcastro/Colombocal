@@ -10,6 +10,8 @@ import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanne
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { toast } from "sonner";
 import { downloadFiscalFile } from "@/features/fiscal/services/download";
+import { DetailPageSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Doc = {
   id: number;
@@ -40,6 +42,8 @@ export default function FiscalMdfeDetailPage() {
   const id = Number(params?.id);
   const { mdfeEnabled } = useTenantFeatures();
   const [doc, setDoc] = useState<MdfeDetail | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [encerrar, setEncerrar] = useState({
     data: "",
     siglaUf: "",
@@ -50,9 +54,9 @@ export default function FiscalMdfeDetailPage() {
     if (!mdfeEnabled || !Number.isFinite(id)) return;
     api
       .get<MdfeDetail>(`/fiscal/mdfe/${id}`)
-      .then(setDoc)
-      .catch((err) => reportApiError(err, { title: "MDF-e não encontrado." }));
-  }, [id, mdfeEnabled]);
+      .then((value) => { setDoc(value); setLoadError(false); })
+      .catch((err) => { setLoadError(true); reportApiError(err, { title: "MDF-e não encontrado." }); });
+  }, [id, mdfeEnabled, retry]);
 
   const doEncerrar = async () => {
     try {
@@ -73,10 +77,11 @@ export default function FiscalMdfeDetailPage() {
   };
 
   if (!mdfeEnabled) return <p className="p-6 text-sm">Módulo MDF-e desabilitado.</p>;
-  if (!doc) return <p className="p-6 text-sm">Carregando…</p>;
+  if (loadError) return <div className="p-6 max-w-lg"><EmptyState title="Não foi possível carregar o MDF-e" description="Confira a conexão e tente novamente." action={<button className="btn-primary" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button>} /></div>;
+  if (!doc) return <DetailPageSkeleton />;
 
   return (
-    <div className="p-6 space-y-4 max-w-3xl">
+    <div className="page-container space-y-4 max-w-4xl">
       <Link href="/fiscal/mdfe" className="text-sm text-blue-700 hover:underline">
         ← Voltar
       </Link>

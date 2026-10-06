@@ -19,6 +19,7 @@ import { PrinterIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
+import { Pagination } from "@/components/ui/pagination";
 
 type FreteListRow = FreteMovimento & {
   cliente: {
@@ -285,30 +286,8 @@ function FretesContent() {
               </tbody>
             </table>
           </div>
-          <div className="mt-4 flex justify-between items-center text-sm text-gray-600">
-            <span>Total: {total}</span>
-            <div className="flex gap-2 items-center">
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Anterior
-              </button>
-              <span>
-                Página {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Próxima
-              </button>
-            </div>
-          </div>
+          <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize}
+            noun="frete" onPageChange={setPage} />
         </>
       )}
 

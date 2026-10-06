@@ -4,8 +4,6 @@ import Link from "next/link";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { formatMoney, formatDocumentoCliente, type Cliente } from "@/lib/utils";
 import api from "@/lib/api";
@@ -14,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { ListScaffold } from "@/components/ui/list-scaffold";
+import { Pagination } from "@/components/ui/pagination";
 import { useClientesListaQuery } from "@/features/clientes/hooks/useClientesListaQuery";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
@@ -122,7 +121,8 @@ export default function ClientesPage() {
             />
           </div>
         ) : (
-          <table className="w-full">
+          <div className="table-scroll">
+          <table className="w-full min-w-[760px]">
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="table-header">Razão Social / Fantasia</th>
@@ -183,35 +183,13 @@ export default function ClientesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
       )}
       footer={totalPages > 1 ? (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-gray-500">
-            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} de{" "}
-            {total}
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => p - 1)}
-              disabled={page === 0}
-              className="btn-secondary py-1.5 px-2.5 disabled:opacity-40"
-            >
-              <ChevronLeftIcon className="w-4 h-4" />
-            </button>
-            <span className="text-sm text-gray-600 flex items-center px-2">
-              Pág. {page + 1} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages - 1}
-              className="btn-secondary py-1.5 px-2.5 disabled:opacity-40"
-            >
-              <ChevronRightIcon className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <Pagination page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE}
+          zeroBased noun="cliente" onPageChange={setPage} />
       ) : undefined}
     />
     <ConfirmDialog

@@ -7,6 +7,8 @@ import api from "@/lib/api";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { DetailPageSkeleton } from "@/components/ui/skeletons";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type CiotDetail = {
   id: number;
@@ -33,20 +35,23 @@ export default function FiscalCiotDetailPage() {
   const id = Number(params?.id);
   const { ciotEnabled } = useTenantFeatures();
   const [doc, setDoc] = useState<CiotDetail | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     if (!ciotEnabled || !Number.isFinite(id)) return;
     api
       .get<CiotDetail>(`/fiscal/ciot/${id}`)
-      .then(setDoc)
-      .catch((err) => reportApiError(err, { title: "CIOT não encontrado." }));
-  }, [id, ciotEnabled]);
+      .then((value) => { setDoc(value); setLoadError(false); })
+      .catch((err) => { setLoadError(true); reportApiError(err, { title: "CIOT não encontrado." }); });
+  }, [id, ciotEnabled, retry]);
 
   if (!ciotEnabled) return <p className="p-6 text-sm">Módulo CIOT desabilitado.</p>;
-  if (!doc) return <p className="p-6 text-sm">Carregando…</p>;
+  if (loadError) return <div className="p-6 max-w-lg"><EmptyState title="Não foi possível carregar o CIOT" description="Confira a conexão e tente novamente." action={<button className="btn-primary" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button>} /></div>;
+  if (!doc) return <DetailPageSkeleton />;
 
   return (
-    <div className="p-6 space-y-4 max-w-2xl">
+    <div className="page-container space-y-4 max-w-3xl">
       <Link href="/fiscal/ciot" className="text-sm text-blue-700 hover:underline">
         ← Voltar
       </Link>

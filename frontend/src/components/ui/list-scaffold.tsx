@@ -26,13 +26,13 @@ export function ListScaffold({
 }: ListScaffoldProps) {
   const supportingText = subtitle ?? description;
   return (
-    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+    <div className="page-container">
+      <div className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-          {supportingText ? <p className="text-gray-500 text-sm mt-1">{supportingText}</p> : null}
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-[1.75rem]">{title}</h1>
+          {supportingText ? <p className="mt-1.5 max-w-3xl text-sm leading-5 text-slate-600">{supportingText}</p> : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div> : null}
+        {actions ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end">{actions}</div> : null}
       </div>
       {filters}
       {content}

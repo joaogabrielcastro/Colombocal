@@ -23,6 +23,7 @@ import { ListPageSkeleton, TableListSkeleton } from '@/components/ui/skeletons';
 import { reportApiError } from '@/lib/report-api-error';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Pagination } from '@/components/ui/pagination';
 import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 import { NfeStatusBadge } from '@/features/nfe/status';
 import {
@@ -570,28 +571,8 @@ function VendasPageContent() {
           </div>
         )}
       </div>
-      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-        <p>Total de registros (filtro): {total}</p>
-        <div className="flex items-center gap-2">
-          <button
-            className="btn-secondary"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Anterior
-          </button>
-          <span>
-            Página {page} de {totalPages}
-          </span>
-          <button
-            className="btn-secondary"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >
-            Próxima
-          </button>
-        </div>
-      </div>
+      <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize}
+        noun="venda" onPageChange={setPage} />
     </div>
   );
 }

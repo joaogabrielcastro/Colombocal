@@ -18,6 +18,7 @@ import {
 } from "@/lib/ordem-carregamento-print";
 import { toast } from "sonner";
 import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
+import { Pagination } from "@/components/ui/pagination";
 
 type OcItem = {
   id: number;
@@ -280,34 +281,8 @@ function CarregamentoContent() {
             </table>
           </div>
 
-          {totalPages > 1 ? (
-            <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-              <span>
-                {total} ordem{total === 1 ? "" : "ns"}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary py-1 px-2"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Anterior
-                </button>
-                <span className="py-1">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  className="btn-secondary py-1 px-2"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Próxima
-                </button>
-              </div>
-            </div>
-          ) : null}
+          <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize}
+            noun="ordem" onPageChange={setPage} />
         </>
       )}
 
