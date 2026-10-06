@@ -129,6 +129,37 @@ test("POST /api/vendas frete por pesoKg prioriza frete/saco", async () => {
   assert.equal(Number(res.body.frete), 10);
 });
 
+test("POST /api/vendas frete usa pesoKgFrete do cliente+produto", async () => {
+  const pintura = await seedProduto(ctx.tenant.id, {
+    nome: "Cal Pintura SC",
+    unidade: "saco",
+    pesoKg: 8,
+    precoPadrao: 15,
+    codigo: "CP8SC",
+  });
+  await prisma.precoClienteProduto.create({
+    data: {
+      tenantId: ctx.tenant.id,
+      clienteId: ctx.cliente.id,
+      produtoId: pintura.id,
+      preco: null,
+      pesoKgFrete: 10,
+    },
+  });
+  const res = await agent.post("/api/vendas").send({
+    clienteId: ctx.cliente.id,
+    vendedorId: ctx.vendedor.id,
+    fretePorSaco: 2.5,
+    fretePorTonelada: 0,
+    itens: [{ produtoId: pintura.id, quantidade: 10, precoUnitario: 15 }],
+  });
+  assert.equal(res.status, 201);
+  // 10 × (2.5 × 10/20) = 12.5 — cadastro continua 8 kg
+  assert.equal(Number(res.body.frete), 12.5);
+  const prod = await prisma.produto.findUnique({ where: { id: pintura.id } });
+  assert.equal(Number(prod.pesoKg), 8);
+});
+
 test("POST /api/vendas frete pintura usa ton só quando saco=0", async () => {
   const pintura = await seedProduto(ctx.tenant.id, {
     nome: "Cal Pintura 2",

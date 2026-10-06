@@ -40,6 +40,10 @@ const {
   calcularFreteAutomatico,
   freteLinha,
 } = require("../domain/frete/calcularFrete");
+const {
+  loadPesoFreteMap,
+  aplicarPesoFreteNoMap,
+} = require("../domain/frete/pesoFreteCliente");
 const { registerVendaNfeRoutes, anexarNotaNaVendaJson } = require("./vendasNfe");
 const { notaBloqueanteDaVenda, sanitizarNota } = require("../domain/nfe/notaDaVenda");
 const { STATUS } = require("../domain/nfe/constants");
@@ -661,6 +665,12 @@ router.put("/:id", async (req, res) => {
           .json({ error: `Produto ID ${item.produtoId} não encontrado` });
       }
     }
+    const pesoFreteMap = await loadPesoFreteMap(prisma, {
+      tenantId,
+      clienteId: clienteIdNum,
+      produtoIds,
+    });
+    aplicarPesoFreteNoMap(produtosPorId, pesoFreteMap);
 
     const snapshotAntes = {
       clienteId: existente.clienteId,

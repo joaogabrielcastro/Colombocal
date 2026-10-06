@@ -174,11 +174,15 @@ model Produto {
 }
 
 model PrecoClienteProduto {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   tenantId  Int
   clienteId Int
   produtoId Int
-  preco     Decimal @db.Decimal(10, 2)
+  /// Preço especial do produto para o cliente. Null = usa precoPadrao.
+  preco     Decimal? @db.Decimal(10, 2)
+  /// Peso (kg) usado só no cálculo de frete para este cliente+produto.
+  /// Null = usa pesoKg do cadastro do produto. Não altera estoque/OC.
+  pesoKgFrete Decimal? @db.Decimal(10, 3)
 
   cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)

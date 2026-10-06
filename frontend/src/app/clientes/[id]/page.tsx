@@ -22,7 +22,7 @@ const abasAvancadas: ClienteAba[] = ["precos", "comissoes"];
 function labelAba(tab: ClienteAba, chequesCount: number) {
   if (tab === "conta") return "Financeiro";
   if (tab === "cheques") return `Cheques (${chequesCount})`;
-  if (tab === "precos") return "Preços Especiais";
+  if (tab === "precos") return "Preços e Frete";
   if (tab === "comissoes") return "Comissões";
   return "Editar Cliente";
 }
@@ -97,7 +97,17 @@ export default function ClienteDetailPage() {
       </div>
       {aba === "conta" && <ClienteContaTab conta={detail.conta} clienteId={id} />}
       {aba === "cheques" && <ClienteChequesTab clienteId={id} cheques={detail.cheques} filtroChqIni={detail.filtroChqIni} filtroChqFim={detail.filtroChqFim} buscaChq={detail.buscaChq} setFiltroChqIni={detail.setFiltroChqIni} setFiltroChqFim={detail.setFiltroChqFim} setBuscaChq={detail.setBuscaChq} onFiltrar={() => void detail.carregarCheques()} />}
-      {aba === "precos" && <ClientePrecosTab produtos={detail.produtos} precosEdit={detail.precosEdit} setPrecosEdit={detail.setPrecosEdit} salvando={detail.salvandoPrecos} onSalvar={() => void detail.handleSalvarPrecos()} />}
+      {aba === "precos" && (
+        <ClientePrecosTab
+          produtos={detail.produtos}
+          precosEdit={detail.precosEdit}
+          setPrecosEdit={detail.setPrecosEdit}
+          pesosFreteEdit={detail.pesosFreteEdit}
+          setPesosFreteEdit={detail.setPesosFreteEdit}
+          salvando={detail.salvandoPrecos}
+          onSalvar={() => void detail.handleSalvarPrecos()}
+        />
+      )}
       {aba === "comissoes" && <ClienteComissoesTab comissoesData={detail.comissoesData} comissoesEdit={detail.comissoesEdit} setComissoesEdit={detail.setComissoesEdit} salvando={detail.salvandoComissoes} onSalvar={() => void detail.handleSalvarComissoes()} />}
       {aba === "editar" && <ClienteEditForm form={detail.form} setForm={detail.setForm} freteEnabled={freteEnabled} nfeEnabled={nfeEnabled} erro={detail.erro} salvando={detail.salvandoForm} onSubmit={detail.handleSalvarCliente} loadVendedorOptions={detail.loadVendedorOptions} loadVendedorLabelById={detail.loadVendedorLabelById} condicoesPagamento={detail.condicoesPagamento} />}
     </div>
