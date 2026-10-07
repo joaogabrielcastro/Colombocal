@@ -104,8 +104,9 @@ export default function NovoTenantPage() {
         {canCreate ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Chave de setup</label>
+              <label htmlFor="novo-tenant-chave" className="field-label">Chave de setup</label>
               <input
+                id="novo-tenant-chave"
                 type="password"
                 autoComplete="off"
                 className="input-field w-full"
@@ -115,8 +116,9 @@ export default function NovoTenantPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome da organização</label>
+              <label htmlFor="novo-tenant-organizacao" className="field-label">Nome da organização</label>
               <input
+                id="novo-tenant-organizacao"
                 type="text"
                 className="input-field w-full"
                 value={tenantName}
@@ -125,10 +127,11 @@ export default function NovoTenantPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="novo-tenant-slug" className="field-label">
                 Identificador (slug, opcional)
               </label>
               <input
+                id="novo-tenant-slug"
                 type="text"
                 className="input-field w-full"
                 value={tenantSlug}
@@ -139,12 +142,13 @@ export default function NovoTenantPage() {
               <p className="text-xs text-gray-500 mt-1">Letras minúsculas, números e hífens. Não use &quot;default&quot;.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome do administrador (opcional)</label>
-              <input type="text" className="input-field w-full" value={name} onChange={(e) => setName(e.target.value)} />
+              <label htmlFor="novo-tenant-nome" className="field-label">Nome do administrador (opcional)</label>
+              <input id="novo-tenant-nome" type="text" className="input-field w-full" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">E-mail do administrador</label>
+              <label htmlFor="novo-tenant-email" className="field-label">E-mail do administrador</label>
               <input
+                id="novo-tenant-email"
                 type="email"
                 autoComplete="email"
                 className="input-field w-full"
@@ -155,8 +159,9 @@ export default function NovoTenantPage() {
               <p className="text-xs text-gray-500 mt-1">Deve ser diferente dos e-mails já cadastrados.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+              <label htmlFor="novo-tenant-senha" className="field-label">Senha</label>
               <input
+                id="novo-tenant-senha"
                 type="password"
                 autoComplete="new-password"
                 className="input-field w-full"

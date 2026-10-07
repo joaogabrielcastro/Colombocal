@@ -11,6 +11,7 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { downloadCsvPtBr } from "@/lib/csv";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type FreteLinha = {
   id: number;
@@ -113,8 +114,9 @@ export default function RelatorioFretesPage() {
       <div className="card p-4 mb-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data início</label>
+            <label htmlFor="rel-fretes-inicio" className="field-label">Data início</label>
             <input
+              id="rel-fretes-inicio"
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
@@ -122,8 +124,9 @@ export default function RelatorioFretesPage() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data fim</label>
+            <label htmlFor="rel-fretes-fim" className="field-label">Data fim</label>
             <input
+              id="rel-fretes-fim"
               type="date"
               value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}
@@ -131,8 +134,9 @@ export default function RelatorioFretesPage() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+            <label htmlFor="rel-fretes-cliente" className="field-label">Cliente</label>
             <input
+              id="rel-fretes-cliente"
               value={cliente}
               onChange={(e) => setCliente(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void carregar()}
@@ -141,8 +145,9 @@ export default function RelatorioFretesPage() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+            <label htmlFor="rel-fretes-tipo" className="field-label">Tipo</label>
             <select
+              id="rel-fretes-tipo"
               value={avulso}
               onChange={(e) => setAvulso(e.target.value)}
               className="input-field"
@@ -153,8 +158,9 @@ export default function RelatorioFretesPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Recibo</label>
+            <label htmlFor="rel-fretes-recibo" className="field-label">Recibo</label>
             <select
+              id="rel-fretes-recibo"
               value={recibo}
               onChange={(e) => setRecibo(e.target.value)}
               className="input-field"
@@ -248,7 +254,9 @@ export default function RelatorioFretesPage() {
               <h2 className="font-semibold text-gray-900">Detalhes</h2>
             </div>
             {data.fretes.length === 0 ? (
-              <p className="p-6 text-sm text-gray-500">Nenhum frete no período.</p>
+              <div className="p-4">
+                <EmptyState compact title="Nenhum frete no período" description="Ajuste os filtros para ampliar a consulta." />
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

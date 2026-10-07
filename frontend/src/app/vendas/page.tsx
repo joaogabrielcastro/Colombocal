@@ -243,10 +243,11 @@ function VendasPageContent() {
       <FilterBar className="p-4 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">
+            <label htmlFor="vendas-busca" className="field-label">
               Busca (cliente, CNPJ, cidade…)
             </label>
             <input
+              id="vendas-busca"
               value={buscaInput}
               onChange={(e) => setBuscaInput(e.target.value)}
               className="input-field w-full"
@@ -254,8 +255,9 @@ function VendasPageContent() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Ordem (#)</label>
+            <label htmlFor="vendas-ordem" className="field-label">Ordem (#)</label>
             <input
+              id="vendas-ordem"
               type="text"
               inputMode="numeric"
               value={ordemInput}
@@ -271,8 +273,9 @@ function VendasPageContent() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data início</label>
+            <label htmlFor="vendas-data-inicio" className="field-label">Data início</label>
             <input
+              id="vendas-data-inicio"
               type="date"
               value={dataInicio}
               onChange={(e) => {
@@ -283,8 +286,9 @@ function VendasPageContent() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data fim</label>
+            <label htmlFor="vendas-data-fim" className="field-label">Data fim</label>
             <input
+              id="vendas-data-fim"
               type="date"
               value={dataFim}
               onChange={(e) => {
@@ -297,8 +301,9 @@ function VendasPageContent() {
           {maisFiltrosAbertos ? (
             <>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Vendedor</label>
+                <label htmlFor="vendas-vendedor" className="field-label">Vendedor</label>
                 <select
+                  id="vendas-vendedor"
                   value={vendedorId}
                   onChange={(e) => {
                     setVendedorId(e.target.value);
@@ -315,8 +320,9 @@ function VendasPageContent() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Motorista</label>
+                <label htmlFor="vendas-motorista" className="field-label">Motorista</label>
                 <select
+                  id="vendas-motorista"
                   value={motoristaId}
                   onChange={(e) => {
                     setMotoristaId(e.target.value);
@@ -333,8 +339,9 @@ function VendasPageContent() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Valor mín. (R$)</label>
+                <label htmlFor="vendas-valor-min" className="field-label">Valor mín. (R$)</label>
                 <input
+                  id="vendas-valor-min"
                   type="number"
                   step="0.01"
                   min="0"
@@ -348,8 +355,9 @@ function VendasPageContent() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Valor máx. (R$)</label>
+                <label htmlFor="vendas-valor-max" className="field-label">Valor máx. (R$)</label>
                 <input
+                  id="vendas-valor-max"
                   type="number"
                   step="0.01"
                   min="0"

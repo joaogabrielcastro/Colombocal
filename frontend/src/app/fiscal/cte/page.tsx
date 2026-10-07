@@ -8,6 +8,7 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanner";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type CteRow = {
   id: number;
@@ -62,44 +63,47 @@ export default function FiscalCteListPage() {
   if (featLoading) return <TableListSkeleton />;
   if (!cteEnabled) {
     return (
-      <div className="p-6">
-        <p className="text-sm text-gray-600">Módulo CT-e desabilitado nesta organização.</p>
+      <div className="page-container max-w-xl">
+        <EmptyState title="Módulo CT-e desabilitado" description="Ative o módulo nas configurações da organização para emitir e consultar CT-e." />
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="page-container space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-xl font-semibold text-gray-900">CT-e</h1>
+        <div><h1 className="text-2xl font-bold text-gray-900">CT-e</h1><p className="mt-1 text-sm text-gray-500">Emissão e acompanhamento de conhecimentos de transporte.</p></div>
         <Link href="/fiscal/cte/nova" className="btn-primary text-sm">
           Emitir CT-e
         </Link>
       </div>
       <HomologacaoBanner ambiente="homologacao" />
-      <div className="flex flex-wrap gap-2 items-end">
-        <label className="text-sm">
-          De
+      <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+        <label className="field-label" htmlFor="cte-data-inicio">
+          Data inicial
           <input
+            id="cte-data-inicio"
             type="date"
-            className="input ml-1"
+            className="input-field mt-1"
             value={dataInicio}
             onChange={(e) => setDataInicio(e.target.value)}
           />
         </label>
-        <label className="text-sm">
-          Até
+        <label className="field-label" htmlFor="cte-data-fim">
+          Data final
           <input
+            id="cte-data-fim"
             type="date"
-            className="input ml-1"
+            className="input-field mt-1"
             value={dataFim}
             onChange={(e) => setDataFim(e.target.value)}
           />
         </label>
-        <label className="text-sm">
+        <label className="field-label" htmlFor="cte-status">
           Status
           <select
-            className="input ml-1"
+            id="cte-status"
+            className="input-field mt-1"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
@@ -110,7 +114,7 @@ export default function FiscalCteListPage() {
             <option value="cancelada">Cancelada</option>
           </select>
         </label>
-        <button type="button" className="btn-secondary text-sm" onClick={() => void carregar()}>
+        <button type="button" className="btn-secondary text-sm" onClick={() => void carregar()} disabled={loading}>
           Filtrar
         </button>
       </div>
@@ -158,9 +162,7 @@ export default function FiscalCteListPage() {
               ))}
               {!items.length ? (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-gray-500">
-                    Nenhum CT-e no período.
-                  </td>
+                  <td colSpan={9}><EmptyState compact title="Nenhum CT-e no período" description="Ajuste os filtros ou emita um novo CT-e." /></td>
                 </tr>
               ) : null}
             </tbody>

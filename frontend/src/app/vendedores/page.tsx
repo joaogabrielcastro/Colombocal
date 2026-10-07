@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { ListScaffold } from "@/components/ui/list-scaffold";
 import { reportApiError } from "@/lib/report-api-error";
+import { ModalSurface } from "@/components/ui/modal-surface";
 
 export default function VendedoresPage() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -119,10 +120,11 @@ export default function VendedoresPage() {
           <FilterBar className="p-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="min-w-[16rem] flex-1 max-w-md">
-                <label className="block text-xs text-gray-500 mb-1">Buscar vendedor</label>
+                <label htmlFor="vendedores-busca" className="field-label">Buscar vendedor</label>
                 <div className="relative">
                   <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   <input
+                    id="vendedores-busca"
                     type="search"
                     value={buscaInput}
                     onChange={(e) => setBuscaInput(e.target.value)}
@@ -201,11 +203,14 @@ export default function VendedoresPage() {
         )}
       />
 
-      {mostrarForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+      <ModalSurface
+        open={mostrarForm}
+        ariaLabel={editando ? "Editar vendedor" : "Novo vendedor"}
+        onClose={() => setMostrarForm(false)}
+        closeDisabled={salvando}
+      >
             <div className="px-5 py-4 border-b border-gray-200">
-              <h2 className="font-semibold">
+              <h2 id="vendedor-form-title" className="font-semibold">
                 {editando ? "Editar Vendedor" : "Novo Vendedor"}
               </h2>
             </div>
@@ -216,10 +221,11 @@ export default function VendedoresPage() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="vendedor-nome" className="field-label">
                   Nome *
                 </label>
                 <input
+                  id="vendedor-nome"
                   required
                   value={form.nome || ""}
                   onChange={(e) =>
@@ -229,10 +235,11 @@ export default function VendedoresPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="vendedor-telefone" className="field-label">
                   Telefone
                 </label>
                 <input
+                  id="vendedor-telefone"
                   value={form.telefone || ""}
                   onChange={(e) =>
                     setForm((p) => ({ ...p, telefone: e.target.value }))
@@ -241,10 +248,11 @@ export default function VendedoresPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="vendedor-comissao" className="field-label">
                   Comissão (%)
                 </label>
                 <input
+                  id="vendedor-comissao"
                   type="number"
                   step="0.01"
                   min="0"
@@ -283,9 +291,7 @@ export default function VendedoresPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ModalSurface>
 
       <ConfirmDialog
         open={!!vendedorToDelete}

@@ -384,11 +384,12 @@ function NovaOcForm() {
               placeholder="Buscar motorista…"
             />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="oc-nova-pedido" className="field-label">
                 Pedido / nº venda
               </label>
               <div className="flex gap-2">
                 <input
+                  id="oc-nova-pedido"
                   className="input-field font-mono"
                   value={pedido}
                   onChange={(e) => {
@@ -433,10 +434,11 @@ function NovaOcForm() {
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="oc-nova-data" className="field-label">
                 Data de emissão
               </label>
               <input
+                id="oc-nova-data"
                 type="date"
                 className="input-field"
                 value={dataEmissao}
@@ -504,6 +506,7 @@ function NovaOcForm() {
                     <td className="py-2 pr-3">
                       <input
                         type="number"
+                        aria-label={`Quantidade do item ${idx + 1}`}
                         step="0.001"
                         min="0"
                         placeholder={
@@ -528,6 +531,7 @@ function NovaOcForm() {
                     <td className="py-2">
                       <button
                         type="button"
+                        aria-label={`Remover item ${idx + 1}`}
                         className="btn-secondary py-1.5 px-2 text-red-600"
                         disabled={itens.length === 1}
                         onClick={() => removeItem(idx)}
@@ -544,10 +548,11 @@ function NovaOcForm() {
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
             <div className="flex-1 min-w-[12rem]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="oc-nova-observacoes" className="field-label">
                 Observações
               </label>
               <input
+                id="oc-nova-observacoes"
                 className="input-field"
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}

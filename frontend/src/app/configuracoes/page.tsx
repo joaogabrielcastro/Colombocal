@@ -8,6 +8,7 @@ import {
   fetchTenantFeatures,
 } from '@/hooks/useTenantFeatures';
 import { EmitenteFiscalForm } from '@/features/nfe/EmitenteFiscalForm';
+import { EmptyState } from '@/components/ui/empty-state';
 
 type MeUser = {
   role: string;
@@ -104,7 +105,7 @@ export default function ConfiguracoesPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="page-container max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
       <p className="text-gray-500 text-sm mt-1 mb-6">
         Módulos e opções da organização.
@@ -117,10 +118,10 @@ export default function ConfiguracoesPage() {
             Ative ou desative funcionalidades para todos os usuários desta organização.
           </p>
           {erroFeatures ? (
-            <p className="text-sm text-red-600 mb-3">{erroFeatures}</p>
+            <p className="text-sm text-red-600 mb-3" role="alert">{erroFeatures}</p>
           ) : null}
           {okFeatures ? (
-            <p className="text-sm text-green-700 mb-3">{okFeatures}</p>
+            <p className="text-sm text-green-700 mb-3" role="status">{okFeatures}</p>
           ) : null}
           {features ? (
             <div className="space-y-3">
@@ -227,9 +228,7 @@ export default function ConfiguracoesPage() {
           )}
         </section>
       ) : (
-        <p className="text-sm text-gray-500">
-          Apenas administradores podem alterar as configurações da organização.
-        </p>
+        <EmptyState title="Acesso restrito" description="Apenas administradores podem alterar as configurações da organização." />
       )}
 
       {isAdmin && features?.nfe ? (

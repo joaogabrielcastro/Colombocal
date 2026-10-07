@@ -54,7 +54,7 @@ export default function ClienteDetailPage() {
   if (!detail.conta) return <div className="p-6 max-w-lg mx-auto flex items-center min-h-[40vh]"><EmptyState title="Cliente não encontrado ou indisponível" action={<button type="button" className="btn-primary" onClick={() => void detail.carregarPrincipal()}>Tentar novamente</button>} /></div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="page-container max-w-5xl mx-auto">
       <ClienteHeader cliente={detail.conta.cliente} clienteId={id} />
       <ClienteResumoFinanceiro
         conta={detail.conta}
@@ -63,11 +63,15 @@ export default function ClienteDetailPage() {
         onReconciliar={() => void detail.handleReconciliarRecebiveis()}
       />
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+        <div className="flex max-w-full gap-1 overflow-x-auto bg-gray-100 p-1 rounded-lg" role="tablist" aria-label="Dados do cliente">
           {abasPrincipais.map((tab) => (
             <button
               key={tab}
               type="button"
+              role="tab"
+              id={`cliente-tab-${tab}`}
+              aria-selected={aba === tab}
+              aria-controls={`cliente-panel-${tab}`}
               onClick={() => selecionarAba(tab)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 aba === tab ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-900"
@@ -78,11 +82,15 @@ export default function ClienteDetailPage() {
           ))}
         </div>
         <span className="text-xs text-gray-400 hidden sm:inline">Avançado:</span>
-        <div className="flex gap-1 bg-gray-50 p-1 rounded-lg w-fit border border-gray-100">
+        <div className="flex max-w-full gap-1 overflow-x-auto bg-gray-50 p-1 rounded-lg border border-gray-100" role="tablist" aria-label="Configurações avançadas do cliente">
           {abasAvancadas.map((tab) => (
             <button
               key={tab}
               type="button"
+              role="tab"
+              id={`cliente-tab-${tab}`}
+              aria-selected={aba === tab}
+              aria-controls={`cliente-panel-${tab}`}
               onClick={() => selecionarAba(tab)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 aba === tab
@@ -95,6 +103,7 @@ export default function ClienteDetailPage() {
           ))}
         </div>
       </div>
+      <div role="tabpanel" id={`cliente-panel-${aba}`} aria-labelledby={`cliente-tab-${aba}`}>
       {aba === "conta" && <ClienteContaTab conta={detail.conta} clienteId={id} />}
       {aba === "cheques" && <ClienteChequesTab clienteId={id} cheques={detail.cheques} filtroChqIni={detail.filtroChqIni} filtroChqFim={detail.filtroChqFim} buscaChq={detail.buscaChq} setFiltroChqIni={detail.setFiltroChqIni} setFiltroChqFim={detail.setFiltroChqFim} setBuscaChq={detail.setBuscaChq} onFiltrar={() => void detail.carregarCheques()} />}
       {aba === "precos" && (
@@ -110,6 +119,7 @@ export default function ClienteDetailPage() {
       )}
       {aba === "comissoes" && <ClienteComissoesTab comissoesData={detail.comissoesData} comissoesEdit={detail.comissoesEdit} setComissoesEdit={detail.setComissoesEdit} salvando={detail.salvandoComissoes} onSalvar={() => void detail.handleSalvarComissoes()} />}
       {aba === "editar" && <ClienteEditForm form={detail.form} setForm={detail.setForm} freteEnabled={freteEnabled} nfeEnabled={nfeEnabled} erro={detail.erro} salvando={detail.salvandoForm} onSubmit={detail.handleSalvarCliente} loadVendedorOptions={detail.loadVendedorOptions} loadVendedorLabelById={detail.loadVendedorLabelById} condicoesPagamento={detail.condicoesPagamento} />}
+      </div>
     </div>
   );
 }

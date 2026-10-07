@@ -284,7 +284,7 @@ export function EmitenteFiscalForm() {
           Adicionar empresa
         </button>
       </div>
-      {erro ? <p className="text-sm text-red-600">{erro}</p> : null}
+      {erro ? <p className="text-sm text-red-600" role="alert">{erro}</p> : null}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="md:col-span-2 flex flex-wrap gap-4 rounded-lg border border-gray-200 p-3">
           {([

@@ -411,8 +411,9 @@ function RegistrarRecebimentoForm() {
           <p className="text-sm font-semibold text-gray-900 mb-3">1. Localizar a venda</p>
           <div className="flex flex-wrap gap-2 mb-4">
             <div className="flex-1 min-w-[12rem]">
-              <label className="block text-xs text-gray-500 mb-1">Buscar pela ordem (#)</label>
+              <label htmlFor="receber-ordem" className="field-label">Buscar pela ordem (#)</label>
               <input
+                id="receber-ordem"
                 className="input-field font-mono"
                 placeholder="Ex.: 278 ou #278"
                 value={ordemInput}

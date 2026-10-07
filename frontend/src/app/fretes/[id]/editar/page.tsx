@@ -374,16 +374,18 @@ export default function EditarFretePage() {
               placeholder="Buscar motorista..."
             />
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Preço por saco</label>
+              <label htmlFor="frete-editar-preco-saco" className="field-label">Preço por saco</label>
               <input
+                id="frete-editar-preco-saco"
                 className="input-field"
                 value={form.precoSaco}
                 onChange={(e) => setForm((s) => ({ ...s, precoSaco: e.target.value }))}
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Preço por tonelada</label>
+              <label htmlFor="frete-editar-preco-tonelada" className="field-label">Preço por tonelada</label>
               <input
+                id="frete-editar-preco-tonelada"
                 className="input-field"
                 value={form.precoTonelada}
                 onChange={(e) => setForm((s) => ({ ...s, precoTonelada: e.target.value }))}
@@ -432,6 +434,7 @@ export default function EditarFretePage() {
                   </div>
                   <div className="md:col-span-2">
                     <input
+                      aria-label={`Quantidade do item ${index + 1}`}
                       className="input-field"
                       placeholder="Quantidade"
                       value={item.quantidade}
@@ -452,6 +455,7 @@ export default function EditarFretePage() {
                   <div className="md:col-span-2">
                     <button
                       type="button"
+                      aria-label={`Remover item ${index + 1}`}
                       className="btn-secondary w-full"
                       onClick={() => removerItem(index)}
                     >
@@ -465,18 +469,20 @@ export default function EditarFretePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Total calculado</label>
+              <label htmlFor="frete-editar-total-calculado" className="field-label">Total calculado</label>
               <input
+                id="frete-editar-total-calculado"
                 className="input-field bg-gray-50"
                 value={formatMoney(valorCalculado)}
                 readOnly
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
+              <label htmlFor="frete-editar-total-final" className="field-label">
                 Total final (editável)
               </label>
               <input
+                id="frete-editar-total-final"
                 className="input-field"
                 value={form.valorTotal}
                 onChange={(e) => setForm((s) => ({ ...s, valorTotal: e.target.value }))}
@@ -487,8 +493,9 @@ export default function EditarFretePage() {
               </p>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Data do frete</label>
+              <label htmlFor="frete-editar-data" className="field-label">Data do frete</label>
               <input
+                id="frete-editar-data"
                 type="date"
                 className="input-field"
                 value={form.dataMovimento}
@@ -498,8 +505,9 @@ export default function EditarFretePage() {
               />
             </div>
             <div className="lg:col-span-4">
-              <label className="block text-sm text-gray-600 mb-1">Observação</label>
+              <label htmlFor="frete-editar-observacao" className="field-label">Observação</label>
               <input
+                id="frete-editar-observacao"
                 className="input-field"
                 value={form.observacao}
                 onChange={(e) => setForm((s) => ({ ...s, observacao: e.target.value }))}
@@ -530,8 +538,9 @@ export default function EditarFretePage() {
             {(fretePagoDefault || form.pagoNoAto) ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Nº recibo</label>
+                  <label htmlFor="frete-editar-recibo" className="field-label">Nº recibo</label>
                   <input
+                    id="frete-editar-recibo"
                     className="input-field"
                     value={form.reciboNumero}
                     onChange={(e) =>

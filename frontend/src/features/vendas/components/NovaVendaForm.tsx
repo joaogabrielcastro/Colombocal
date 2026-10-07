@@ -785,10 +785,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="venda-condicao-pagamento" className="field-label">
                   Condição de pagamento
                 </label>
                 <select
+                  id="venda-condicao-pagamento"
                   className="input-field"
                   value={condicaoPagamentoId}
                   onChange={(e) => setCondicaoPagamentoId(e.target.value)}
@@ -803,10 +804,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="venda-banco-cobranca" className="field-label">
                   Banco para cobrança
                 </label>
                 <select
+                  id="venda-banco-cobranca"
                   className="input-field"
                   value={bancoCobranca}
                   onChange={(e) => setBancoCobranca(e.target.value)}
@@ -903,10 +905,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                   placeholder="Nome do motorista (opcional)…"
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="venda-data" className="field-label">
                     Data da Venda
                   </label>
                   <input
+                    id="venda-data"
                     type="date"
                     value={dataVenda}
                     onChange={(e) => setDataVenda(e.target.value)}
@@ -916,10 +919,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                 {freteEnabled ? (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="venda-frete-total" className="field-label">
                         Frete (R$) — cobrado à parte
                       </label>
                       <input
+                        id="venda-frete-total"
                         type="number"
                         step="0.01"
                         min="0"
@@ -933,10 +937,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                       </p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="venda-frete-saco" className="field-label">
                         Tarifa frete por saco (R$)
                       </label>
                       <input
+                        id="venda-frete-saco"
                         type="number"
                         step="0.01"
                         min="0"
@@ -947,10 +952,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="venda-frete-tonelada" className="field-label">
                         Tarifa frete por tonelada (R$)
                       </label>
                       <input
+                        id="venda-frete-tonelada"
                         type="number"
                         step="0.01"
                         min="0"
@@ -1001,10 +1007,11 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                   </>
                 ) : null}
                 <div className="xl:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="venda-observacoes" className="field-label">
                     Observações
                   </label>
                   <input
+                    id="venda-observacoes"
                     value={observacoes}
                     onChange={(e) => setObservacoes(e.target.value)}
                     className="input-field"
@@ -1074,6 +1081,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                     <td className="py-2 pr-3">
                       <input
                         type="number"
+                        aria-label={`Quantidade do item ${idx + 1}`}
                         step="0.001"
                         min="0"
                         placeholder="0"
@@ -1094,6 +1102,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                     <td className="py-2 pr-3">
                       <input
                         type="number"
+                        aria-label={`Preço unitário do item ${idx + 1}`}
                         step="0.01"
                         min="0"
                         placeholder="0,00"
@@ -1117,6 +1126,7 @@ export function NovaVendaForm({ editId }: { editId?: string }) {
                       {itens.length > 1 && (
                         <button
                           type="button"
+                          aria-label={`Remover item ${idx + 1}`}
                           onClick={() => removeItem(idx)}
                           className="text-red-400 hover:text-red-600"
                         >

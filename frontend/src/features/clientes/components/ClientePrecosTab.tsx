@@ -57,6 +57,7 @@ export function ClientePrecosTab({
                 <td className="table-cell">{formatMoney(p.precoPadrao)}</td>
                 <td className="table-cell">
                   <input
+                    aria-label={`Preço especial de ${p.nome}`}
                     type="number"
                     step="0.01"
                     min="0"
@@ -71,6 +72,7 @@ export function ClientePrecosTab({
                 <td className="table-cell text-gray-500">{placeholderPeso(p)}</td>
                 <td className="table-cell">
                   <input
+                    aria-label={`Peso para frete de ${p.nome}`}
                     type="number"
                     step="0.001"
                     min="0.001"

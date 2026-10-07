@@ -139,8 +139,9 @@ function CarregamentoContent() {
       <FilterBar className="p-4 flex flex-wrap gap-3 items-end justify-between">
         <div className="flex flex-wrap gap-3 items-end flex-1 min-w-0">
           <div className="flex-1 min-w-[16rem] max-w-md">
-            <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+            <label htmlFor="carregamento-cliente" className="field-label">Cliente</label>
             <input
+              id="carregamento-cliente"
               type="text"
               value={clienteInput}
               onChange={(e) => setClienteInput(e.target.value)}
@@ -152,8 +153,9 @@ function CarregamentoContent() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">OC Nº</label>
+            <label htmlFor="carregamento-oc" className="field-label">OC Nº</label>
             <input
+              id="carregamento-oc"
               type="text"
               inputMode="numeric"
               value={ocInput}
@@ -166,8 +168,9 @@ function CarregamentoContent() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Pedido</label>
+            <label htmlFor="carregamento-pedido" className="field-label">Pedido</label>
             <input
+              id="carregamento-pedido"
               type="text"
               value={pedidoInput}
               onChange={(e) => setPedidoInput(e.target.value)}

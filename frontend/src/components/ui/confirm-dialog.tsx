@@ -23,6 +23,8 @@ type ConfirmDialogProps = {
   children?: ReactNode;
   /** Desabilita o botão de confirmar (ex.: formulário incompleto). */
   confirmDisabled?: boolean;
+  /** Para diálogos informativos que precisam apenas da ação principal. */
+  hideCancel?: boolean;
 };
 
 function getFocusable(container: HTMLElement): HTMLElement[] {
@@ -48,6 +50,7 @@ export function ConfirmDialog({
   onSecondary,
   children,
   confirmDisabled = false,
+  hideCancel = false,
 }: ConfirmDialogProps) {
   const titleId = useId();
   const descId = useId();
@@ -150,9 +153,11 @@ export function ConfirmDialog({
         ) : null}
         {children}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
-            {cancelText}
-          </button>
+          {!hideCancel ? (
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              {cancelText}
+            </button>
+          ) : null}
           {secondaryText && onSecondary ? (
             <button
               type="button"

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { EmitenteFiscalSelect } from "@/features/fiscal/components/EmitenteFiscalSelect";
 import { fiscalAccessKeyError } from "@/features/fiscal/services/access-key";
 import { buildMdfeEmissionPayload } from "@/features/fiscal/services/transport-payload";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function NovaMdfePage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function NovaMdfePage() {
     tipoDoc: "nfe" as "nfe" | "cte",
   });
 
-  if (!mdfeEnabled) return <p className="p-6 text-sm">Módulo MDF-e desabilitado.</p>;
+  if (!mdfeEnabled) return <div className="page-container max-w-xl"><EmptyState title="Módulo MDF-e desabilitado" description="Ative o módulo nas configurações antes de emitir um MDF-e." /></div>;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,11 +53,11 @@ export default function NovaMdfePage() {
   };
 
   return (
-    <div className="p-6 max-w-xl space-y-4">
+    <div className="page-container max-w-xl space-y-4">
       <Link href="/fiscal/mdfe" className="text-sm text-blue-700 hover:underline">
         ← Voltar
       </Link>
-      <h1 className="text-xl font-semibold">Emitir MDF-e</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-slate-950">Emitir MDF-e</h1>
       <form className="card p-4 space-y-3" onSubmit={(e) => void onSubmit(e)}>
         <EmitenteFiscalSelect
           recurso="mdfe"
@@ -64,37 +65,55 @@ export default function NovaMdfePage() {
           onChange={setEmitenteFiscalId}
           disabled={saving}
         />
-        <input
-          className="input w-full"
-          placeholder="UF início"
+        <label htmlFor="mdfe-uf-inicio" className="block">
+          <span className="field-label">UF de início</span>
+          <input
+          id="mdfe-uf-inicio"
+          className="input-field"
+          placeholder="Ex.: PR"
           required
           maxLength={2}
           value={form.ufInicio}
           onChange={(e) => setForm((f) => ({ ...f, ufInicio: e.target.value }))}
-        />
-        <input
-          className="input w-full"
-          placeholder="UF fim"
+          />
+        </label>
+        <label htmlFor="mdfe-uf-fim" className="block">
+          <span className="field-label">UF de destino</span>
+          <input
+          id="mdfe-uf-fim"
+          className="input-field"
+          placeholder="Ex.: SP"
           required
           maxLength={2}
           value={form.ufFim}
           onChange={(e) => setForm((f) => ({ ...f, ufFim: e.target.value }))}
-        />
-        <input
-          className="input w-full"
-          placeholder="Placa"
+          />
+        </label>
+        <label htmlFor="mdfe-placa" className="block">
+          <span className="field-label">Placa</span>
+          <input
+          id="mdfe-placa"
+          className="input-field"
+          placeholder="ABC-1D23"
           required
           value={form.veiculoPlaca}
           onChange={(e) => setForm((f) => ({ ...f, veiculoPlaca: e.target.value }))}
-        />
-        <input
-          className="input w-full"
-          placeholder="Motorista"
+          />
+        </label>
+        <label htmlFor="mdfe-motorista" className="block">
+          <span className="field-label">Motorista</span>
+          <input
+          id="mdfe-motorista"
+          className="input-field"
           value={form.motoristaNome}
           onChange={(e) => setForm((f) => ({ ...f, motoristaNome: e.target.value }))}
-        />
-        <select
-          className="input w-full"
+          />
+        </label>
+        <label htmlFor="mdfe-tipo-documento" className="block">
+          <span className="field-label">Documento vinculado</span>
+          <select
+          id="mdfe-tipo-documento"
+          className="input-field"
           value={form.tipoDoc}
           onChange={(e) =>
             setForm((f) => ({ ...f, tipoDoc: e.target.value as "nfe" | "cte" }))
@@ -102,10 +121,13 @@ export default function NovaMdfePage() {
         >
           <option value="nfe">Vincular NF-e</option>
           <option value="cte">Vincular CT-e</option>
-        </select>
-        <input
-          className="input w-full"
-          placeholder="Chave de acesso (44 dígitos)"
+          </select>
+        </label>
+        <label htmlFor="mdfe-chave" className="block">
+          <span className="field-label">Chave de acesso (44 dígitos)</span>
+          <input
+          id="mdfe-chave"
+          className="input-field font-mono"
           required
           inputMode="numeric"
           maxLength={44}
@@ -117,7 +139,8 @@ export default function NovaMdfePage() {
             setForm((f) => ({ ...f, chaveDoc }));
             if (chaveError) setChaveError(fiscalAccessKeyError(chaveDoc));
           }}
-        />
+          />
+        </label>
         {chaveError ? (
           <p id="mdfe-chave-error" className="text-sm text-red-700">
             {chaveError}

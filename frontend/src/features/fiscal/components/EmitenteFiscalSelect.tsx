@@ -52,10 +52,11 @@ export function EmitenteFiscalSelect({ recurso, value, onChange, disabled }: Pro
   }, [recurso]);
 
   return (
-    <label className="block text-sm">
-      Empresa emissora
+    <label htmlFor={`${recurso}-emitente-fiscal`} className="block">
+      <span className="field-label">Empresa emissora</span>
       <select
-        className="input mt-1 w-full"
+        id={`${recurso}-emitente-fiscal`}
+        className="input-field"
         required
         disabled={disabled || loading}
         value={value}

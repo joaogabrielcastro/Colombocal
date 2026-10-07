@@ -141,8 +141,9 @@ function FretesContent() {
       <FilterBar className="p-4 flex flex-wrap gap-3 items-end justify-between">
         <div className="flex flex-wrap gap-3 items-end flex-1 min-w-0">
         <div className="flex-1 min-w-[16rem] max-w-md">
-          <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+          <label htmlFor="fretes-cliente" className="field-label">Cliente</label>
           <input
+            id="fretes-cliente"
             type="text"
             value={clienteInput}
             onChange={(e) => setClienteInput(e.target.value)}
@@ -157,8 +158,9 @@ function FretesContent() {
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Pagamento</label>
+          <label htmlFor="fretes-pagamento" className="field-label">Pagamento</label>
           <select
+            id="fretes-pagamento"
             value={reciboEmitido}
             onChange={(e) => {
               setReciboEmitido(e.target.value);

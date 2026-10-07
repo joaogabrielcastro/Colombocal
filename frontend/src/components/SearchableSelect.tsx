@@ -48,6 +48,7 @@ export default function SearchableSelect({
   'data-testid': dataTestId,
 }: SearchableSelectProps) {
   const listId = useId();
+  const inputId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const [open, setOpen] = useState(false);
@@ -126,11 +127,12 @@ export default function SearchableSelect({
   return (
     <div ref={wrapRef} className={`relative ${className}`} data-testid={dataTestId}>
       {!hideLabel && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <label htmlFor={inputId} className="field-label">{label}</label>
       )}
       <div className="relative">
         <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
         <input
+          id={inputId}
           type="text"
           role="combobox"
           aria-expanded={open}

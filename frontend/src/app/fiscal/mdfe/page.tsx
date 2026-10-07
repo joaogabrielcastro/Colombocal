@@ -8,6 +8,7 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanner";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type MdfeRow = {
   id: number;
@@ -58,29 +59,29 @@ export default function FiscalMdfeListPage() {
 
   if (featLoading) return <TableListSkeleton />;
   if (!mdfeEnabled) {
-    return <p className="p-6 text-sm text-gray-600">Módulo MDF-e desabilitado.</p>;
+    return <div className="page-container max-w-xl"><EmptyState title="Módulo MDF-e desabilitado" description="Ative o módulo nas configurações da organização para emitir e consultar MDF-e." /></div>;
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="page-container space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-xl font-semibold">MDF-e</h1>
+        <div><h1 className="text-2xl font-bold text-gray-900">MDF-e</h1><p className="mt-1 text-sm text-gray-500">Emissão e acompanhamento de manifestos eletrônicos.</p></div>
         <Link href="/fiscal/mdfe/nova" className="btn-primary text-sm">
           Emitir MDF-e
         </Link>
       </div>
       <HomologacaoBanner ambiente="homologacao" />
-      <div className="flex flex-wrap gap-2 items-end">
-        <input type="date" className="input" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-        <input type="date" className="input" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-        <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+      <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+        <label className="field-label" htmlFor="mdfe-data-inicio">Data inicial<input id="mdfe-data-inicio" type="date" className="input-field mt-1" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></label>
+        <label className="field-label" htmlFor="mdfe-data-fim">Data final<input id="mdfe-data-fim" type="date" className="input-field mt-1" value={dataFim} onChange={(e) => setDataFim(e.target.value)} /></label>
+        <label className="field-label" htmlFor="mdfe-status">Status<select id="mdfe-status" className="input-field mt-1" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Status</option>
           <option value="autorizada">Autorizada</option>
           <option value="encerrada">Encerrada</option>
           <option value="cancelada">Cancelada</option>
           <option value="processando">Processando</option>
-        </select>
-        <button type="button" className="btn-secondary text-sm" onClick={() => void carregar()}>
+        </select></label>
+        <button type="button" className="btn-secondary text-sm" onClick={() => void carregar()} disabled={loading}>
           Filtrar
         </button>
       </div>
@@ -118,9 +119,7 @@ export default function FiscalMdfeListPage() {
               ))}
               {!items.length ? (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-gray-500">
-                    Nenhum MDF-e no período.
-                  </td>
+                  <td colSpan={6}><EmptyState compact title="Nenhum MDF-e no período" description="Ajuste os filtros ou emita um novo MDF-e." /></td>
                 </tr>
               ) : null}
             </tbody>

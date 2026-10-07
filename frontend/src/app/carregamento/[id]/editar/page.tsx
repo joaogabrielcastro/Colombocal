@@ -275,10 +275,11 @@ export default function EditarOcPage() {
               placeholder="Buscar motorista…"
             />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="oc-editar-pedido" className="field-label">
                 Pedido / nº venda
               </label>
               <input
+                id="oc-editar-pedido"
                 className="input-field"
                 value={pedido}
                 onChange={(e) => {
@@ -308,10 +309,11 @@ export default function EditarOcPage() {
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="oc-editar-data" className="field-label">
                 Data de emissão
               </label>
               <input
+                id="oc-editar-data"
                 type="date"
                 className="input-field"
                 value={dataEmissao}
@@ -351,6 +353,7 @@ export default function EditarOcPage() {
                 <tr key={idx} className="border-b border-gray-50">
                   <td className="py-2 pr-3">
                     <input
+                      aria-label={`Descrição do item ${idx + 1}`}
                       className="input-field text-sm"
                       value={item.descricao}
                       onChange={(e) =>
@@ -368,6 +371,7 @@ export default function EditarOcPage() {
                   <td className="py-2 pr-3">
                     <input
                       type="number"
+                      aria-label={`Quantidade do item ${idx + 1}`}
                       step="0.001"
                       min="0"
                       className="input-field text-sm"
@@ -386,6 +390,7 @@ export default function EditarOcPage() {
                   <td className="py-2">
                     <button
                       type="button"
+                      aria-label={`Remover item ${idx + 1}`}
                       className="btn-secondary py-1.5 px-2 text-red-600"
                       disabled={itens.length === 1}
                       onClick={() =>
@@ -406,10 +411,11 @@ export default function EditarOcPage() {
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
             <div className="flex-1 min-w-[12rem]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="oc-editar-observacoes" className="field-label">
                 Observações
               </label>
               <input
+                id="oc-editar-observacoes"
                 className="input-field"
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}

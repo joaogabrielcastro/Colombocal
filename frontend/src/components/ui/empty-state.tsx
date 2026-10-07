@@ -2,13 +2,18 @@ export function EmptyState({
   title,
   description,
   action,
+  compact = false,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-6 py-12 text-center">
+    <div
+      className={`rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-6 text-center ${compact ? "py-6" : "py-12"}`}
+      role="status"
+    >
       <p className="text-sm font-medium text-gray-700">{title}</p>
       {description && (
         <p className="mt-1 text-sm text-gray-500 max-w-md mx-auto">{description}</p>

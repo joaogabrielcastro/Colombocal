@@ -10,6 +10,7 @@ import { formatMoney, formatDate, type CobrancaBancaria } from "@/lib/utils";
 import { ListPageSkeleton } from "@/components/ui/skeletons";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { ListScaffold } from "@/components/ui/list-scaffold";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reportApiError } from "@/lib/report-api-error";
 import { toast } from "sonner";
 
@@ -248,11 +249,12 @@ function CobrancasPageContent() {
         </div>
       )}
 
-      <div className="flex gap-2 mt-3">
+      <nav className="mt-4 flex items-center gap-2" aria-label="Paginação de cobranças">
         <button
           type="button"
           className="btn-secondary"
           disabled={page <= 1}
+          aria-label="Página anterior"
           onClick={() => setPage((p) => Math.max(1, p - 1))}
         >
           Anterior
@@ -261,16 +263,23 @@ function CobrancasPageContent() {
           type="button"
           className="btn-secondary"
           disabled={rows.length < pageSize}
+          aria-label="Próxima página"
           onClick={() => setPage((p) => p + 1)}
         >
           Próxima
         </button>
-      </div>
+      </nav>
 
-      {detalhe && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-5 space-y-2">
-            <h2 className="text-lg font-semibold">Cobrança #{detalhe.id}</h2>
+      <ConfirmDialog
+        open={detalhe != null}
+        title={detalhe ? `Cobrança #${detalhe.id}` : "Cobrança"}
+        confirmText="Fechar"
+        hideCancel
+        onConfirm={() => setDetalhe(null)}
+        onCancel={() => setDetalhe(null)}
+      >
+        {detalhe ? (
+          <div className="mt-4 space-y-2 text-sm">
             <p>
               <span className="text-gray-500">Status:</span>{" "}
               {statusLabel(detalhe.status)}
@@ -297,18 +306,9 @@ function CobrancasPageContent() {
             {detalhe.ultimoErro && (
               <p className="text-red-700 text-sm">{detalhe.ultimoErro}</p>
             )}
-            <div className="flex justify-end gap-2 pt-3">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setDetalhe(null)}
-              >
-                Fechar
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        ) : null}
+      </ConfirmDialog>
     </ListScaffold>
   );
 }

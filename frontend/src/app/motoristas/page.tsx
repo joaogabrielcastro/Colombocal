@@ -7,6 +7,7 @@ import { TableListSkeleton } from '@/components/ui/skeletons';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ListScaffold } from '@/components/ui/list-scaffold';
+import { ModalSurface } from '@/components/ui/modal-surface';
 import { reportApiError } from '@/lib/report-api-error';
 
 export default function MotoristasPage() {
@@ -130,30 +131,33 @@ export default function MotoristasPage() {
         }
       />
 
-      {mostrarForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+      <ModalSurface
+        open={mostrarForm}
+        ariaLabel={editando ? 'Editar motorista' : 'Novo motorista'}
+        onClose={() => setMostrarForm(false)}
+        closeDisabled={salvando}
+      >
             <div className="px-5 py-4 border-b border-gray-200">
-              <h2 className="font-semibold">{editando ? 'Editar Motorista' : 'Novo Motorista'}</h2>
+              <h2 id="motorista-form-title" className="font-semibold">{editando ? 'Editar Motorista' : 'Novo Motorista'}</h2>
             </div>
             <form onSubmit={handleSubmit} className="p-5 space-y-3">
               {erro && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{erro}</div>}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
-                <input required value={form.nome || ''} onChange={set('nome')} className="input-field" />
+                <label htmlFor="motorista-nome" className="field-label">Nome *</label>
+                <input id="motorista-nome" required value={form.nome || ''} onChange={set('nome')} className="input-field" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                <input value={form.telefone || ''} onChange={set('telefone')} className="input-field" />
+                <label htmlFor="motorista-telefone" className="field-label">Telefone</label>
+                <input id="motorista-telefone" value={form.telefone || ''} onChange={set('telefone')} className="input-field" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Veículo</label>
-                  <input value={form.veiculo || ''} onChange={set('veiculo')} className="input-field" placeholder="ex: Caminhão" />
+                  <label htmlFor="motorista-veiculo" className="field-label">Veículo</label>
+                  <input id="motorista-veiculo" value={form.veiculo || ''} onChange={set('veiculo')} className="input-field" placeholder="ex: Caminhão" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Placa</label>
-                  <input value={form.placa || ''} onChange={set('placa')} className="input-field" placeholder="ABC-1234" />
+                  <label htmlFor="motorista-placa" className="field-label">Placa</label>
+                  <input id="motorista-placa" value={form.placa || ''} onChange={set('placa')} className="input-field" placeholder="ABC-1234" />
                 </div>
               </div>
               <div className="flex gap-3 pt-1">
@@ -161,9 +165,7 @@ export default function MotoristasPage() {
                 <button type="button" onClick={() => setMostrarForm(false)} className="btn-secondary">Cancelar</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ModalSurface>
 
       <ConfirmDialog
         open={!!motoristaToDelete}

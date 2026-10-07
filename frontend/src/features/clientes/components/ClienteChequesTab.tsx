@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { VendaOrdem } from "@/components/VendaOrdem";
 import type { Cheque } from "@/features/clientes/types";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Props = {
   clienteId: string;
@@ -43,16 +44,16 @@ export function ClienteChequesTab({ clienteId, cheques, filtroChqIni, filtroChqF
           <input id="cli-chq-busca" value={buscaChq} onChange={(e) => setBuscaChq(e.target.value)} className="input-field text-sm" placeholder="Filtra na lista carregada..." />
         </div>
       </div>
-      {cheques.length === 0 ? <p className="p-6 text-center text-gray-400">Nenhum cheque registrado</p>
-        : filtrados.length === 0 ? <p className="p-6 text-center text-gray-400">Nenhum cheque com os filtros atuais</p>
-          : <table className="w-full"><thead><tr className="border-b border-gray-200">
+      {cheques.length === 0 ? <div className="p-4"><EmptyState compact title="Nenhum cheque registrado" /></div>
+        : filtrados.length === 0 ? <div className="p-4"><EmptyState compact title="Nenhum cheque com os filtros atuais" description="Ajuste o período ou a busca." /></div>
+          : <div className="overflow-x-auto"><table className="w-full"><thead><tr className="border-b border-gray-200">
             <th className="table-header w-16">Ordem</th><th className="table-header">Banco / Nº</th><th className="table-header w-28 bg-slate-50">Ordem</th><th className="table-header">Valor</th><th className="table-header">Data</th>
           </tr></thead><tbody>{filtrados.map((c) => <tr key={c.id} className="table-row">
             <td className="table-cell font-mono font-bold text-gray-600">#{c.numeroOrdem}</td>
             <td className="table-cell"><p className="font-medium">{c.banco || "-"}</p>{c.numero && <p className="text-xs text-gray-400">Nº {c.numero}</p>}</td>
             <td className="table-cell">{c.venda ? <VendaOrdem venda={c.venda} size="sm" prefix="Venda" /> : <span className="text-gray-400 text-sm">-</span>}</td>
             <td className="table-cell font-semibold">{formatMoney(c.valor)}</td><td className="table-cell">{formatDate(c.dataRecebimento)}</td>
-          </tr>)}</tbody></table>}
+          </tr>)}</tbody></table></div>}
     </div>
   );
 }

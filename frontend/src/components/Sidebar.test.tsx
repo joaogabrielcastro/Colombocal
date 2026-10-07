@@ -44,12 +44,18 @@ describe("Sidebar mobile drawer", () => {
 
     const mobile = await screen.findByTestId("sidebar-mobile");
     expect(mobile.className).toContain("-translate-x-full");
+    expect(mobile).toHaveAttribute("aria-hidden", "true");
+    expect(mobile).toHaveAttribute("inert");
     expect(screen.queryByTestId("mobile-nav-overlay")).toBeNull();
 
     rerender(<Sidebar mobileOpen onCloseMobile={onClose} />);
     expect(await screen.findByTestId("mobile-nav-overlay")).toBeInTheDocument();
     expect((await screen.findByTestId("sidebar-mobile")).className).toContain(
       "translate-x-0",
+    );
+    expect(await screen.findByRole("dialog", { name: "Menu principal" })).toHaveAttribute(
+      "aria-modal",
+      "true",
     );
   });
 

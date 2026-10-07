@@ -345,10 +345,11 @@ export default function ComissoesPage() {
       <div className="card p-4 sm:p-5 mb-6 print:hidden">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-4">
           <div className="xl:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="comissoes-inicio" className="field-label">
               Data Início
             </label>
             <input
+              id="comissoes-inicio"
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
@@ -356,10 +357,11 @@ export default function ComissoesPage() {
             />
           </div>
           <div className="xl:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="comissoes-fim" className="field-label">
               Data Fim
             </label>
             <input
+              id="comissoes-fim"
               type="date"
               value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}

@@ -20,7 +20,7 @@ export function ClienteComissoesTab({ comissoesData, comissoesEdit, setComissoes
         </p>
         <p className="text-gray-400 text-xs mt-1">Deixe em branco para usar a comissão padrão do cliente/representante</p>
       </div>
-      <table className="w-full">
+      <div className="overflow-x-auto"><table className="w-full">
         <thead><tr className="border-b border-gray-200">
           <th className="table-header">Produto</th><th className="table-header">Unidade</th><th className="table-header">Padrão (%)</th><th className="table-header">Comissão específica (%)</th><th className="table-header">Aplicada (%)</th>
         </tr></thead>
@@ -30,11 +30,11 @@ export function ClienteComissoesTab({ comissoesData, comissoesEdit, setComissoes
           return <tr key={p.id} className="table-row">
             <td className="table-cell font-medium">{p.nome}</td><td className="table-cell text-gray-500">{p.unidade}</td>
             <td className="table-cell">{comissoesData.comissaoPadrao.toFixed(2)}%</td>
-            <td className="table-cell"><input type="number" step="0.01" min="0" max="100" placeholder={comissoesData.comissaoPadrao.toFixed(2)} value={editVal} onChange={(e) => setComissoesEdit((prev) => ({ ...prev, [p.id]: e.target.value }))} className="input-field w-28" /></td>
+            <td className="table-cell"><input aria-label={`Comissão específica de ${p.nome}`} type="number" step="0.01" min="0" max="100" placeholder={comissoesData.comissaoPadrao.toFixed(2)} value={editVal} onChange={(e) => setComissoesEdit((prev) => ({ ...prev, [p.id]: e.target.value }))} className="input-field w-28" /></td>
             <td className="table-cell text-gray-600">{Number.isFinite(aplicada) ? `${aplicada.toFixed(2)}%` : "—"}</td>
           </tr>;
         })}</tbody>
-      </table>
+      </table></div>
       <div className="px-5 py-4 border-t border-gray-100">
         <button type="button" onClick={onSalvar} disabled={salvando} className="btn-primary">{salvando ? "Salvando..." : "Salvar Comissões"}</button>
       </div>

@@ -129,8 +129,9 @@ export default function SetupPage() {
         {status && status.setupEnabled && status.databaseReady && status.needsBootstrap ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Chave de setup</label>
+              <label htmlFor="setup-chave" className="field-label">Chave de setup</label>
               <input
+                id="setup-chave"
                 type="password"
                 autoComplete="off"
                 className="input-field w-full"
@@ -142,8 +143,9 @@ export default function SetupPage() {
               <p className="text-xs text-gray-500 mt-1">Definida só no servidor (Coolify), não no código.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome da organização</label>
+              <label htmlFor="setup-organizacao" className="field-label">Nome da organização</label>
               <input
+                id="setup-organizacao"
                 type="text"
                 className="input-field w-full"
                 value={tenantName}
@@ -152,12 +154,13 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Seu nome (opcional)</label>
-              <input type="text" className="input-field w-full" value={name} onChange={(e) => setName(e.target.value)} />
+              <label htmlFor="setup-nome" className="field-label">Seu nome (opcional)</label>
+              <input id="setup-nome" type="text" className="input-field w-full" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">E-mail do administrador</label>
+              <label htmlFor="setup-email" className="field-label">E-mail do administrador</label>
               <input
+                id="setup-email"
                 type="email"
                 autoComplete="email"
                 className="input-field w-full"
@@ -167,8 +170,9 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+              <label htmlFor="setup-senha" className="field-label">Senha</label>
               <input
+                id="setup-senha"
                 type="password"
                 autoComplete="new-password"
                 className="input-field w-full"

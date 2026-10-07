@@ -14,6 +14,7 @@ import api, { apiFetchWithMeta } from "@/lib/api";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { Pagination } from "@/components/ui/pagination";
 import { toast } from "sonner";
 import { reportApiError } from "@/lib/report-api-error";
 import { useSyncListFiltersToUrl } from "@/hooks/useSyncListFiltersToUrl";
@@ -209,12 +210,13 @@ export function ContasPorClientePanel() {
             className="flex flex-col sm:flex-row gap-3 flex-1 min-w-0"
           >
             <div className="flex-1 min-w-0 max-w-xl">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="contas-cliente-busca" className="field-label">
                 Buscar cliente
               </label>
               <div className="relative">
                 <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
+                  id="contas-cliente-busca"
                   type="search"
                   className="input-field pl-9"
                   placeholder="Razão social, fantasia ou documento…"
@@ -224,10 +226,11 @@ export function ContasPorClientePanel() {
               </div>
             </div>
             <div className="w-full sm:w-56 shrink-0">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="contas-cliente-representante" className="field-label">
                 Representante
               </label>
               <select
+                id="contas-cliente-representante"
                 value={vendedorId}
                 onChange={(e) => {
                   setVendedorId(e.target.value);
@@ -244,10 +247,11 @@ export function ContasPorClientePanel() {
               </select>
             </div>
             <div className="w-full sm:w-56 shrink-0">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="contas-cliente-ordenar" className="field-label">
                 Ordenar ranking
               </label>
               <select
+                id="contas-cliente-ordenar"
                 value={ordenar}
                 onChange={(e) => {
                   setOrdenar(e.target.value as OrdenarClientes);
@@ -426,31 +430,15 @@ export function ContasPorClientePanel() {
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600 print:hidden">
-            <p>
-              {totalAba} cliente(s){filtrado ? " no filtro" : ""} · {pageSize} por página
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Anterior
-              </button>
-              <span>
-                Página {page} de {totalPages}
-              </span>
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={page >= totalPages || loading}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Próxima
-              </button>
-            </div>
+          <div className={`print:hidden ${loading ? "pointer-events-none opacity-60" : ""}`}>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalAba}
+              pageSize={pageSize}
+              noun="cliente"
+              onPageChange={setPage}
+            />
           </div>
         </>
       ) : null}

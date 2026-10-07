@@ -59,7 +59,7 @@ describe("RelatorioVendasDetalhes", () => {
     );
     expect(screen.getByText("Cli 21")).toBeInTheDocument();
     expect(screen.queryByText("Cli 1")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Próxima" }));
+    await user.click(screen.getByRole("button", { name: "Próxima página" }));
     expect(screen.getByText("Cli 1")).toBeInTheDocument();
   });
 });

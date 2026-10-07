@@ -76,7 +76,7 @@ export default function FiscalMdfeDetailPage() {
     }
   };
 
-  if (!mdfeEnabled) return <p className="p-6 text-sm">Módulo MDF-e desabilitado.</p>;
+  if (!mdfeEnabled) return <div className="page-container max-w-xl"><EmptyState title="Módulo MDF-e desabilitado" description="Ative o módulo nas configurações para consultar este documento." /></div>;
   if (loadError) return <div className="p-6 max-w-lg"><EmptyState title="Não foi possível carregar o MDF-e" description="Confira a conexão e tente novamente." action={<button className="btn-primary" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button>} /></div>;
   if (!doc) return <DetailPageSkeleton />;
 
@@ -85,7 +85,7 @@ export default function FiscalMdfeDetailPage() {
       <Link href="/fiscal/mdfe" className="text-sm text-blue-700 hover:underline">
         ← Voltar
       </Link>
-      <h1 className="text-xl font-semibold">MDF-e {doc.numero ?? doc.id}</h1>
+      <h1 className="text-2xl font-bold text-gray-900">MDF-e {doc.numero ?? doc.id}</h1>
       <HomologacaoBanner ambiente={doc.ambiente || "homologacao"} />
       <div className="card p-4 space-y-2 text-sm">
         <p>

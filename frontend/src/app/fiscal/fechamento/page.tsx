@@ -157,36 +157,36 @@ export default function FiscalFechamentoPage() {
       <HomologacaoBanner ambiente={fechamento?.ambiente} />
 
       <div className="card mb-4 p-4 flex flex-wrap items-end gap-3 lg:gap-4">
-        <label className="text-sm">
-          <span className="text-slate-600">Mês</span>
+        <label className="block">
+          <span className="field-label">Mês</span>
           <input
             type="month"
-            className="mt-1 block rounded-md border border-slate-300 px-3 py-2"
+            className="input-field"
             value={anoMes}
             onChange={(e) => onMesChange(e.target.value)}
           />
         </label>
-        <label className="text-sm">
-          <span className="text-slate-600">De</span>
+        <label className="block">
+          <span className="field-label">De</span>
           <input
             type="date"
-            className="mt-1 block rounded-md border border-slate-300 px-3 py-2"
+            className="input-field"
             value={dataInicio}
             onChange={(e) => setDataInicio(e.target.value)}
           />
         </label>
-        <label className="text-sm">
-          <span className="text-slate-600">Até</span>
+        <label className="block">
+          <span className="field-label">Até</span>
           <input
             type="date"
-            className="mt-1 block rounded-md border border-slate-300 px-3 py-2"
+            className="input-field"
             value={dataFim}
             onChange={(e) => setDataFim(e.target.value)}
           />
         </label>
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md bg-slate-900 text-white px-4 py-2 text-sm font-medium"
+          className="btn-primary"
           onClick={() => void consultar(dataInicio, dataFim)}
         >
           <MagnifyingGlassIcon className="w-4 h-4" />
@@ -195,7 +195,7 @@ export default function FiscalFechamentoPage() {
         <button
           type="button"
           disabled={exportando || !fechamento}
-          className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm disabled:opacity-40"
+          className="btn-secondary"
           onClick={() => void exportarExcel()}
         >
           <ArrowDownTrayIcon className="w-4 h-4" />

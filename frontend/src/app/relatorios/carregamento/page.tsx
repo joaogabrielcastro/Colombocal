@@ -12,6 +12,7 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { downloadCsvPtBr } from "@/lib/csv";
 import FreteFeatureGuard from "@/components/FreteFeatureGuard";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type OcLinha = {
   id: number;
@@ -108,8 +109,9 @@ export default function RelatorioCarregamentoPage() {
       <div className="card p-4 mb-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data início</label>
+            <label htmlFor="rel-carregamento-inicio" className="field-label">Data início</label>
             <input
+              id="rel-carregamento-inicio"
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
@@ -117,8 +119,9 @@ export default function RelatorioCarregamentoPage() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data fim</label>
+            <label htmlFor="rel-carregamento-fim" className="field-label">Data fim</label>
             <input
+              id="rel-carregamento-fim"
               type="date"
               value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}
@@ -126,8 +129,9 @@ export default function RelatorioCarregamentoPage() {
             />
           </div>
           <div className="lg:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+            <label htmlFor="rel-carregamento-cliente" className="field-label">Cliente</label>
             <input
+              id="rel-carregamento-cliente"
               value={cliente}
               onChange={(e) => setCliente(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void carregar()}
@@ -238,7 +242,9 @@ export default function RelatorioCarregamentoPage() {
               <h2 className="font-semibold text-gray-900">Detalhes</h2>
             </div>
             {data.ordens.length === 0 ? (
-              <p className="p-6 text-sm text-gray-500">Nenhuma OC no período.</p>
+              <div className="p-4">
+                <EmptyState compact title="Nenhuma OC no período" description="Ajuste o período ou o cliente informado." />
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

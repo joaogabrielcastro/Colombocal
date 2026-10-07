@@ -12,6 +12,7 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { produtoEnsacado } from "@/lib/frete";
+import { ModalSurface } from "@/components/ui/modal-surface";
 
 function ProdutosPageContent() {
   const searchParams = useSearchParams();
@@ -304,9 +305,13 @@ function ProdutosPageContent() {
         )}
       />
 
-      {mostrarForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <ModalSurface
+        open={mostrarForm}
+        ariaLabel={editando ? "Editar produto" : "Novo produto"}
+        onClose={() => setMostrarForm(false)}
+        closeDisabled={salvando}
+        panelClassName="max-w-lg max-h-[90vh] overflow-y-auto"
+      >
             <div className="px-5 py-4 border-b border-gray-200">
               <h2 className="font-semibold text-gray-900">
                 {editando ? "Editar Produto" : "Novo Produto"}
@@ -320,10 +325,11 @@ function ProdutosPageContent() {
               )}
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="produto-nome" className="field-label">
                     Nome *
                   </label>
                   <input
+                    id="produto-nome"
                     required
                     value={form.nome || ""}
                     onChange={set("nome")}
@@ -331,10 +337,11 @@ function ProdutosPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="produto-unidade" className="field-label">
                     Unidade
                   </label>
                   <select
+                    id="produto-unidade"
                     value={form.unidade || "ton"}
                     onChange={set("unidade")}
                     className="input-field"
@@ -355,10 +362,11 @@ function ProdutosPageContent() {
                     )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="produto-peso" className="field-label">
                     Peso por unidade (kg)
                   </label>
                   <input
+                    id="produto-peso"
                     type="number"
                     step="0.001"
                     min="0"
@@ -373,10 +381,11 @@ function ProdutosPageContent() {
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="produto-preco" className="field-label">
                     Preço Padrão (R$) *
                   </label>
                   <input
+                    id="produto-preco"
                     required
                     type="number"
                     step="0.01"
@@ -389,10 +398,11 @@ function ProdutosPageContent() {
                 {nfeEnabled ? (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="produto-ncm" className="field-label">
                         NCM
                       </label>
                       <input
+                        id="produto-ncm"
                         value={form.ncm || ""}
                         onChange={set("ncm")}
                         className="input-field"
@@ -405,10 +415,11 @@ function ProdutosPageContent() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="produto-cfop-dentro" className="field-label">
                           CFOP dentro do estado
                         </label>
                         <input
+                          id="produto-cfop-dentro"
                           value={form.cfopPadraoDentro || ""}
                           onChange={set("cfopPadraoDentro")}
                           className="input-field"
@@ -417,10 +428,11 @@ function ProdutosPageContent() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="produto-cfop-fora" className="field-label">
                           CFOP fora do estado
                         </label>
                         <input
+                          id="produto-cfop-fora"
                           value={form.cfopPadraoFora || ""}
                           onChange={set("cfopPadraoFora")}
                           className="input-field"
@@ -431,10 +443,11 @@ function ProdutosPageContent() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="produto-csosn" className="field-label">
                           CSOSN (Simples)
                         </label>
                         <input
+                          id="produto-csosn"
                           value={form.csosn || ""}
                           onChange={set("csosn")}
                           className="input-field"
@@ -443,10 +456,11 @@ function ProdutosPageContent() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="produto-cst" className="field-label">
                           CST (regime normal)
                         </label>
                         <input
+                          id="produto-cst"
                           value={form.cst || ""}
                           onChange={set("cst")}
                           className="input-field"
@@ -471,9 +485,7 @@ function ProdutosPageContent() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ModalSurface>
 
       <ConfirmDialog
         open={!!produtoToDelete}

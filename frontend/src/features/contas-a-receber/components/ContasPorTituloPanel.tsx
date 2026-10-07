@@ -9,6 +9,7 @@ import api, { apiFetchWithMeta } from "@/lib/api";
 import { TableListSkeleton } from "@/components/ui/skeletons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { Pagination } from "@/components/ui/pagination";
 import SearchableSelect from "@/components/SearchableSelect";
 import { ArrowDownTrayIcon, PrinterIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
@@ -389,10 +390,11 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             />
           </div>
           <div className="xl:col-span-3">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="titulos-representante" className="field-label">
               Representante
             </label>
             <select
+              id="titulos-representante"
               value={vendedorId}
               onChange={(e) => {
                 setVendedorId(e.target.value);
@@ -409,10 +411,11 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             </select>
           </div>
           <div className="xl:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="titulos-venda" className="field-label">
               Nº venda (ordem)
             </label>
             <input
+              id="titulos-venda"
               type="text"
               inputMode="numeric"
               value={vendaIdFiltro}
@@ -422,10 +425,11 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             />
           </div>
           <div className="xl:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="titulos-status" className="field-label">
               Status
             </label>
             <select
+              id="titulos-status"
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -440,10 +444,11 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             </select>
           </div>
           <div className="xl:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="titulos-vencimento-inicio" className="field-label">
               Venc. início
             </label>
             <input
+              id="titulos-vencimento-inicio"
               type="date"
               value={dataVencInicio}
               onChange={(e) => setDataVencInicio(e.target.value)}
@@ -451,10 +456,11 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
             />
           </div>
           <div className="xl:col-span-3">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="titulos-vencimento-fim" className="field-label">
               Venc. fim
             </label>
             <input
+              id="titulos-vencimento-fim"
               type="date"
               value={dataVencFim}
               onChange={(e) => setDataVencFim(e.target.value)}
@@ -660,31 +666,15 @@ export function ContasPorTituloPanel({ initialClienteId = "" }: Props) {
           </div>
         )}
       </div>
-      <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600 print:hidden">
-        <p>
-          Total de registros (filtro): {total} · {pageSize} por página
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={page <= 1 || loading}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Anterior
-          </button>
-          <span>
-            Página {page} de {totalPages}
-          </span>
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={page >= totalPages || loading}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >
-            Próxima
-          </button>
-        </div>
+      <div className={`print:hidden ${loading ? "pointer-events-none opacity-60" : ""}`}>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          noun="título"
+          onPageChange={setPage}
+        />
       </div>
         </>
       ) : null}

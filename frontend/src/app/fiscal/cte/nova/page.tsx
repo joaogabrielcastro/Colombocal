@@ -9,6 +9,7 @@ import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import { toast } from "sonner";
 import { EmitenteFiscalSelect } from "@/features/fiscal/components/EmitenteFiscalSelect";
 import { buildCteEmissionPayload } from "@/features/fiscal/services/transport-payload";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function NovaCtePage() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function NovaCtePage() {
   });
 
   if (!cteEnabled) {
-    return <p className="p-6 text-sm">Módulo CT-e desabilitado.</p>;
+    return <div className="page-container max-w-xl"><EmptyState title="Módulo CT-e desabilitado" description="Ative o módulo nas configurações antes de emitir um CT-e." /></div>;
   }
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -52,10 +53,11 @@ export default function NovaCtePage() {
   };
 
   const field = (key: keyof typeof form, label: string, opts?: { required?: boolean }) => (
-    <label className="block text-sm">
-      {label}
+    <label htmlFor={`cte-${key}`} className="block">
+      <span className="field-label">{label}</span>
       <input
-        className="input mt-1 w-full"
+        id={`cte-${key}`}
+        className="input-field"
         required={opts?.required}
         value={form[key]}
         onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
@@ -64,11 +66,11 @@ export default function NovaCtePage() {
   );
 
   return (
-    <div className="p-6 max-w-2xl space-y-4">
+    <div className="page-container max-w-2xl space-y-4">
       <Link href="/fiscal/cte" className="text-sm text-blue-700 hover:underline">
         ← Voltar
       </Link>
-      <h1 className="text-xl font-semibold">Emitir CT-e</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-slate-950">Emitir CT-e</h1>
       <form className="card p-4 space-y-3" onSubmit={(e) => void onSubmit(e)}>
         <EmitenteFiscalSelect
           recurso="cte"

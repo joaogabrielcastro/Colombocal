@@ -346,8 +346,9 @@ function FinanceiroPageContent() {
           <FilterBar className="p-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+                <label htmlFor="financeiro-cliente" className="field-label">Cliente</label>
                 <input
+                  id="financeiro-cliente"
                   type="text"
                   value={clienteInput}
                   onChange={(e) => setClienteInput(e.target.value)}
@@ -359,8 +360,9 @@ function FinanceiroPageContent() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Ordem / venda</label>
+                <label htmlFor="financeiro-ordem" className="field-label">Ordem / venda</label>
                 <input
+                  id="financeiro-ordem"
                   type="text"
                   inputMode="numeric"
                   value={ordemInput}
@@ -373,8 +375,9 @@ function FinanceiroPageContent() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Data início</label>
+                <label htmlFor="financeiro-data-inicio" className="field-label">Data início</label>
                 <input
+                  id="financeiro-data-inicio"
                   type="date"
                   value={dataInicio}
                   onChange={(e) => {
@@ -385,8 +388,9 @@ function FinanceiroPageContent() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Data fim</label>
+                <label htmlFor="financeiro-data-fim" className="field-label">Data fim</label>
                 <input
+                  id="financeiro-data-fim"
                   type="date"
                   value={dataFim}
                   onChange={(e) => {
@@ -399,8 +403,9 @@ function FinanceiroPageContent() {
               {maisFiltrosAbertos ? (
                 <>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+                    <label htmlFor="financeiro-tipo" className="field-label">Tipo</label>
                     <select
+                      id="financeiro-tipo"
                       value={tipoFiltro}
                       onChange={(e) => {
                         setTipoFiltro(e.target.value);
@@ -415,10 +420,11 @@ function FinanceiroPageContent() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label htmlFor="financeiro-emitente" className="field-label">
                       Nome do emitente
                     </label>
                     <input
+                      id="financeiro-emitente"
                       type="text"
                       value={emitenteInput}
                       onChange={(e) => setEmitenteInput(e.target.value)}
@@ -430,8 +436,9 @@ function FinanceiroPageContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Banco</label>
+                    <label htmlFor="financeiro-banco" className="field-label">Banco</label>
                     <input
+                      id="financeiro-banco"
                       type="text"
                       value={bancoInput}
                       onChange={(e) => setBancoInput(e.target.value)}
@@ -443,10 +450,11 @@ function FinanceiroPageContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label htmlFor="financeiro-cheque" className="field-label">
                       Número do cheque
                     </label>
                     <input
+                      id="financeiro-cheque"
                       type="text"
                       value={numeroInput}
                       onChange={(e) => setNumeroInput(e.target.value)}

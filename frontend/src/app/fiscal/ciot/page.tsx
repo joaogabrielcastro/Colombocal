@@ -8,6 +8,7 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanner";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type CiotRow = {
   id: number;
@@ -63,13 +64,13 @@ export default function FiscalCiotListPage() {
 
   if (featLoading) return <TableListSkeleton />;
   if (!ciotEnabled) {
-    return <p className="p-6 text-sm text-gray-600">Módulo CIOT desabilitado.</p>;
+    return <div className="page-container max-w-xl"><EmptyState title="Módulo CIOT desabilitado" description="Ative o módulo nas configurações da organização para registrar e consultar CIOT." /></div>;
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="page-container space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-xl font-semibold">CIOT</h1>
+        <div><h1 className="text-2xl font-bold text-gray-900">CIOT</h1><p className="mt-1 text-sm text-gray-500">Registro e acompanhamento das operações de transporte.</p></div>
         <Link href="/fiscal/ciot/nova" className="btn-primary text-sm">
           Registrar CIOT
         </Link>
@@ -81,10 +82,10 @@ export default function FiscalCiotListPage() {
           NAO_IMPLEMENTADO. Em testes/demo usa-se provider mock (sem validade).
         </div>
       ) : null}
-      <div className="flex gap-2">
-        <input type="date" className="input" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-        <input type="date" className="input" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-        <button type="button" className="btn-secondary text-sm" onClick={() => void carregar()}>
+      <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+        <label className="field-label" htmlFor="ciot-data-inicio">Data inicial<input id="ciot-data-inicio" type="date" className="input-field mt-1" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></label>
+        <label className="field-label" htmlFor="ciot-data-fim">Data final<input id="ciot-data-fim" type="date" className="input-field mt-1" value={dataFim} onChange={(e) => setDataFim(e.target.value)} /></label>
+        <button type="button" className="btn-secondary text-sm" onClick={() => void carregar()} disabled={loading}>
           Filtrar
         </button>
       </div>
@@ -132,9 +133,7 @@ export default function FiscalCiotListPage() {
               ))}
               {!items.length ? (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-gray-500">
-                    Nenhum CIOT no período.
-                  </td>
+                  <td colSpan={9}><EmptyState compact title="Nenhum CIOT no período" description="Ajuste os filtros ou registre um novo CIOT." /></td>
                 </tr>
               ) : null}
             </tbody>

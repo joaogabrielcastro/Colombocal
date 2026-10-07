@@ -589,10 +589,11 @@ export default function VendaDetailPage() {
               className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 pb-4 border-b border-gray-100"
             >
               <div>
-                <label className="block text-xs text-gray-500 mb-1">
+                <label htmlFor="venda-detalhe-frete-valor" className="field-label">
                   Valor do frete (R$)
                 </label>
                 <input
+                  id="venda-detalhe-frete-valor"
                   type="text"
                   inputMode="decimal"
                   value={freteForm.valor}
@@ -603,10 +604,11 @@ export default function VendaDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">
+                <label htmlFor="venda-detalhe-frete-data" className="field-label">
                   Data do pagamento
                 </label>
                 <input
+                  id="venda-detalhe-frete-data"
                   type="date"
                   value={freteForm.data}
                   onChange={(e) =>

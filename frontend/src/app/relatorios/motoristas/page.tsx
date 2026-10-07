@@ -97,8 +97,9 @@ export default function RelatorioMotoristasPage() {
       <div className="card p-4 mb-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data início</label>
+            <label htmlFor="rel-motoristas-inicio" className="field-label">Data início</label>
             <input
+              id="rel-motoristas-inicio"
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
@@ -106,8 +107,9 @@ export default function RelatorioMotoristasPage() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Data fim</label>
+            <label htmlFor="rel-motoristas-fim" className="field-label">Data fim</label>
             <input
+              id="rel-motoristas-fim"
               type="date"
               value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}

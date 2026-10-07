@@ -46,7 +46,7 @@ export default function FiscalCiotDetailPage() {
       .catch((err) => { setLoadError(true); reportApiError(err, { title: "CIOT não encontrado." }); });
   }, [id, ciotEnabled, retry]);
 
-  if (!ciotEnabled) return <p className="p-6 text-sm">Módulo CIOT desabilitado.</p>;
+  if (!ciotEnabled) return <div className="page-container max-w-xl"><EmptyState title="Módulo CIOT desabilitado" description="Ative o módulo nas configurações para consultar este documento." /></div>;
   if (loadError) return <div className="p-6 max-w-lg"><EmptyState title="Não foi possível carregar o CIOT" description="Confira a conexão e tente novamente." action={<button className="btn-primary" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button>} /></div>;
   if (!doc) return <DetailPageSkeleton />;
 
@@ -55,7 +55,7 @@ export default function FiscalCiotDetailPage() {
       <Link href="/fiscal/ciot" className="text-sm text-blue-700 hover:underline">
         ← Voltar
       </Link>
-      <h1 className="text-xl font-semibold">CIOT {doc.codigoCiot || doc.id}</h1>
+      <h1 className="text-2xl font-bold text-gray-900">CIOT {doc.codigoCiot || doc.id}</h1>
       <div className="card p-4 space-y-2 text-sm">
         <p>
           <strong>Status:</strong> <span className="capitalize">{doc.status}</span>

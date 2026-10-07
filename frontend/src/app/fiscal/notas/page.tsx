@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { NfeStatusBadge } from "@/features/nfe/status";
 import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanner";
 import { FiscalKpiCards } from "@/features/fiscal/components/FiscalKpiCards";
+import { Pagination } from "@/components/ui/pagination";
 import { qsFiscal, formatChave } from "@/features/fiscal/services/query";
 import type { FiscalFiltros, FiscalNotaLista, FiscalResumo } from "@/features/fiscal/types";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
@@ -124,28 +125,28 @@ export default function FiscalNotasPage() {
 
       <div className="card mb-4 p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
-          <label className="text-sm">
-            <span className="text-slate-600">Início</span>
+          <label className="block">
+            <span className="field-label">Início</span>
             <input
               type="date"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.dataInicio}
               onChange={(e) => setFiltros((f) => ({ ...f, dataInicio: e.target.value }))}
             />
           </label>
-          <label className="text-sm">
-            <span className="text-slate-600">Fim</span>
+          <label className="block">
+            <span className="field-label">Fim</span>
             <input
               type="date"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.dataFim}
               onChange={(e) => setFiltros((f) => ({ ...f, dataFim: e.target.value }))}
             />
           </label>
-          <label className="text-sm">
-            <span className="text-slate-600">Status</span>
+          <label className="block">
+            <span className="field-label">Status</span>
             <select
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.status || ""}
               onChange={(e) => setFiltros((f) => ({ ...f, status: e.target.value }))}
             >
@@ -158,42 +159,42 @@ export default function FiscalNotasPage() {
               <option value="rascunho">Rascunho</option>
             </select>
           </label>
-          <label className="text-sm">
-            <span className="text-slate-600">Número</span>
+          <label className="block">
+            <span className="field-label">Número</span>
             <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.numero || ""}
               onChange={(e) => setFiltros((f) => ({ ...f, numero: e.target.value }))}
             />
           </label>
-          <label className="text-sm">
-            <span className="text-slate-600">Série</span>
+          <label className="block">
+            <span className="field-label">Série</span>
             <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.serie || ""}
               onChange={(e) => setFiltros((f) => ({ ...f, serie: e.target.value }))}
             />
           </label>
-          <label className="text-sm">
-            <span className="text-slate-600">CNPJ/CPF</span>
+          <label className="block">
+            <span className="field-label">CNPJ/CPF</span>
             <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.documento || ""}
               onChange={(e) => setFiltros((f) => ({ ...f, documento: e.target.value }))}
             />
           </label>
-          <label className="text-sm">
-            <span className="text-slate-600">Venda (#)</span>
+          <label className="block">
+            <span className="field-label">Venda (#)</span>
             <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.venda || ""}
               onChange={(e) => setFiltros((f) => ({ ...f, venda: e.target.value }))}
             />
           </label>
-          <label className="text-sm">
-            <span className="text-slate-600">Chave NF-e</span>
+          <label className="block">
+            <span className="field-label">Chave NF-e</span>
             <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              className="input-field"
               value={filtros.chave || ""}
               onChange={(e) => setFiltros((f) => ({ ...f, chave: e.target.value }))}
             />
@@ -201,7 +202,7 @@ export default function FiscalNotasPage() {
         </div>
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800"
+          className="btn-primary"
           onClick={() => {
             if (!filtros.dataInicio || !filtros.dataFim) {
               toast.error("Informe o período.");
@@ -274,31 +275,14 @@ export default function FiscalNotasPage() {
         </div>
       )}
 
-      {total > PAGE_SIZE ? (
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <span className="text-slate-600">
-            {total} registro(s) · página {page}
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              className="rounded border px-3 py-1 disabled:opacity-40"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              disabled={page * PAGE_SIZE >= total}
-              className="rounded border px-3 py-1 disabled:opacity-40"
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <Pagination
+        page={page}
+        totalPages={Math.max(1, Math.ceil(total / PAGE_SIZE))}
+        total={total}
+        pageSize={PAGE_SIZE}
+        noun="nota"
+        onPageChange={setPage}
+      />
     </div>
   );
 }

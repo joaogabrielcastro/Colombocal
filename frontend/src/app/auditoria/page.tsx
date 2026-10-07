@@ -9,6 +9,7 @@ import { TableListSkeleton } from "@/components/ui/skeletons";
 import { reportApiError } from "@/lib/report-api-error";
 import { localDateInputValue } from "@/lib/utils";
 import { labelTipoAuditoria } from "@/lib/auditoria-labels";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type AuditoriaEvento = {
   id: number;
@@ -80,8 +81,9 @@ export default function AuditoriaPage() {
         <div className="space-y-4">
           <div className="card p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">De</label>
+              <label htmlFor="auditoria-inicio" className="field-label">De</label>
               <input
+                id="auditoria-inicio"
                 type="date"
                 className="input-field w-full"
                 value={dataInicio}
@@ -89,8 +91,9 @@ export default function AuditoriaPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Até</label>
+              <label htmlFor="auditoria-fim" className="field-label">Até</label>
               <input
+                id="auditoria-fim"
                 type="date"
                 className="input-field w-full"
                 value={dataFim}
@@ -98,8 +101,9 @@ export default function AuditoriaPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
+              <label htmlFor="auditoria-tipo" className="field-label">Tipo</label>
               <select
+                id="auditoria-tipo"
                 className="input-field w-full"
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value)}
@@ -124,9 +128,12 @@ export default function AuditoriaPage() {
                 <TableListSkeleton rows={8} cols={5} />
               </div>
             ) : eventos.length === 0 ? (
-              <p className="p-6 text-sm text-gray-500 text-center">
-                Nenhum evento no período.
-              </p>
+              <div className="p-4">
+                <EmptyState
+                  title="Nenhum evento no período"
+                  description="Ajuste as datas ou o tipo de ação para ampliar a consulta."
+                />
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>

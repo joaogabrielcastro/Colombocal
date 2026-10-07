@@ -2,6 +2,7 @@ import Link from "next/link";
 import { VendaOrdem } from "@/components/VendaOrdem";
 import { formatDate, formatMoney } from "@/lib/utils";
 import type { ContaData } from "@/features/clientes/types";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   classStatusTituloUi,
   labelStatusTituloUi,
@@ -33,7 +34,7 @@ export function ClienteContaTab({ conta, clienteId }: Props) {
         </div>
         <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
           {conta.vendas.length === 0 ? (
-            <p className="p-4 text-gray-400 text-sm text-center">Nenhuma venda</p>
+            <div className="p-3"><EmptyState compact title="Nenhuma venda" /></div>
           ) : (
             conta.vendas.map((v) => {
               const total = parseFloat(String(v.valorTotal ?? 0));
@@ -89,7 +90,7 @@ export function ClienteContaTab({ conta, clienteId }: Props) {
         </div>
         <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
           {conta.pagamentos.length === 0 ? (
-            <p className="p-4 text-gray-400 text-sm text-center">Nenhum pagamento</p>
+            <div className="p-3"><EmptyState compact title="Nenhum pagamento" /></div>
           ) : (
             conta.pagamentos.map((p) => {
               const valorNum = parseFloat(String(p.valor ?? 0));
@@ -148,7 +149,7 @@ export function ClienteContaTab({ conta, clienteId }: Props) {
         </div>
         <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
           {!conta.titulos?.length ? (
-            <p className="p-4 text-gray-400 text-sm text-center">Nenhum título</p>
+            <div className="p-3"><EmptyState compact title="Nenhum título a receber" /></div>
           ) : (
             conta.titulos.map((t) => {
               const aberto = Math.max(0, Number(t.valorOriginal) - Number(t.valorPago));

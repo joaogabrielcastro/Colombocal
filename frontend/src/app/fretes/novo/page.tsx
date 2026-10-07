@@ -287,16 +287,18 @@ export default function NovoFretePage() {
             placeholder="Buscar motorista..."
           />
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Preço por saco</label>
+            <label htmlFor="frete-novo-preco-saco" className="field-label">Preço por saco</label>
             <input
+              id="frete-novo-preco-saco"
               className="input-field"
               value={form.precoSaco}
               onChange={(e) => setForm((s) => ({ ...s, precoSaco: e.target.value }))}
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Preço por tonelada</label>
+            <label htmlFor="frete-novo-preco-tonelada" className="field-label">Preço por tonelada</label>
             <input
+              id="frete-novo-preco-tonelada"
               className="input-field"
               value={form.precoTonelada}
               onChange={(e) => setForm((s) => ({ ...s, precoTonelada: e.target.value }))}
@@ -334,6 +336,7 @@ export default function NovoFretePage() {
                 </div>
                 <div className="md:col-span-2">
                   <input
+                    aria-label={`Quantidade do item ${index + 1}`}
                     className="input-field"
                     placeholder="Quantidade"
                     value={item.quantidade}
@@ -348,7 +351,7 @@ export default function NovoFretePage() {
                   </div>
                 </div>
                 <div className="md:col-span-2">
-                  <button type="button" className="btn-secondary w-full" onClick={() => removerItem(index)}>
+                  <button type="button" aria-label={`Remover item ${index + 1}`} className="btn-secondary w-full" onClick={() => removerItem(index)}>
                     Remover
                   </button>
                 </div>
@@ -359,12 +362,13 @@ export default function NovoFretePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Total calculado</label>
-            <input className="input-field bg-gray-50" value={formatMoney(valorCalculado)} readOnly />
+            <label htmlFor="frete-novo-total-calculado" className="field-label">Total calculado</label>
+            <input id="frete-novo-total-calculado" className="input-field bg-gray-50" value={formatMoney(valorCalculado)} readOnly />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Total final (editável)</label>
+            <label htmlFor="frete-novo-total-final" className="field-label">Total final (editável)</label>
             <input
+              id="frete-novo-total-final"
               className="input-field"
               value={form.valorTotal}
               onChange={(e) => setForm((s) => ({ ...s, valorTotal: e.target.value }))}
@@ -372,8 +376,9 @@ export default function NovoFretePage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Data do frete</label>
+            <label htmlFor="frete-novo-data" className="field-label">Data do frete</label>
             <input
+              id="frete-novo-data"
               type="date"
               className="input-field"
               value={form.dataMovimento}
@@ -381,8 +386,9 @@ export default function NovoFretePage() {
             />
           </div>
           <div className="lg:col-span-4">
-            <label className="block text-sm text-gray-600 mb-1">Observação</label>
+            <label htmlFor="frete-novo-observacao" className="field-label">Observação</label>
             <input
+              id="frete-novo-observacao"
               className="input-field"
               value={form.observacao}
               onChange={(e) => setForm((s) => ({ ...s, observacao: e.target.value }))}
@@ -410,8 +416,9 @@ export default function NovoFretePage() {
           {fretePago ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Nº recibo (opcional)</label>
+                <label htmlFor="frete-novo-recibo" className="field-label">Nº recibo (opcional)</label>
                 <input
+                  id="frete-novo-recibo"
                   className="input-field"
                   value={form.reciboNumero}
                   onChange={(e) => setForm((s) => ({ ...s, reciboNumero: e.target.value }))}

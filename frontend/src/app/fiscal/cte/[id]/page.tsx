@@ -75,7 +75,7 @@ export default function FiscalCteDetailPage() {
   };
 
   if (!cteEnabled) {
-    return <p className="p-6 text-sm text-gray-600">Módulo CT-e desabilitado.</p>;
+    return <div className="page-container max-w-xl"><EmptyState title="Módulo CT-e desabilitado" description="Ative o módulo nas configurações para consultar este documento." /></div>;
   }
   if (loadError) return <div className="p-6 max-w-lg"><EmptyState title="Não foi possível carregar o CT-e" description="Confira a conexão e tente novamente." action={<button className="btn-primary" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button>} /></div>;
   if (!doc) return <DetailPageSkeleton />;
@@ -85,7 +85,7 @@ export default function FiscalCteDetailPage() {
       <Link href="/fiscal/cte" className="text-sm text-blue-700 hover:underline">
         ← Voltar
       </Link>
-      <h1 className="text-xl font-semibold">
+      <h1 className="text-2xl font-bold text-gray-900">
         CT-e {doc.numero ?? doc.id} · série {doc.serie ?? "—"}
       </h1>
       <HomologacaoBanner ambiente={doc.ambiente || "homologacao"} />

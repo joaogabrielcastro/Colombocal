@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   HomeIcon,
   UserGroupIcon,
@@ -117,6 +117,16 @@ export default function Sidebar({
     useTenantFeatures();
   const [reportsOpen, setReportsOpen] = useState(false);
   const [fiscalOpen, setFiscalOpen] = useState(false);
+  const mobileAsideRef = useRef<HTMLElement>(null);
+
+  // React 18 ainda não serializa o atributo HTML `inert` de forma confiável.
+  // Aplicá-lo diretamente impede que links do drawer fechado recebam foco.
+  useEffect(() => {
+    const drawer = mobileAsideRef.current;
+    if (!drawer) return;
+    if (mobileOpen) drawer.removeAttribute('inert');
+    else drawer.setAttribute('inert', '');
+  }, [mobileOpen]);
 
   useEffect(() => {
     onCloseMobile?.();
@@ -283,6 +293,8 @@ export default function Sidebar({
             <button
               type="button"
               onClick={() => setFiscalOpen(!fiscalOpen)}
+              aria-expanded={fiscalOpen}
+              aria-controls="sidebar-fiscal-navigation"
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors ${
                 pathname.startsWith('/fiscal')
                   ? 'bg-white/10 text-white'
@@ -301,7 +313,7 @@ export default function Sidebar({
               </svg>
             </button>
             {fiscalOpen && (
-              <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
+              <div id="sidebar-fiscal-navigation" className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
                 {fiscalItems.map(({ href, label }) => (
                   <Link
                     key={href}
@@ -326,6 +338,8 @@ export default function Sidebar({
             <button
               type="button"
               onClick={() => setReportsOpen(!reportsOpen)}
+              aria-expanded={reportsOpen}
+              aria-controls="sidebar-reports-navigation"
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors ${
                 pathname.startsWith('/relatorios')
                   ? 'bg-white/10 text-white'
@@ -344,7 +358,7 @@ export default function Sidebar({
               </svg>
             </button>
             {reportsOpen && (
-              <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
+              <div id="sidebar-reports-navigation" className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
                 {reports.map(({ href, label }) => (
                   <Link
                     key={href}
@@ -467,8 +481,12 @@ export default function Sidebar({
       ) : null}
 
       <aside
+        ref={mobileAsideRef}
         data-testid="sidebar-mobile"
         aria-hidden={!mobileOpen}
+        aria-label="Menu principal"
+        aria-modal={mobileOpen ? true : undefined}
+        role={mobileOpen ? "dialog" : undefined}
         className={`fixed inset-y-0 left-0 z-50 flex flex-col w-60 bg-[#1a1f2e] text-white overflow-hidden md:hidden transform transition-transform duration-200 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"
         }`}

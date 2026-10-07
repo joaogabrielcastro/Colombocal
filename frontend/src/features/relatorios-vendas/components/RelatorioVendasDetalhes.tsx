@@ -9,6 +9,7 @@ import {
   type Venda,
 } from "@/lib/utils";
 import { VendaOrdemCell } from "@/components/VendaOrdem";
+import { Pagination } from "@/components/ui/pagination";
 import type { RelatorioVendasPdfSecao } from "../services/exports";
 import { RelatorioPdfSecaoButton } from "./RelatorioPdfSecaoButton";
 import { EXPORT_MAX_ROWS } from "../hooks/useRelatorioVendasQuery";
@@ -210,31 +211,16 @@ export function RelatorioVendasDetalhes({
           </tbody>
         </table>
       </div>
-      {filtradas.length > PAGE_SIZE ? (
-        <div className="px-4 sm:px-5 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
-          <span>
-            {inicio + 1}–{Math.min(inicio + PAGE_SIZE, filtradas.length)} de {filtradas.length}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-secondary h-9"
-              disabled={paginaAtual <= 1}
-              onClick={() => setPagina((p) => Math.max(1, p - 1))}
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              className="btn-secondary h-9"
-              disabled={paginaAtual >= totalPaginas}
-              onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <div className="px-4 pb-4 sm:px-5">
+        <Pagination
+          page={paginaAtual}
+          totalPages={totalPaginas}
+          total={filtradas.length}
+          pageSize={PAGE_SIZE}
+          noun="venda"
+          onPageChange={setPagina}
+        />
+      </div>
     </div>
   );
 }

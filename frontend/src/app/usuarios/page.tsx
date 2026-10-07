@@ -15,6 +15,7 @@ import { TableListSkeleton } from '@/components/ui/skeletons';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { reportApiError } from '@/lib/report-api-error';
+import { ModalSurface } from '@/components/ui/modal-surface';
 
 type TenantUser = {
   id: number;
@@ -279,15 +280,20 @@ export default function UsuariosPage() {
         }
       />
 
-      {mostrarForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Novo usuário</h2>
+      <ModalSurface
+        open={mostrarForm}
+        ariaLabel="Novo usuário"
+        onClose={() => setMostrarForm(false)}
+        closeDisabled={salvando}
+        panelClassName="max-w-md p-6"
+      >
+            <h2 id="usuario-form-title" className="text-lg font-semibold text-gray-900 mb-4">Novo usuário</h2>
             <form onSubmit={handleSubmit} className="space-y-3">
               {erro ? <p className="text-sm text-red-600">{erro}</p> : null}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                <label htmlFor="usuario-email" className="field-label">E-mail</label>
                 <input
+                  id="usuario-email"
                   type="email"
                   required
                   autoComplete="off"
@@ -297,8 +303,9 @@ export default function UsuariosPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Senha inicial</label>
+                <label htmlFor="usuario-senha" className="field-label">Senha inicial</label>
                 <input
+                  id="usuario-senha"
                   type="password"
                   required
                   minLength={6}
@@ -310,8 +317,9 @@ export default function UsuariosPage() {
                 <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome (opcional)</label>
+                <label htmlFor="usuario-nome" className="field-label">Nome (opcional)</label>
                 <input
+                  id="usuario-nome"
                   type="text"
                   className="input-field w-full"
                   value={name}
@@ -319,8 +327,9 @@ export default function UsuariosPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Papel</label>
+                <label htmlFor="usuario-papel" className="field-label">Papel</label>
                 <select
+                  id="usuario-papel"
                   className="input-field w-full"
                   value={role}
                   onChange={(e) => setRole(e.target.value as 'admin' | 'member')}
@@ -342,22 +351,30 @@ export default function UsuariosPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ModalSurface>
 
-      {pwdUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-1">Alterar senha</h2>
+      <ModalSurface
+        open={pwdUser != null}
+        ariaLabel="Alterar senha"
+        onClose={() => {
+          setPwdUser(null);
+          setNewPassword('');
+        }}
+        closeDisabled={salvandoPwd}
+        panelClassName="max-w-md p-6"
+      >
+        {pwdUser ? (
+          <>
+            <h2 id="usuario-senha-title" className="text-lg font-semibold text-gray-900 mb-1">Alterar senha</h2>
             <p className="text-sm text-gray-600 mb-4">
               {pwdUser.name || pwdUser.email}
               {pwdUser.id === me.id ? ' (sua conta)' : ''}
             </p>
             <form onSubmit={(e) => void salvarSenha(e)} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nova senha</label>
+                <label htmlFor="usuario-nova-senha" className="field-label">Nova senha</label>
                 <input
+                  id="usuario-nova-senha"
                   type="password"
                   required
                   minLength={6}
@@ -384,13 +401,19 @@ export default function UsuariosPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+          </>
+        ) : null}
+      </ModalSurface>
 
-      {permUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
+      <ModalSurface
+        open={permUser != null}
+        ariaLabel="Abas visíveis"
+        onClose={() => setPermUser(null)}
+        closeDisabled={salvandoPerm}
+        panelClassName="max-w-lg p-6 max-h-[85vh] overflow-y-auto"
+      >
+        {permUser ? (
+          <>
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Abas visíveis</h2>
             <p className="text-sm text-gray-600 mb-4">
               {permUser.name || permUser.email} — marque o que esta pessoa pode acessar no menu.
@@ -438,9 +461,9 @@ export default function UsuariosPage() {
                 Cancelar
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        ) : null}
+      </ModalSurface>
 
       <ConfirmDialog
         open={!!userToDelete}

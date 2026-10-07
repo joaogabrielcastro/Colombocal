@@ -103,8 +103,9 @@ export default function CadastroPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {multipleTenants ? (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organização</label>
+                <label htmlFor="cadastro-organizacao" className="field-label">Organização</label>
                 <select
+                  id="cadastro-organizacao"
                   className="input-field w-full"
                   value={tenantSlug}
                   onChange={(e) => setTenantSlug(e.target.value)}
@@ -126,8 +127,9 @@ export default function CadastroPage() {
 
             {status.registrationRequiresKey ? (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Chave de convite</label>
+                <label htmlFor="cadastro-chave" className="field-label">Chave de convite</label>
                 <input
+                  id="cadastro-chave"
                   type="password"
                   autoComplete="off"
                   className="input-field w-full"
@@ -141,12 +143,13 @@ export default function CadastroPage() {
               </div>
             ) : null}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome (opcional)</label>
-              <input type="text" className="input-field w-full" value={name} onChange={(e) => setName(e.target.value)} />
+              <label htmlFor="cadastro-nome" className="field-label">Nome (opcional)</label>
+              <input id="cadastro-nome" type="text" className="input-field w-full" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+              <label htmlFor="cadastro-email" className="field-label">E-mail</label>
               <input
+                id="cadastro-email"
                 type="email"
                 autoComplete="email"
                 className="input-field w-full"
@@ -156,8 +159,9 @@ export default function CadastroPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+              <label htmlFor="cadastro-senha" className="field-label">Senha</label>
               <input
+                id="cadastro-senha"
                 type="password"
                 autoComplete="new-password"
                 className="input-field w-full"

@@ -77,8 +77,9 @@ export function RelatorioVendasFiltros(props: Props) {
     <div className="card p-4 sm:p-5 mb-6 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Data Inicial</label>
+          <label htmlFor="rel-vendas-inicio" className="field-label">Data inicial</label>
           <input
+            id="rel-vendas-inicio"
             type="date"
             value={dataInicio}
             onChange={(e) => setDataInicio(e.target.value)}
@@ -86,8 +87,9 @@ export function RelatorioVendasFiltros(props: Props) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Data Final</label>
+          <label htmlFor="rel-vendas-fim" className="field-label">Data final</label>
           <input
+            id="rel-vendas-fim"
             type="date"
             value={dataFim}
             onChange={(e) => setDataFim(e.target.value)}
@@ -95,8 +97,9 @@ export function RelatorioVendasFiltros(props: Props) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Representante</label>
+          <label htmlFor="rel-vendas-representante" className="field-label">Representante</label>
           <select
+            id="rel-vendas-representante"
             value={vendedorId}
             onChange={(e) => setVendedorId(e.target.value)}
             className="input-field w-full"
@@ -110,8 +113,9 @@ export function RelatorioVendasFiltros(props: Props) {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Busca</label>
+          <label htmlFor="rel-vendas-busca" className="field-label">Busca</label>
           <input
+            id="rel-vendas-busca"
             type="text"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
@@ -125,8 +129,9 @@ export function RelatorioVendasFiltros(props: Props) {
         {maisFiltrosAbertos ? (
           <>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Cliente</label>
+              <label htmlFor="rel-vendas-cliente" className="field-label">Cliente</label>
               <select
+                id="rel-vendas-cliente"
                 value={clienteId}
                 onChange={(e) => setClienteId(e.target.value)}
                 className="input-field w-full"
@@ -140,8 +145,9 @@ export function RelatorioVendasFiltros(props: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Produto</label>
+              <label htmlFor="rel-vendas-produto" className="field-label">Produto</label>
               <select
+                id="rel-vendas-produto"
                 value={produtoId}
                 onChange={(e) => setProdutoId(e.target.value)}
                 className="input-field w-full"
@@ -155,10 +161,11 @@ export function RelatorioVendasFiltros(props: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
+              <label htmlFor="rel-vendas-produto-busca" className="field-label">
                 Produto contém
               </label>
               <input
+                id="rel-vendas-produto-busca"
                 type="text"
                 value={produtoBusca}
                 onChange={(e) => setProdutoBusca(e.target.value)}
@@ -170,8 +177,9 @@ export function RelatorioVendasFiltros(props: Props) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Motorista</label>
+              <label htmlFor="rel-vendas-motorista" className="field-label">Motorista</label>
               <select
+                id="rel-vendas-motorista"
                 value={motoristaId}
                 onChange={(e) => setMotoristaId(e.target.value)}
                 className="input-field w-full"
