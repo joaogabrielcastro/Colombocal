@@ -2,121 +2,61 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  HomeIcon,
-  UserGroupIcon,
-  CubeIcon,
-  ShoppingCartIcon,
-  BanknotesIcon,
-  TruckIcon,
-  ClipboardDocumentListIcon,
-  ChartBarIcon,
-  Cog6ToothIcon,
-  UsersIcon,
   ArrowRightOnRectangleIcon,
-  DocumentTextIcon,
-  DocumentChartBarIcon,
-  MagnifyingGlassIcon,
-  UserIcon,
+  ChevronDownIcon,
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useTenantFeatures } from '@/hooks/useTenantFeatures';
-import {
-  MAIN_NAV,
-  REPORT_NAV,
-  FISCAL_NAV,
-  CONFIG_NAV_HREF,
-  filterMainNavForSidebar,
-  filterReportsForSidebar,
-  filterFiscalForSidebar,
-  canAccessNavKey,
-} from '@/lib/navigation';
-import { AUTH_SESSION_EVENT, clearAuthToken, getAuthToken } from '@/lib/auth-token';
-import api from '@/lib/api';
+import { buildNavGroups, isNavHrefActive, type NavGroup } from '@/lib/navigation';
+import { clearAuthToken } from '@/lib/auth-token';
+import { useSession } from '@/lib/session';
 import { BrandMark, BrandWordmark } from '@/components/brand/BrandMark';
-
-type MeUser = {
-  role: string;
-  navPermissions?: string[] | null;
-};
-
-type MeTenant = {
-  name: string;
-  slug: string | null;
-};
 
 type SidebarProps = {
   mobileOpen?: boolean;
   onOpenMobile?: () => void;
   onCloseMobile?: () => void;
+  /** Desktop: barra recolhida (apenas ícones). */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
-type NavLink = { href: string; label: string; icon?: React.ComponentType<{ className?: string }> };
+function initials(name?: string | null, email?: string | null) {
+  const base = (name || email || '').trim();
+  if (!base) return '?';
+  const parts = base.split(/[\s@._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
+}
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  '/': HomeIcon,
-  '/clientes': UserGroupIcon,
-  '/produtos': CubeIcon,
-  '/vendas': ShoppingCartIcon,
-  '/financeiro/novo': BanknotesIcon,
-  '/contas-a-receber': DocumentChartBarIcon,
-  '/financeiro': BanknotesIcon,
-  '/fretes': TruckIcon,
-  '/carregamento': ClipboardDocumentListIcon,
-  '/motoristas': UserIcon,
-  '/vendedores': UserGroupIcon,
-  '/auditoria': MagnifyingGlassIcon,
-  '/usuarios': UsersIcon,
-};
+const itemBase =
+  'group relative flex items-center gap-3 rounded-lg px-2.5 py-[7px] text-[13.5px] font-medium transition-colors';
+const itemIdle = 'text-white/65 hover:bg-white/[0.06] hover:text-white';
+const itemActive = 'bg-white/[0.10] text-white';
 
-function useMe() {
-  const [me, setMe] = useState<MeUser | null>(null);
-  const [tenant, setTenant] = useState<MeTenant | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadMe = () => {
-      if (!getAuthToken()) {
-        setMe(null);
-        setTenant(null);
-        return;
-      }
-      api
-        .get<{ user: MeUser; tenant?: MeTenant }>('/auth/me')
-        .then((r) => {
-          if (cancelled) return;
-          setMe(r.user);
-          setTenant(r.tenant ?? null);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setMe(null);
-          setTenant(null);
-        });
-    };
-    loadMe();
-    window.addEventListener(AUTH_SESSION_EVENT, loadMe);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(AUTH_SESSION_EVENT, loadMe);
-    };
-  }, []);
-
-  return { me, tenant };
+function ActiveBar() {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-gold"
+    />
+  );
 }
 
 export default function Sidebar({
   mobileOpen = false,
-  onOpenMobile,
   onCloseMobile,
+  collapsed = false,
+  onToggleCollapsed,
 }: SidebarProps) {
   const pathname = usePathname();
-  const { me, tenant } = useMe();
+  const { user, tenant, isAdmin, navPermissions } = useSession();
   const { freteEnabled, nfeEnabled, cteEnabled, mdfeEnabled, ciotEnabled } =
     useTenantFeatures();
-  const [reportsOpen, setReportsOpen] = useState(false);
-  const [fiscalOpen, setFiscalOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const mobileAsideRef = useRef<HTMLElement>(null);
 
   // React 18 ainda não serializa o atributo HTML `inert` de forma confiável.
@@ -133,348 +73,246 @@ export default function Sidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  // Auto-expand reports / fiscal when on those pages
+  // Abre automaticamente o grupo recolhível da seção atual.
   useEffect(() => {
-    if (pathname.startsWith('/relatorios')) setReportsOpen(true);
-    if (pathname.startsWith('/fiscal')) setFiscalOpen(true);
+    if (pathname.startsWith('/relatorios')) setOpenGroups((g) => ({ ...g, relatorios: true }));
+    if (pathname.startsWith('/fiscal')) setOpenGroups((g) => ({ ...g, fiscal: true }));
   }, [pathname]);
 
-  const isAdmin = me?.role === 'admin';
-  const navOpts = { isAdmin, navPermissions: me?.navPermissions ?? null };
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseMobile?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen, onCloseMobile]);
 
-  const allMain = filterMainNavForSidebar(MAIN_NAV, false, {
-    ...navOpts,
-    freteEnabled,
-    nfeEnabled,
-  }).filter((i) => i.href !== '/usuarios');
-
-  const has = (href: string) => allMain.some((i) => i.href === href);
-
-  const operation: NavLink[] = [
-    { href: '/', label: 'Início' },
-    { href: '/vendas', label: 'Vendas' },
-    { href: '/financeiro/novo', label: 'Receber' },
-    { href: '/contas-a-receber', label: 'Contas a receber' },
-    { href: '/financeiro', label: 'Financeiro' },
-    ...(freteEnabled
-      ? ([
-          { href: '/fretes', label: 'Fretes' },
-          { href: '/carregamento', label: 'Carregamento' },
-        ] as NavLink[])
-      : []),
-  ].filter((l) => has(l.href) || l.href === '/');
-
-  const records: NavLink[] = [
-    { href: '/clientes', label: 'Clientes' },
-    { href: '/produtos', label: 'Produtos' },
-    ...(freteEnabled ? [{ href: '/motoristas', label: 'Motoristas' }] : []),
-    { href: '/vendedores', label: 'Vendedores' },
-  ].filter((l) => has(l.href));
-
-  const reports = filterReportsForSidebar(REPORT_NAV, false, {
-    ...navOpts,
-    freteEnabled,
-    nfeEnabled,
-  });
-
-  const fiscalItems = filterFiscalForSidebar(FISCAL_NAV, {
-    ...navOpts,
-    nfeEnabled,
-    cteEnabled,
-    mdfeEnabled,
-    ciotEnabled,
-  });
-
-  const mais: NavLink[] = [
-    { href: '/auditoria', label: 'Auditoria' },
-  ].filter((l) => {
-    const item = MAIN_NAV.find((m) => m.href === l.href);
-    return item && canAccessNavKey(item.navKey, navOpts) && has(l.href);
-  });
-
-  const showUsuarios = isAdmin;
-
-  const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
-    // Evita que "Financeiro" fique ativo em /financeiro/novo (Receber).
-    if (href === '/financeiro') {
-      return (
-        pathname === '/financeiro' || pathname.startsWith('/financeiro/cobrancas')
-      );
-    }
-    if (href === '/financeiro/novo') {
-      return pathname === '/financeiro/novo' || pathname.startsWith('/financeiro/novo/');
-    }
-    // Alias /contas-a-receber → /relatorios/financeiro
-    if (href === '/contas-a-receber') {
-      return (
-        pathname.startsWith('/contas-a-receber') ||
-        pathname.startsWith('/relatorios/financeiro') ||
-        pathname.startsWith('/relatorios/titulos')
-      );
-    }
-    return pathname === href || pathname.startsWith(`${href}/`);
-  };
-
-  const linkClass = (active: boolean) =>
-    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-      active
-        ? 'bg-white/10 text-white'
-        : 'text-gray-400 hover:text-white hover:bg-white/5'
-    }`;
+  const groups = useMemo(
+    () =>
+      buildNavGroups({
+        isAdmin,
+        navPermissions,
+        freteEnabled,
+        nfeEnabled,
+        cteEnabled,
+        mdfeEnabled,
+        ciotEnabled,
+      }),
+    [isAdmin, navPermissions, freteEnabled, nfeEnabled, cteEnabled, mdfeEnabled, ciotEnabled],
+  );
 
   const logout = () => {
     clearAuthToken();
     window.location.href = '/login';
   };
-
   const closeMobile = () => onCloseMobile?.();
 
-  const getIcon = (href: string) => iconMap[href] || DocumentTextIcon;
-
-  const renderPanel = () => (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2.5 px-4 h-16 flex-shrink-0 border-b border-white/10">
-        <Link href="/" className="flex items-center gap-2.5" onClick={closeMobile}>
-          <BrandMark className="h-9 w-9" />
-          <BrandWordmark light className="text-base" />
-        </Link>
-        {mobileOpen ? (
+  const renderGroup = (group: NavGroup, rail: boolean, idx: number) => {
+    if (group.collapsible) {
+      const GroupIcon = group.icon!;
+      const sectionActive = group.items.some((i) => isNavHrefActive(i.href, pathname));
+      if (rail) {
+        // Barra recolhida: o grupo vira um atalho para o primeiro item.
+        const first = group.items[0];
+        return (
+          <Link
+            key={group.id}
+            href={first.href}
+            title={group.label}
+            aria-label={group.label}
+            className={`${itemBase} justify-center ${sectionActive ? itemActive : itemIdle}`}
+          >
+            {sectionActive ? <ActiveBar /> : null}
+            <GroupIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
+          </Link>
+        );
+      }
+      const open = !!openGroups[group.id];
+      const panelId = `sidebar-${group.id}-navigation`;
+      return (
+        <div key={group.id} className={idx > 0 ? 'pt-1' : ''}>
           <button
             type="button"
-            className="ml-auto p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 md:hidden"
-            aria-label="Fechar menu"
-            data-testid="mobile-nav-close"
-            onClick={closeMobile}
+            onClick={() => setOpenGroups((g) => ({ ...g, [group.id]: !open }))}
+            aria-expanded={open}
+            aria-controls={panelId}
+            className={`${itemBase} w-full ${sectionActive && !open ? itemActive : itemIdle}`}
           >
-            <XMarkIcon className="w-5 h-5" />
+            <GroupIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="flex-1 text-left">{group.label}</span>
+            <ChevronDownIcon
+              className={`h-4 w-4 text-white/40 transition-transform ${open ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
           </button>
-        ) : null}
-      </div>
+          {open ? (
+            <div id={panelId} className="ml-[1.35rem] mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
+              {group.items.map(({ href, label }) => {
+                const active = isNavHrefActive(href, pathname);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={closeMobile}
+                    aria-current={active ? 'page' : undefined}
+                    className={`block rounded-md px-2.5 py-1.5 text-[13px] transition-colors ${
+                      active ? 'bg-white/[0.10] font-medium text-white' : 'text-white/55 hover:bg-white/[0.06] hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1" aria-label="Navegação principal">
-        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Operação
-        </p>
-        {operation.map(({ href, label }) => {
-          const Icon = getIcon(href);
+    return (
+      <div key={group.id} className="space-y-0.5">
+        {rail ? (
+          idx > 0 ? <div className="mx-2 my-2 border-t border-white/10" aria-hidden="true" /> : null
+        ) : (
+          <p
+            className={`px-2.5 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/35 ${idx > 0 ? 'pt-3.5' : ''}`}
+          >
+            {group.label}
+          </p>
+        )}
+        {group.items.map(({ href, label, icon: Icon }) => {
+          const active = isNavHrefActive(href, pathname);
           return (
             <Link
               key={href}
               href={href}
-              className={linkClass(isActive(href))}
               onClick={closeMobile}
+              title={rail ? label : undefined}
+              aria-label={rail ? label : undefined}
+              aria-current={active ? 'page' : undefined}
+              className={`${itemBase} ${rail ? 'justify-center' : ''} ${active ? itemActive : itemIdle}`}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              {label}
+              {active ? <ActiveBar /> : null}
+              <Icon
+                className={`h-5 w-5 shrink-0 ${active ? 'text-white' : 'text-white/50 group-hover:text-white/80'}`}
+                aria-hidden="true"
+              />
+              {rail ? null : label}
             </Link>
           );
         })}
+      </div>
+    );
+  };
 
-        {records.length > 0 && (
-          <div className="pt-4">
-            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Cadastros
-            </p>
-            {records.map(({ href, label }) => {
-              const Icon = getIcon(href);
-              return (
-                <Link key={href} href={href} className={linkClass(isActive(href))} onClick={closeMobile}>
-                  <Icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  {label}
-                </Link>
-              );
-            })}
-          </div>
-        )}
+  const renderPanel = (rail: boolean, isMobile: boolean) => (
+    <div className="flex h-full flex-col">
+      <div
+        className={`flex h-14 shrink-0 items-center gap-2.5 border-b border-white/[0.08] ${rail ? 'justify-center px-2' : 'px-4'}`}
+      >
+        <Link href="/" className="flex min-w-0 items-center gap-2.5" onClick={closeMobile} aria-label="Colombocal — página inicial">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white">
+            <BrandMark className="h-7 w-7" />
+          </span>
+          {rail ? null : <BrandWordmark light className="text-[15px]" />}
+        </Link>
+        {isMobile ? (
+          <button
+            type="button"
+            className="ml-auto rounded-lg p-2 text-white/60 hover:bg-white/[0.06] hover:text-white"
+            aria-label="Fechar menu"
+            data-testid="mobile-nav-close"
+            onClick={closeMobile}
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        ) : null}
+      </div>
 
-        {fiscalItems.length > 0 && (
-          <div className="pt-3">
-            <button
-              type="button"
-              onClick={() => setFiscalOpen(!fiscalOpen)}
-              aria-expanded={fiscalOpen}
-              aria-controls="sidebar-fiscal-navigation"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors ${
-                pathname.startsWith('/fiscal')
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <DocumentTextIcon className="w-5 h-5 flex-shrink-0" />
-              <span className="flex-1 text-left">Fiscal</span>
-              <svg
-                className={`w-4 h-4 transition-transform ${fiscalOpen ? 'rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {fiscalOpen && (
-              <div id="sidebar-fiscal-navigation" className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
-                {fiscalItems.map(({ href, label }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={closeMobile}
-                    className={`block px-3 py-2 rounded-md text-sm transition-colors ${
-                      pathname === href || pathname.startsWith(href + '/')
-                        ? 'bg-white/10 text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {reports.length > 0 && (
-          <div className="pt-3">
-            <button
-              type="button"
-              onClick={() => setReportsOpen(!reportsOpen)}
-              aria-expanded={reportsOpen}
-              aria-controls="sidebar-reports-navigation"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors ${
-                pathname.startsWith('/relatorios')
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <ChartBarIcon className="w-5 h-5 flex-shrink-0" />
-              <span className="flex-1 text-left">Relatórios</span>
-              <svg
-                className={`w-4 h-4 transition-transform ${reportsOpen ? 'rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {reportsOpen && (
-              <div id="sidebar-reports-navigation" className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
-                {reports.map(({ href, label }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={closeMobile}
-                    className={`block px-3 py-2 rounded-md text-sm transition-colors ${
-                      pathname === href
-                        ? 'bg-white/10 text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {mais.length > 0 && (
-          <div className="pt-3">
-            <p className="px-3 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
-              Sistema
-            </p>
-            {mais.map(({ href, label }) => {
-              const Icon = getIcon(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={linkClass(isActive(href))}
-                  onClick={closeMobile}
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  {label}
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
-        {isAdmin && (
-          <div className="pt-3">
-            <p className="px-3 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
-              Administração
-            </p>
-            <Link
-              href={CONFIG_NAV_HREF}
-              className={linkClass(pathname.startsWith(CONFIG_NAV_HREF))}
-              onClick={closeMobile}
-            >
-              <Cog6ToothIcon className="w-5 h-5 flex-shrink-0" />
-              Configurações
-            </Link>
-            {showUsuarios && (
-              <Link
-                href="/usuarios"
-                className={linkClass(pathname.startsWith('/usuarios'))}
-                onClick={closeMobile}
-              >
-                <UsersIcon className="w-5 h-5 flex-shrink-0" />
-                Usuários
-              </Link>
-            )}
-          </div>
-        )}
+      <nav
+        className={`flex-1 overflow-y-auto py-3 ${rail ? 'px-2' : 'px-3'} [scrollbar-color:rgb(255_255_255/0.15)_transparent]`}
+        aria-label="Navegação principal"
+      >
+        <div className="space-y-1">{groups.map((g, i) => renderGroup(g, rail, i))}</div>
       </nav>
 
-      <div className="flex-shrink-0 border-t border-white/10 px-3 py-3">
-        {tenant && (
-          <p
-            className="text-xs text-gray-500 truncate px-3 mb-2"
-            title={tenant.name}
-            data-testid="sidebar-tenant-name"
-          >
-            {tenant.name}
-          </p>
+      <div className={`shrink-0 border-t border-white/[0.08] ${rail ? 'px-2 py-2.5' : 'px-3 py-2.5'}`}>
+        {rail ? null : (
+          <div className="mb-1 flex items-center gap-2.5 rounded-lg px-2 py-1">
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white"
+              aria-hidden="true"
+            >
+              {initials(user?.name, user?.email)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium text-white" title={user?.email ?? undefined}>
+                {user?.name || user?.email || 'Usuário'}
+              </p>
+              {tenant ? (
+                <p
+                  className="truncate text-[11.5px] text-white/50"
+                  title={tenant.name}
+                  data-testid="sidebar-tenant-name"
+                >
+                  {tenant.name}
+                  {isAdmin ? ' · Admin' : ''}
+                </p>
+              ) : null}
+            </div>
+          </div>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            closeMobile();
-            logout();
-          }}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 w-full transition-colors"
-        >
-          <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
-          Sair
-        </button>
+        <div className={`flex ${rail ? 'flex-col items-center gap-1' : 'items-center gap-1'}`}>
+          <button
+            type="button"
+            onClick={() => {
+              closeMobile();
+              logout();
+            }}
+            title="Sair"
+            className={`${itemBase} ${itemIdle} ${rail ? 'justify-center' : 'flex-1'}`}
+          >
+            <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0 text-white/50" aria-hidden="true" />
+            {rail ? <span className="sr-only">Sair</span> : 'Sair'}
+          </button>
+          {!isMobile && onToggleCollapsed ? (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className="rounded-lg p-2 text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
+              aria-label={rail ? 'Expandir menu' : 'Recolher menu'}
+              title={rail ? 'Expandir menu' : 'Recolher menu'}
+            >
+              {rail ? (
+                <ChevronDoubleRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDoubleLeftIcon className="h-4 w-4" />
+              )}
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
 
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseMobile?.();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [mobileOpen, onCloseMobile]);
-
   return (
     <>
       <aside
-        className="hidden md:flex flex-col w-60 flex-shrink-0 bg-[#1a1f2e] text-white h-full overflow-hidden"
+        className={`hidden h-full shrink-0 flex-col overflow-hidden bg-brand-950 text-white transition-[width] duration-200 md:flex ${
+          collapsed ? 'w-16' : 'w-[var(--sidebar-w)]'
+        }`}
         data-testid="sidebar-desktop"
+        data-collapsed={collapsed ? 'true' : 'false'}
       >
-        {renderPanel()}
+        {renderPanel(collapsed, false)}
       </aside>
 
       {mobileOpen ? (
         <button
           type="button"
           data-testid="mobile-nav-overlay"
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          className="fixed inset-0 z-40 bg-gray-950/50 backdrop-blur-[1px] md:hidden"
           aria-label="Fechar menu"
           onClick={() => onCloseMobile?.()}
         />
@@ -486,12 +324,12 @@ export default function Sidebar({
         aria-hidden={!mobileOpen}
         aria-label="Menu principal"
         aria-modal={mobileOpen ? true : undefined}
-        role={mobileOpen ? "dialog" : undefined}
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col w-60 bg-[#1a1f2e] text-white overflow-hidden md:hidden transform transition-transform duration-200 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"
+        role={mobileOpen ? 'dialog' : undefined}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[17rem] max-w-[85vw] transform flex-col overflow-hidden bg-brand-950 text-white shadow-xl transition-transform duration-200 md:hidden ${
+          mobileOpen ? 'translate-x-0' : 'pointer-events-none -translate-x-full'
         }`}
       >
-        {renderPanel()}
+        {renderPanel(false, true)}
       </aside>
     </>
   );

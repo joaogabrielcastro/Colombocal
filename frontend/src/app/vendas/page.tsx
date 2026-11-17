@@ -8,12 +8,16 @@ import {
   XMarkIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ArrowDownTrayIcon,
+  DocumentDuplicateIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
-import { VendaOrdemCell } from '@/components/VendaOrdem';
+import { VendaOrdem, VendaOrdemCell } from '@/components/VendaOrdem';
 import {
   formatMoney,
   formatDate,
   formatFreteReciboLinha,
+  localDateInputValue,
   type Venda,
   type Vendedor,
   type Motorista,
@@ -24,6 +28,7 @@ import { reportApiError } from '@/lib/report-api-error';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pagination } from '@/components/ui/pagination';
+import { PageHeader } from '@/components/ui/page-header';
 import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 import { NfeStatusBadge } from '@/features/nfe/status';
 import {
@@ -187,40 +192,67 @@ function VendasPageContent() {
     router.replace('/vendas');
   };
 
+  const hojeIso = localDateInputValue(new Date());
+  const presets = [
+    { id: 'hoje', label: 'Hoje', ini: hojeIso, fim: hojeIso },
+    {
+      id: '7d',
+      label: '7 dias',
+      ini: localDateInputValue(new Date(Date.now() - 6 * 86_400_000)),
+      fim: hojeIso,
+    },
+    {
+      id: 'mes',
+      label: 'Este mês',
+      ini: localDateInputValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
+      fim: hojeIso,
+    },
+  ];
+  const presetAtivo = presets.find((p) => p.ini === dataInicio && p.fim === dataFim)?.id ?? null;
+  const filtrosAtivos = [
+    buscaRapida,
+    ordemFiltro,
+    dataInicio,
+    dataFim,
+    vendedorId,
+    motoristaId,
+    valorMin.trim(),
+    valorMax.trim(),
+    clienteId,
+  ].filter(Boolean).length;
+  const filtrosAvancadosAtivos = [vendedorId, motoristaId, valorMin.trim(), valorMax.trim()].filter(Boolean).length;
+
   return (
-    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vendas</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {total} venda{total === 1 ? '' : 's'} com os filtros atuais
+    <div className="page-container">
+      <PageHeader
+        title="Vendas"
+        subtitle={
+          <>
+            {total} venda{total === 1 ? '' : 's'}
+            {filtrosAtivos > 0 ? ' com os filtros atuais' : ''}
             {sumFiltrado != null && (
               <>
-                {' '}
-                • Total filtrado (todas as páginas):{' '}
-                <span className="font-semibold text-gray-800">
-                  {formatMoney(sumFiltrado)}
-                </span>
+                {' · '}Total filtrado (todas as páginas):{' '}
+                <span className="font-semibold tabular-nums text-gray-900">{formatMoney(sumFiltrado)}</span>
               </>
             )}
-          </p>
-          <p className="text-gray-400 text-xs mt-0.5">
-            Subtotal só desta página: {formatMoney(subtotalPagina)}
-          </p>
-          {freteEnabled ? (
-          <p className="text-gray-400 text-xs mt-1">
-            Frete da venda fica nesta tela.{" "}
-            <Link href="/fretes" className="text-blue-600 hover:underline">
-              Fretes avulsos
-            </Link>{" "}
-            são orçamentos sem venda.
-          </p>
-          ) : null}
-        </div>
-        <Link href="/vendas/nova" className="btn-primary">
-          <PlusIcon className="w-4 h-4" /> Nova Venda
-        </Link>
-      </div>
+            {freteEnabled ? (
+              <span className="mt-0.5 block text-xs text-gray-400">
+                Frete da venda fica nesta tela.{' '}
+                <Link href="/fretes" className="text-blue-700 hover:underline">
+                  Fretes avulsos
+                </Link>{' '}
+                são orçamentos sem venda.
+              </span>
+            ) : null}
+          </>
+        }
+        actions={
+          <Link href="/vendas/nova" className="btn-primary">
+            <PlusIcon className="h-4 w-4" /> Nova venda
+          </Link>
+        }
+      />
 
       {clienteId ? (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
@@ -240,21 +272,63 @@ function VendasPageContent() {
         </div>
       ) : null}
 
-      <FilterBar className="p-4 space-y-4">
+      <FilterBar className="space-y-4 p-4">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período rápido">
+          <span className="mr-1 text-xs font-semibold text-gray-500">Período:</span>
+          {presets.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={presetAtivo === p.id}
+              onClick={() => {
+                setDataInicio(p.ini);
+                setDataFim(p.fim);
+                setPage(1);
+              }}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                presetAtivo === p.id
+                  ? 'border-blue-800 bg-blue-800 text-white'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+          {dataInicio || dataFim ? (
+            <button
+              type="button"
+              onClick={() => {
+                setDataInicio('');
+                setDataFim('');
+                setPage(1);
+              }}
+              className="rounded-full px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-900"
+            >
+              Todo o período
+            </button>
+          ) : null}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
           <div>
             <label htmlFor="vendas-busca" className="field-label">
               Busca (cliente, CNPJ, cidade…)
             </label>
-            <input
-              id="vendas-busca"
-              value={buscaInput}
-              onChange={(e) => setBuscaInput(e.target.value)}
-              className="input-field w-full"
-              placeholder="Nome, fantasia, CNPJ, cidade…"
-            />
+            <div className="relative">
+              <MagnifyingGlassIcon
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                aria-hidden="true"
+              />
+              <input
+                id="vendas-busca"
+                type="search"
+                value={buscaInput}
+                onChange={(e) => setBuscaInput(e.target.value)}
+                className="input-field w-full pl-9"
+                placeholder="Nome, fantasia, CNPJ, cidade…"
+              />
+            </div>
           </div>
-          <div>
+          <div className={maisFiltrosAbertos ? undefined : 'hidden sm:block'}>
             <label htmlFor="vendas-ordem" className="field-label">Ordem (#)</label>
             <input
               id="vendas-ordem"
@@ -272,7 +346,7 @@ function VendasPageContent() {
               placeholder="ex: 7 ou #7"
             />
           </div>
-          <div>
+          <div className={maisFiltrosAbertos ? undefined : 'hidden sm:block'}>
             <label htmlFor="vendas-data-inicio" className="field-label">Data início</label>
             <input
               id="vendas-data-inicio"
@@ -285,7 +359,7 @@ function VendasPageContent() {
               className="input-field w-full"
             />
           </div>
-          <div>
+          <div className={maisFiltrosAbertos ? undefined : 'hidden sm:block'}>
             <label htmlFor="vendas-data-fim" className="field-label">Data fim</label>
             <input
               id="vendas-data-fim"
@@ -375,21 +449,23 @@ function VendasPageContent() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={aplicarBuscaJa} className="btn-primary h-10">
+          <button type="button" onClick={aplicarBuscaJa} className="btn-primary">
             <MagnifyingGlassIcon className="w-4 h-4" /> Aplicar busca
           </button>
           <button
             type="button"
             onClick={limparFiltros}
-            className="btn-secondary h-10 flex items-center gap-1"
+            className="btn-ghost"
+            disabled={filtrosAtivos === 0}
           >
             <XMarkIcon className="w-4 h-4" />
-            Limpar filtros
+            Limpar filtros{filtrosAtivos > 0 ? ` (${filtrosAtivos})` : ''}
           </button>
           <button
             type="button"
             onClick={() => setMaisFiltrosAbertos((open) => !open)}
-            className="ml-auto flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+            aria-expanded={maisFiltrosAbertos}
+            className="ml-auto flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:text-blue-900"
           >
             {maisFiltrosAbertos ? (
               <ChevronUpIcon className="w-4 h-4" />
@@ -397,6 +473,9 @@ function VendasPageContent() {
               <ChevronDownIcon className="w-4 h-4" />
             )}
             {maisFiltrosAbertos ? 'Ocultar filtros' : 'Mais filtros'}
+            {!maisFiltrosAbertos && filtrosAvancadosAtivos > 0 ? (
+              <span className="badge badge-info">{filtrosAvancadosAtivos}</span>
+            ) : null}
           </button>
         </div>
       </FilterBar>
@@ -418,8 +497,47 @@ function VendasPageContent() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto -mx-1 px-1">
-          <table className="w-full min-w-[72rem] text-sm">
+          <>
+          <ul className="divide-y divide-gray-100 sm:hidden" aria-label="Vendas">
+            {vendas.map((v) => {
+              const saldo = Math.max(0, parseFloat(String(v.saldoEmAbertoTitulos ?? 0)));
+              const status = statusTituloFromSaldo(saldo, parseFloat(String(v.valorTotal ?? 0)));
+              const clienteNome = v.cliente.nomeFantasia || v.cliente.razaoSocial;
+              return (
+                <li key={v.id} className="flex items-start gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <VendaOrdem venda={v} size="sm" />
+                      <span className="text-xs text-gray-500">{formatDate(v.dataVenda)}</span>
+                      <span className={`badge ${classStatusTituloUi(status)}`}>{labelStatusTituloUi(status)}</span>
+                      {nfeEnabled ? <NfeStatusBadge status={v.notaFiscal?.status} short /> : null}
+                    </div>
+                    <Link href={`/vendas/${v.id}`} className="mt-1 block truncate text-sm font-medium text-gray-900">
+                      {clienteNome}
+                    </Link>
+                    <p className="truncate text-xs text-gray-500">
+                      {[v.cliente.cidade, v.vendedor.nome, freteEnabled ? v.motorista?.nome : null]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <span className="text-sm font-semibold tabular-nums text-gray-900">{formatMoney(v.valorTotal)}</span>
+                    {status !== 'quitado' ? (
+                      <Link
+                        href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
+                        className="btn-secondary btn-sm"
+                      >
+                        Receber
+                      </Link>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
+          <table className="w-full min-w-[64rem] text-sm">
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="table-header whitespace-nowrap bg-slate-50 !px-2 min-w-[4.5rem]">Ordem</th>
@@ -469,9 +587,13 @@ function VendasPageContent() {
                   <VendaOrdemCell venda={v} size="sm" className="!px-2 !py-2" />
                   <td className="table-cell whitespace-nowrap !px-2 !py-2">{formatDate(v.dataVenda)}</td>
                   <td className="table-cell !px-2 !py-2">
-                    <p className="font-medium text-gray-900 truncate" title={clienteNome}>
+                    <Link
+                      href={`/vendas/${v.id}`}
+                      className="block truncate font-medium text-gray-900 hover:text-blue-800 hover:underline"
+                      title={clienteNome}
+                    >
                       {clienteNome}
-                    </p>
+                    </Link>
                     {v.cliente.cidade ? (
                       <p className="text-xs text-gray-400 mt-0.5 truncate" title={v.cliente.cidade}>
                         {v.cliente.cidade}
@@ -506,12 +628,12 @@ function VendasPageContent() {
                   </td>
                     </>
                   ) : null}
-                  <td className="table-cell font-semibold text-green-700 text-right whitespace-nowrap tabular-nums !px-2 !py-2">
+                  <td className="table-cell font-semibold text-gray-900 text-right whitespace-nowrap tabular-nums !px-2 !py-2">
                     {formatMoney(v.valorTotal)}
                   </td>
                   <td className="table-cell whitespace-nowrap !px-2 !py-2">
                     <span
-                      className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${classStatusTituloUi(status)}`}
+                      className={`badge ${classStatusTituloUi(status)}`}
                       title={
                         status === "parcial"
                           ? `Parcial · ${formatMoney(saldo)}`
@@ -526,35 +648,42 @@ function VendasPageContent() {
                       <NfeStatusBadge status={v.notaFiscal?.status} />
                     </td>
                   ) : null}
-                  <td className="table-cell text-right !px-2 !py-2 sticky right-0 bg-white group-hover:bg-gray-50 z-[1] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]">
-                    <div className="inline-flex flex-nowrap items-center justify-end gap-x-4 text-xs whitespace-nowrap">
-                      <Link
-                        href={`/vendas/${v.id}`}
-                        className="text-blue-600 hover:underline font-medium"
-                      >
-                        Ver
-                      </Link>
-                      <Link
-                        href={`/vendas/nova?clienteId=${v.clienteId}`}
-                        className="text-green-700 hover:underline"
-                      >
-                        Nova
-                      </Link>
+                  <td className="table-cell text-right !px-2 !py-1.5 sticky right-0 bg-white group-hover:bg-gray-50 z-[1] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.06)]">
+                    <div className="inline-flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
                       {status === "quitado" ? (
                         <span
-                          className="text-gray-400 cursor-not-allowed"
+                          className="btn-sm inline-flex cursor-not-allowed items-center gap-1 rounded-lg text-gray-400"
                           title="Ordem já quitada"
                         >
+                          <ArrowDownTrayIcon className="h-3.5 w-3.5" aria-hidden="true" />
                           Receber
                         </span>
                       ) : (
                         <Link
                           href={`/financeiro/novo?clienteId=${v.clienteId}&vendaId=${v.id}&ordem=${v.numeroVenda ?? v.id}`}
-                          className="text-gray-600 hover:underline"
+                          className="btn-secondary btn-sm"
+                          title={`Receber ${formatMoney(saldo)} da ordem #${v.numeroVenda ?? v.id}`}
                         >
+                          <ArrowDownTrayIcon className="h-3.5 w-3.5" aria-hidden="true" />
                           Receber
                         </Link>
                       )}
+                      <Link
+                        href={`/vendas/nova?clienteId=${v.clienteId}`}
+                        className="btn-icon h-8 w-8"
+                        title={`Nova venda para ${clienteNome}`}
+                        aria-label={`Nova venda para ${clienteNome}`}
+                      >
+                        <DocumentDuplicateIcon className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                      <Link
+                        href={`/vendas/${v.id}`}
+                        className="btn-icon h-8 w-8"
+                        title="Ver venda"
+                        aria-label={`Ver venda #${v.numeroVenda ?? v.id}`}
+                      >
+                        <ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
+                      </Link>
                     </div>
                   </td>
                 </tr>
@@ -569,7 +698,7 @@ function VendasPageContent() {
                 >
                   Subtotal (só esta página):
                 </td>
-                <td className="px-2 py-3 font-bold text-green-700 text-right whitespace-nowrap tabular-nums">
+                <td className="px-2 py-3 font-bold text-gray-900 text-right whitespace-nowrap tabular-nums">
                   {formatMoney(subtotalPagina)}
                 </td>
                 <td colSpan={nfeEnabled ? 3 : 2} />
@@ -577,6 +706,7 @@ function VendasPageContent() {
             </tfoot>
           </table>
           </div>
+          </>
         )}
       </div>
       <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize}

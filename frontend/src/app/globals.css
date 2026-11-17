@@ -5,11 +5,12 @@
 @layer base {
   :root {
     color-scheme: light;
-    --app-bg: 248 250 252;
+    --app-bg: 245 246 248;
     --surface: 255 255 255;
-    --border: 226 232 240;
-    --muted: 100 116 139;
-    --brand: 37 99 235;
+    --border: 227 230 235;
+    --muted: 106 115 131;
+    --brand: 0 64 113;
+    --sidebar-w: 15.5rem;
   }
 
   * {
@@ -18,11 +19,20 @@
 
   html {
     @apply antialiased;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-slate-50 text-slate-900;
+    @apply text-gray-900;
+    background-color: rgb(var(--app-bg));
     min-width: 320px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
   }
 
   ::selection {
@@ -30,7 +40,7 @@
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-white;
+    @apply outline-none ring-2 ring-blue-500/70 ring-offset-2 ring-offset-white;
   }
 
   button,
@@ -40,54 +50,128 @@
   textarea {
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* Valores monetários e quantidades alinhados em colunas. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Scrollbars discretas em áreas roláveis internas. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(207 212 220) transparent;
+  }
 }
 
 @layer components {
+  /* ---------- Botões ---------- */
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-ghost {
+    @apply inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition-[background-color,border-color,color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+  }
   .btn-primary {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply bg-blue-800 text-white shadow-sm hover:bg-blue-900 active:bg-blue-950;
   }
   .btn-secondary {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply border border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900;
   }
   .btn-danger {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply bg-red-600 text-white shadow-sm hover:bg-red-700;
   }
+  .btn-ghost {
+    @apply text-gray-600 hover:bg-gray-100 hover:text-gray-900;
+  }
+  .btn-sm {
+    @apply min-h-8 px-2.5 py-1.5 text-[13px];
+  }
+  .btn-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50;
+  }
+
+  /* ---------- Campos ---------- */
   .input-field {
-    @apply block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500;
+    @apply block min-h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 hover:border-gray-400 focus:border-blue-600 focus:outline-none focus:ring-[3px] focus:ring-blue-500/15 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 aria-[invalid=true]:border-red-500 aria-[invalid=true]:ring-red-500/15;
   }
+  .field-label {
+    @apply mb-1.5 block text-xs font-semibold text-gray-600;
+  }
+  .field-hint {
+    @apply mt-1 text-xs text-gray-500;
+  }
+
+  /* ---------- Superfícies ---------- */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    @apply rounded-xl border border-gray-200 bg-white shadow-sm;
   }
   .card.overflow-hidden:has(> table) {
     @apply overflow-x-auto;
   }
-  .card.overflow-hidden > table {
-    min-width: 720px;
+  .card-header {
+    @apply flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5;
   }
+  .card-title {
+    @apply text-sm font-semibold text-gray-900;
+  }
+  .card-subtitle {
+    @apply mt-0.5 text-xs text-gray-500;
+  }
+
+  /* ---------- Tabelas ---------- */
   .table-header {
-    @apply whitespace-nowrap bg-slate-50 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500;
+    @apply whitespace-nowrap border-b border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-gray-500;
   }
   .table-cell {
-    @apply px-4 py-3 text-sm text-slate-700;
+    @apply px-4 py-3 text-sm text-gray-700;
   }
   .table-row {
-    @apply border-b border-slate-100 transition-colors last:border-b-0 hover:bg-blue-50/40;
+    @apply border-b border-gray-100 transition-colors last:border-b-0 hover:bg-gray-50/80;
   }
   .table-scroll {
     @apply w-full overflow-x-auto overscroll-x-contain;
     scrollbar-gutter: stable;
   }
-  .field-label {
-    @apply mb-1.5 block text-xs font-semibold text-slate-600;
-  }
+
+  /* ---------- Status ---------- */
   .status-badge {
     @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold leading-none;
   }
+  .badge {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-4 ring-1 ring-inset;
+  }
+  .badge-neutral {
+    @apply bg-gray-50 text-gray-600 ring-gray-200;
+  }
+  .badge-success {
+    @apply bg-green-50 text-green-700 ring-green-600/20;
+  }
+  .badge-warning {
+    @apply bg-amber-50 text-amber-800 ring-amber-600/25;
+  }
+  .badge-danger {
+    @apply bg-red-50 text-red-700 ring-red-600/20;
+  }
+  .badge-info {
+    @apply bg-blue-50 text-blue-800 ring-blue-700/20;
+  }
+
+  .kbd {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-gray-200 bg-gray-50 px-1 font-sans text-[11px] font-medium text-gray-500;
+  }
+
   .section-title {
-    @apply text-base font-semibold text-slate-900;
+    @apply text-base font-semibold text-gray-900;
   }
   .page-container {
-    @apply w-full max-w-none p-4 sm:p-6 lg:px-8 lg:py-7;
+    @apply mx-auto w-full max-w-[96rem] p-4 sm:p-6 lg:px-8 lg:py-7;
+  }
+}
+
+/* Em telas menores, tabelas dentro de cards rolam na horizontal em vez de espremer colunas. */
+@media (max-width: 1023px) {
+  .card.overflow-hidden > table {
+    min-width: 640px;
   }
 }
 
@@ -99,7 +183,8 @@
 
   .btn-primary,
   .btn-secondary,
-  .btn-danger {
+  .btn-danger,
+  .btn-ghost {
     @apply min-h-11;
   }
 }
@@ -145,7 +230,8 @@
 
   .btn-primary,
   .btn-secondary,
-  .btn-danger {
+  .btn-danger,
+  .btn-ghost {
     display: none !important;
   }
 }

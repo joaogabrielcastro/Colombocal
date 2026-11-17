@@ -56,7 +56,7 @@ export function ClienteContaTab({ conta, clienteId }: Props) {
                   </div>
                   <div className="text-right shrink-0">
                     <span
-                      className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${classStatusTituloUi(status)}`}
+                      className={`badge ${classStatusTituloUi(status)}`}
                     >
                       {labelStatusTituloUi(status)}
                     </span>

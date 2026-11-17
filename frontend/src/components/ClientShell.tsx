@@ -1,26 +1,25 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import BrandLogo from '@/components/BrandLogo';
+import Topbar from '@/components/shell/Topbar';
+import { CommandPalette } from '@/components/shell/CommandPalette';
 import { AUTH_SESSION_EVENT, getAuthTenantId, getAuthToken } from '@/lib/auth-token';
-import { canAccessPath } from '@/lib/navigation';
-import api, { ApiError } from '@/lib/api';
+import { canAccessNavKey, canAccessPath } from '@/lib/navigation';
+import { ApiError } from '@/lib/api';
+import { fetchSession, getCachedSession, type SessionData } from '@/lib/session';
 import { nextPathFromSearch } from '@/lib/safe-next-path';
 import { REQUIRE_LOGIN } from '@/lib/features';
-import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useTenantFeatures } from '@/hooks/useTenantFeatures';
 
 /**
  * Por omissão exige JWT: rotas internas redirecionam para /login sem token.
  * Produção sempre exige login. Em dev: NEXT_PUBLIC_REQUIRE_LOGIN=false (backend continua protegendo a API).
  */
 const requireLogin = REQUIRE_LOGIN;
-
-type MeUser = {
-  role?: string;
-  navPermissions?: string[] | null;
-};
+const COLLAPSE_KEY = 'colombocal_sidebar_collapsed';
 
 function isPublicPath(pathname: string): boolean {
   return (
@@ -42,6 +41,12 @@ function sessionKeyFromToken() {
   return `tenant-${getAuthTenantId() ?? 'none'}`;
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -49,6 +54,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isSetupRoot = pathname === '/setup';
   const isCadastro = pathname === '/cadastro';
   const isPublicShell = isPublicPath(pathname);
+  const features = useTenantFeatures();
 
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
   const [sessionKey, setSessionKey] = useState('boot');
@@ -56,9 +62,15 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const [navChecked, setNavChecked] = useState(!requireLogin || isPublicShell);
   const [navError, setNavError] = useState(false);
   const [navRetry, setNavRetry] = useState(0);
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  /** Já houve uma verificação concluída nesta sessão? Evita esconder a tela a cada navegação. */
+  const checkedOnce = useRef(false);
 
   useEffect(() => {
     const refreshSessionKey = () => {
+      checkedOnce.current = false;
       setSessionKey(`${sessionKeyFromToken()}-${Date.now()}`);
     };
     setSessionKey(sessionKeyFromToken());
@@ -68,6 +80,26 @@ export default function ClientShell({ children }: { children: React.ReactNode })
       window.removeEventListener(AUTH_SESSION_EVENT, refreshSessionKey);
       window.removeEventListener('storage', refreshSessionKey);
     };
+  }, []);
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === '1');
+    } catch {
+      /* storage indisponível */
+    }
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        window.localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -102,43 +134,57 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     setMobileNavOpen(false);
+    setPaletteOpen(false);
   }, [pathname]);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
     const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = prev;
     };
   }, [mobileNavOpen]);
 
+  // Guarda de rota por permissão de menu. Usa a sessão em cache (sem rede) quando
+  // disponível; a tela só fica oculta na primeira verificação da sessão.
   useEffect(() => {
     if (isPublicShell || !requireLogin || !getAuthToken()) return;
 
     let cancelled = false;
-    setNavChecked(false);
+    const evaluate = (s: SessionData) => {
+      const ok = canAccessPath(pathname, {
+        isAdmin: s.user?.role === 'admin',
+        navPermissions: s.user?.navPermissions ?? null,
+      });
+      if (!ok) {
+        router.replace('/');
+        return;
+      }
+      checkedOnce.current = true;
+      setNavChecked(true);
+    };
+
+    const cached = getCachedSession();
+    if (cached) {
+      setSession(cached);
+      setNavError(false);
+      evaluate(cached);
+      return;
+    }
+
+    if (!checkedOnce.current) setNavChecked(false);
     setNavError(false);
-    api
-      .get<{ user: MeUser }>('/auth/me')
-      .then((r) => {
+    fetchSession()
+      .then((s) => {
         if (cancelled) return;
-        const user = r.user;
-        const isAdmin = user?.role === 'admin';
-        const ok = canAccessPath(pathname, {
-          isAdmin,
-          navPermissions: user?.navPermissions ?? null,
-        });
-        if (!ok) {
-          router.replace('/');
-          return;
-        }
-        setNavChecked(true);
+        setSession(s);
+        evaluate(s);
       })
       .catch((err) => {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) return;
-        setNavError(true);
+        if (!checkedOnce.current) setNavError(true);
       });
 
     return () => {
@@ -146,25 +192,43 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     };
   }, [pathname, isPublicShell, router, sessionKey, navRetry]);
 
+  // Atalhos globais: Ctrl/⌘+K abre a busca; "/" também, fora de campos de texto.
+  useEffect(() => {
+    if (isPublicShell) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+        return;
+      }
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target)) {
+        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isPublicShell]);
+
   if (!allowBody || (!isPublicShell && !navChecked)) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-sm gap-4 px-4">
-        <BrandLogo variant="full" className="opacity-90 scale-90" />
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-sm text-gray-500">
+        <BrandLogo variant="full" className="scale-90 opacity-90" />
         {navError ? (
           <>
-            <p className="text-center max-w-sm">
+            <p className="max-w-sm text-center">
               Não foi possível verificar sua sessão. Confira a conexão e tente novamente.
             </p>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => setNavRetry((n) => n + 1)}
-            >
+            <button type="button" className="btn-primary" onClick={() => setNavRetry((n) => n + 1)}>
               Tentar novamente
             </button>
           </>
         ) : (
-          <p>A carregar…</p>
+          <p role="status" className="flex items-center gap-2">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-200 border-t-blue-700" aria-hidden="true" />
+            Carregando…
+          </p>
         )}
       </div>
     );
@@ -174,35 +238,48 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 
+  const isAdmin = session?.user?.role === 'admin';
+  const navPermissions = session?.user?.navPermissions ?? null;
+  const navOpts = {
+    isAdmin,
+    navPermissions,
+    freteEnabled: features.freteEnabled,
+    nfeEnabled: features.nfeEnabled,
+    cteEnabled: features.cteEnabled,
+    mdfeEnabled: features.mdfeEnabled,
+    ciotEnabled: features.ciotEnabled,
+  };
+
   return (
-    <div key={sessionKey} className="flex flex-row h-screen bg-gray-50 print:h-auto print:block">
-      <div className="print:hidden h-full self-stretch">
+    <div key={sessionKey} className="flex h-screen flex-row print:block print:h-auto">
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:shadow-lg"
+      >
+        Pular para o conteúdo
+      </a>
+      <div className="h-full self-stretch print:hidden">
         <Sidebar
           mobileOpen={mobileNavOpen}
           onOpenMobile={() => setMobileNavOpen(true)}
           onCloseMobile={() => setMobileNavOpen(false)}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
         />
       </div>
-      <div className="flex flex-col flex-1 min-w-0 min-h-0 print:max-w-none">
-        <header className="md:hidden print:hidden flex items-center gap-3 h-12 px-3 border-b border-gray-200 bg-white flex-shrink-0">
-          <button
-            type="button"
-            data-testid="mobile-menu-button"
-            className="p-2 -ml-1 rounded-lg text-gray-700 hover:bg-gray-100"
-            aria-label={mobileNavOpen ? "Fechar menu" : "Abrir menu"}
-            aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen((open) => !open)}
-          >
-            {mobileNavOpen ? (
-              <XMarkIcon className="w-6 h-6" />
-            ) : (
-              <Bars3Icon className="w-6 h-6" />
-            )}
-          </button>
-          <BrandLogo variant="compact" className="h-8 w-8" />
-        </header>
-        <main className="flex-1 overflow-y-auto min-h-0 print:overflow-visible">{children}</main>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col print:max-w-none">
+        <Topbar
+          mobileNavOpen={mobileNavOpen}
+          onToggleMobileNav={() => setMobileNavOpen((open) => !open)}
+          onOpenSearch={() => setPaletteOpen(true)}
+          canVender={canAccessNavKey('vendas', { isAdmin, navPermissions })}
+          canReceber={canAccessNavKey('financeiro', { isAdmin, navPermissions })}
+        />
+        <main id="conteudo" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto focus:outline-none print:overflow-visible">
+          {children}
+        </main>
       </div>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} nav={navOpts} />
     </div>
   );
 }

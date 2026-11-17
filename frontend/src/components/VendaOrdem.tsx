@@ -83,7 +83,7 @@ export function VendaOrdemCell({
   className?: string;
 }) {
   return (
-    <td className={`table-cell bg-slate-50/90 align-middle whitespace-nowrap ${className}`.trim()}>
+    <td className={`table-cell align-middle whitespace-nowrap ${className}`.trim()}>
       <VendaOrdem venda={venda} size={size} />
     </td>
   );

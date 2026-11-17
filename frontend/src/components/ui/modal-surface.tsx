@@ -78,7 +78,7 @@ export function ModalSurface({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4 backdrop-blur-[2px] animate-fade-in"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !closeDisabled) onClose();
@@ -89,7 +89,7 @@ export function ModalSurface({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className={`w-full rounded-xl bg-white shadow-xl ${panelClassName}`}
+        className={`w-full rounded-xl bg-white shadow-xl ring-1 ring-gray-950/5 animate-pop-in ${panelClassName}`}
       >
         {children}
       </div>

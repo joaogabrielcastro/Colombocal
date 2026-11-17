@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeftIcon,
+  ArrowDownTrayIcon,
   PencilIcon,
   PrinterIcon,
   TrashIcon,
@@ -30,6 +30,9 @@ import { DetailPageSkeleton } from "@/components/ui/skeletons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { reportApiError } from "@/lib/report-api-error";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { PageHeader } from "@/components/ui/page-header";
+import { useSession } from "@/lib/session";
+import { canAccessNavKey } from "@/lib/navigation";
 import { VendaNfeActions } from "@/features/nfe/VendaNfeActions";
 import { badgeTipoPagamento } from "@/lib/status-badges";
 
@@ -37,6 +40,11 @@ export default function VendaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { freteEnabled, fretePagoDefault, nfeEnabled } = useTenantFeatures();
+  const sessao = useSession();
+  const podeReceber = canAccessNavKey("financeiro", {
+    isAdmin: sessao.isAdmin,
+    navPermissions: sessao.navPermissions,
+  });
   const [venda, setVenda] = useState<Venda | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelando, setCancelando] = useState(false);
@@ -301,100 +309,117 @@ export default function VendaDetailPage() {
   });
 
   return (
-    <div className="p-6 w-full max-w-[90rem] mx-auto">
-      <div className="flex flex-wrap items-start gap-3 mb-6">
-        <Link href="/vendas" className="btn-secondary py-1.5 px-2.5 shrink-0">
-          <ArrowLeftIcon className="w-4 h-4" />
-        </Link>
-        <div className="flex-1 min-w-[14rem]">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 flex-wrap">
-            <span className="text-gray-500 font-normal text-lg">Venda</span>
-            <VendaOrdem venda={venda} link={false} size="xl" />
-          </h1>
-          <p className="text-gray-500 text-sm">{formatDate(venda.dataVenda)}</p>
-          <p className="text-sm mt-1">
-            <span className="text-gray-500">Pago nos títulos: </span>
-            <strong className="text-green-700">{formatMoney(totalPagoNosTitulos)}</strong>
-            <span className="text-gray-400"> · </span>
-            <span className="text-gray-500">Saldo: </span>
-            <strong className={quitadoPelosTitulos ? "text-green-700" : "text-red-600"}>
-              {quitadoPelosTitulos
-                ? "Quitado"
-                : `${formatMoney(saldoAbertoTitulos)} a receber`}
-            </strong>
+    <div className="page-container">
+      <PageHeader
+        breadcrumbs={[{ label: "Vendas", href: "/vendas" }, { label: `#${venda.numeroVenda ?? venda.id}` }]}
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            Venda <VendaOrdem venda={venda} link={false} size="xl" className="!text-gray-950" />
+          </span>
+        }
+        meta={
+          <>
+            <span className={`badge ${quitadoPelosTitulos ? "badge-success" : totalPagoNosTitulos > 0.009 ? "badge-warning" : "badge-danger"}`}>
+              {quitadoPelosTitulos ? "Quitado" : totalPagoNosTitulos > 0.009 ? "Parcial" : "Aberto"}
+            </span>
+            <span className="text-sm text-gray-500">{formatDate(venda.dataVenda)}</span>
+            <span className="text-gray-300" aria-hidden="true">·</span>
+            <span className="text-sm text-gray-500">
+              Pago nos títulos:{" "}
+              <strong className="font-semibold tabular-nums text-green-700">{formatMoney(totalPagoNosTitulos)}</strong>
+            </span>
+            <span className="text-gray-300" aria-hidden="true">·</span>
+            <span className="text-sm text-gray-500">
+              Saldo:{" "}
+              <strong className={`font-semibold tabular-nums ${quitadoPelosTitulos ? "text-green-700" : "text-red-600"}`}>
+                {quitadoPelosTitulos ? "Quitado" : `${formatMoney(saldoAbertoTitulos)} a receber`}
+              </strong>
+            </span>
             {(venda.pagamentos?.length ?? 0) > 0 ? (
-              <span className="text-gray-400">
-                {" "}
+              <span className="text-sm text-gray-400">
                 · {venda.pagamentos!.length} recebimento
                 {venda.pagamentos!.length === 1 ? "" : "s"} nesta ordem
               </span>
             ) : null}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 justify-end">
-          <button onClick={imprimirOrdemServico} className="btn-secondary">
-            <PrinterIcon className="w-4 h-4" />
-            Imprimir O.S.
-          </button>
-          {freteEnabled ? (
+          </>
+        }
+        actions={
+          <>
+            <button type="button" onClick={imprimirOrdemServico} className="btn-secondary btn-sm">
+              <PrinterIcon className="w-4 h-4" />
+              Imprimir O.S.
+            </button>
+            {freteEnabled ? (
+              <button
+                type="button"
+                onClick={() => void imprimirFreteVenda()}
+                className="btn-secondary btn-sm"
+                disabled={imprimindoFrete}
+                title="PDF do frete desta venda (não usa frete avulso)"
+              >
+                <PrinterIcon className="w-4 h-4" />
+                {imprimindoFrete ? "Abrindo PDF…" : "PDF do frete"}
+              </button>
+            ) : null}
+            {freteEnabled ? (
+              <button
+                type="button"
+                onClick={solicitarGerarOc}
+                className="btn-secondary btn-sm"
+                disabled={gerandoOc}
+              >
+                <PrinterIcon className="w-4 h-4" />
+                {gerandoOc ? "Gerando OC…" : "Gerar OC"}
+              </button>
+            ) : null}
+            {venda.podeEditar ? (
+              <Link href={`/vendas/${id}/editar`} className="btn-secondary btn-sm">
+                <PencilIcon className="w-4 h-4" />
+                Editar
+              </Link>
+            ) : (
+              <span
+                className="badge badge-neutral"
+                title={
+                  venda.nfeBloqueiaEdicao
+                    ? "Não é possível editar com NF-e autorizada ou em processamento"
+                    : "Não é possível editar com baixas ou cheques vinculados"
+                }
+              >
+                <PencilIcon className="h-3 w-3" aria-hidden="true" />
+                {venda.nfeBloqueiaEdicao
+                  ? "Edição bloqueada (NF-e)"
+                  : "Edição bloqueada (baixas/cheques)"}
+              </span>
+            )}
             <button
               type="button"
-              onClick={() => void imprimirFreteVenda()}
-              className="btn-secondary"
-              disabled={imprimindoFrete}
-              title="PDF do frete desta venda (não usa frete avulso)"
-            >
-              <PrinterIcon className="w-4 h-4" />
-              {imprimindoFrete ? "Abrindo PDF…" : "PDF do frete"}
-            </button>
-          ) : null}
-          {freteEnabled ? (
-            <button
-              type="button"
-              onClick={solicitarGerarOc}
-              className="btn-secondary"
-              disabled={gerandoOc}
-            >
-              <PrinterIcon className="w-4 h-4" />
-              {gerandoOc ? "Gerando OC…" : "Gerar OC"}
-            </button>
-          ) : null}
-          {venda.podeEditar ? (
-            <Link href={`/vendas/${id}/editar`} className="btn-secondary">
-              <PencilIcon className="w-4 h-4" />
-              Editar
-            </Link>
-          ) : (
-            <span
-              className="text-xs text-gray-500 max-w-[12rem] leading-tight"
+              onClick={() => setConfirmCancelOpen(true)}
+              disabled={cancelando || temBaixas || !!venda.nfeBloqueiaEdicao}
+              className="btn-ghost btn-sm text-red-600 hover:bg-red-50 hover:text-red-700"
               title={
-                venda.nfeBloqueiaEdicao
-                  ? "Não é possível editar com NF-e autorizada ou em processamento"
-                  : "Não é possível editar com baixas ou cheques vinculados"
+                temBaixas
+                  ? "Estorne todas as baixas e cheques antes de cancelar"
+                  : venda.nfeBloqueiaEdicao
+                    ? "Cancele a NF-e autorizada antes de cancelar a venda"
+                    : undefined
               }
             >
-              {venda.nfeBloqueiaEdicao
-                ? "Edição bloqueada (NF-e)"
-                : "Edição bloqueada (baixas/cheques)"}
-            </span>
-          )}
-          <button
-            onClick={() => setConfirmCancelOpen(true)}
-            disabled={cancelando || temBaixas || !!venda.nfeBloqueiaEdicao}
-            className="btn-danger disabled:opacity-50"
-            title={
-              temBaixas
-                ? "Estorne todas as baixas e cheques antes de cancelar"
-                : venda.nfeBloqueiaEdicao
-                  ? "Cancele a NF-e autorizada antes de cancelar a venda"
-                  : undefined
-            }
-          >
-            <TrashIcon className="w-4 h-4" />
-            {cancelando ? "Cancelando..." : "Cancelar Venda"}
-          </button>
-        </div>
-      </div>
+              <TrashIcon className="w-4 h-4" />
+              {cancelando ? "Cancelando..." : "Cancelar venda"}
+            </button>
+            {!quitadoPelosTitulos && podeReceber ? (
+              <Link
+                href={`/financeiro/novo?clienteId=${venda.clienteId}&vendaId=${venda.id}&ordem=${venda.numeroVenda ?? venda.id}`}
+                className="btn-primary btn-sm"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                Receber {formatMoney(saldoAbertoTitulos)}
+              </Link>
+            ) : null}
+          </>
+        }
+      />
       <ConfirmDialog
         open={confirmEstorno != null}
         title="Estornar baixa"
@@ -544,7 +569,7 @@ export default function VendaDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 items-start gap-4 mb-4">
         <div className="card overflow-hidden lg:col-span-3">
           <div className="px-5 py-3 border-b border-gray-100">
             <h3 className="font-semibold text-gray-900">Produtos</h3>

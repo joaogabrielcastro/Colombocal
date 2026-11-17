@@ -42,7 +42,15 @@ export default function FiscalNotasPage() {
     const hoje = new Date();
     const ini = localDateInputValue(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
     const fim = localDateInputValue(hoje);
-    const initial = { ...filtros, dataInicio: ini, dataFim: fim };
+    // Permite links diretos (ex.: dashboard → notas rejeitadas do período).
+    const qs = new URLSearchParams(window.location.search);
+    const isoDate = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const initial = {
+      ...filtros,
+      dataInicio: isoDate(qs.get("dataInicio")) ?? ini,
+      dataFim: isoDate(qs.get("dataFim")) ?? fim,
+      status: qs.get("status") ?? "",
+    };
     setFiltros(initial);
     setAplicados(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps

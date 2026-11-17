@@ -12,7 +12,7 @@ describe("status-badges", () => {
     expect(statusTituloFromSaldo(40, 100)).toBe("parcial");
     expect(statusTituloFromSaldo(100, 100)).toBe("aberto");
     expect(labelStatusTituloUi("quitado")).toBe("Quitado");
-    expect(classStatusTituloUi("aberto")).toMatch(/red/);
+    expect(classStatusTituloUi("aberto")).toMatch(/danger/);
   });
 
   it("badge de tipo de pagamento", () => {
