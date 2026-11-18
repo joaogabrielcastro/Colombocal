@@ -178,13 +178,18 @@ function PendenciaRow({ p }: { p: Pendencia }) {
 }
 
 export default function DashboardPage() {
-  const { isAdmin, navPermissions, user } = useSession();
+  const { isAdmin, navPermissions, user, session } = useSession();
   const { nfeEnabled } = useTenantFeatures();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const perm = { isAdmin, navPermissions };
-  const podeContas = canAccessNavKey("rel_financeiro", perm);
-  const podeFiscal = nfeEnabled && canAccessNavKey("fiscal", perm);
+  // Sem sessão carregada, permissões vazias significariam "acesso total": aguarda a sessão
+  // para não consultar módulos que o usuário não pode ver (evita 403).
+  const sessaoPronta = session != null;
+  const podeContas = sessaoPronta && canAccessNavKey("rel_financeiro", perm);
+  const podeFiscal = sessaoPronta && nfeEnabled && canAccessNavKey("fiscal", perm);
   const podeVendas = canAccessNavKey("vendas", perm);
+  const podeRelVendas = canAccessNavKey("rel_vendas", perm);
+  const podeVerContas = canAccessNavKey("rel_financeiro", perm);
 
   const hoje = localDateInputValue(new Date());
   const inicio30d = localDateInputValue(new Date(Date.now() - 29 * 86_400_000));
@@ -407,7 +412,7 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
-      <section aria-label="Indicadores" className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Indicadores" className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiCard
           label="Faturamento hoje"
           value={formatMoney(d.faturamentoHoje)}
@@ -427,7 +432,7 @@ export default function DashboardPage() {
           }
           icon={CurrencyDollarIcon}
           tone="brand"
-          href="/relatorios/vendas"
+          href={podeRelVendas ? "/relatorios/vendas" : undefined}
         />
         <KpiCard
           label="A receber (títulos)"
@@ -439,7 +444,7 @@ export default function DashboardPage() {
           }
           icon={BanknotesIcon}
           tone={d.clientesDevendo > 0 ? "warning" : "success"}
-          href="/contas-a-receber"
+          href={podeVerContas ? "/contas-a-receber" : undefined}
         />
         {podeContas ? (
           <KpiCard
@@ -498,7 +503,11 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-semibold text-gray-900">Nenhuma pendência</p>
                 <p className="text-xs text-gray-500">
-                  Sem títulos vencidos{podeFiscal ? ", NF-e com problema" : ""} ou divergências financeiras.
+                  Verificado:{" "}
+                  {[podeContas ? "títulos vencidos" : null, podeFiscal ? "NF-e com problema" : null, "divergências financeiras"]
+                    .filter(Boolean)
+                    .join(", ")}
+                  .
                 </p>
               </div>
             </div>
@@ -516,9 +525,11 @@ export default function DashboardPage() {
               <h2 id="saldos-title" className="card-title">Maiores saldos em aberto</h2>
               <p className="card-subtitle">Clientes para priorizar na cobrança</p>
             </div>
-            <Link href="/contas-a-receber" className="text-xs font-semibold text-blue-700 hover:underline">
-              Ver todos
-            </Link>
+            {podeVerContas ? (
+              <Link href="/contas-a-receber" className="text-xs font-semibold text-blue-700 hover:underline">
+                Ver todos
+              </Link>
+            ) : null}
           </div>
           <div className="flex-1">
             {(d.topClientesDevendo ?? []).length === 0 ? (
@@ -577,9 +588,11 @@ export default function DashboardPage() {
               <h2 id="ultimas-title" className="card-title">Últimas vendas</h2>
               <p className="card-subtitle">Abra a ordem para ver detalhes e receber</p>
             </div>
-            <Link href="/vendas" className="text-xs font-semibold text-blue-700 hover:underline">
-              Ver todas
-            </Link>
+            {podeVendas ? (
+              <Link href="/vendas" className="text-xs font-semibold text-blue-700 hover:underline">
+                Ver todas
+              </Link>
+            ) : null}
           </div>
           {d.ultimasVendas.length === 0 ? (
             <div className="p-5">

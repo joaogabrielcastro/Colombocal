@@ -45,7 +45,7 @@ export function KpiCard({
 }: KpiCardProps) {
   const body = (
     <div
-      className={`card flex h-full flex-col gap-3 p-4 sm:p-5 ${
+      className={`card flex h-full flex-col gap-3 p-3.5 sm:p-5 ${
         href ? "transition-[border-color,box-shadow] hover:border-gray-300 hover:shadow-md" : ""
       }`}
     >
@@ -58,9 +58,9 @@ export function KpiCard({
         ) : null}
       </div>
       {loading ? (
-        <div className="h-7 w-32 animate-pulse rounded-md bg-gray-200/70" aria-hidden="true" />
+        <div className="h-7 w-full max-w-32 animate-pulse rounded-md bg-gray-200/70" aria-hidden="true" />
       ) : (
-        <p className={`text-2xl font-semibold tabular-nums tracking-tight ${TONE_VALUE[tone]}`}>{value}</p>
+        <p className={`truncate text-lg font-semibold tabular-nums tracking-tight sm:text-2xl ${TONE_VALUE[tone]}`}>{value}</p>
       )}
       {hint ? <p className="-mt-1 text-xs text-gray-500">{hint}</p> : null}
     </div>

@@ -15,6 +15,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { qsFiscal, formatChave } from "@/features/fiscal/services/query";
 import type { FiscalFiltros, FiscalNotaLista, FiscalResumo } from "@/features/fiscal/types";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { PageHeader } from "@/components/ui/page-header";
 
 const PAGE_SIZE = 20;
 
@@ -95,25 +96,23 @@ export default function FiscalNotasPage() {
 
   if (!nfeEnabled) {
     return (
-      <div className="p-6 max-w-3xl">
-        <h1 className="text-2xl font-semibold text-slate-900">Notas fiscais</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          O módulo de NF-e não está habilitado nesta organização. Ative em Configurações
-          (admin).
-        </p>
+      <div className="page-container">
+        <PageHeader
+          title="Notas fiscais"
+          subtitle="O módulo de NF-e não está habilitado nesta organização. Ative em Configurações (admin)."
+        />
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none">
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Notas fiscais</h1>
-        <p className="text-sm text-slate-600 mt-1 max-w-3xl">
-          Histórico de NF-e do período para conferência. Relatório para envio à contabilidade —
-          não substitui o trabalho do contador.
-        </p>
-      </div>
+    <div className="page-container">
+      <PageHeader
+        className="!mb-4"
+        breadcrumbs={[{ label: "Fiscal" }, { label: "NF-e" }]}
+        title="Notas fiscais"
+        subtitle="Histórico de NF-e do período para conferência. Relatório para envio à contabilidade — não substitui o trabalho do contador."
+      />
 
       <HomologacaoBanner ambiente={ambiente} />
 
@@ -271,6 +270,11 @@ export default function FiscalNotasPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <NfeStatusBadge status={n.status} />
+                      {(n.status === "rejeitada" || n.status === "denegada") && n.motivoRejeicao ? (
+                        <p className="mt-1 max-w-[18rem] truncate text-xs text-red-700" title={n.motivoRejeicao}>
+                          {n.motivoRejeicao}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs max-w-[280px] truncate" title={n.chaveAcesso || ""}>
                       {n.chaveAcesso ? formatChave(n.chaveAcesso) : "—"}

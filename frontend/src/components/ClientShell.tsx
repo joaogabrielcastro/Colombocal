@@ -54,7 +54,6 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isSetupRoot = pathname === '/setup';
   const isCadastro = pathname === '/cadastro';
   const isPublicShell = isPublicPath(pathname);
-  const features = useTenantFeatures();
 
   const [allowBody, setAllowBody] = useState(() => initialAllowBody(pathname));
   const [sessionKey, setSessionKey] = useState('boot');
@@ -238,6 +237,49 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 
+  return (
+    <PrivateChrome
+      key={sessionKey}
+      session={session}
+      collapsed={collapsed}
+      onToggleCollapsed={toggleCollapsed}
+      mobileNavOpen={mobileNavOpen}
+      setMobileNavOpen={setMobileNavOpen}
+      paletteOpen={paletteOpen}
+      setPaletteOpen={setPaletteOpen}
+    >
+      {children}
+    </PrivateChrome>
+  );
+}
+
+type PrivateChromeProps = {
+  session: SessionData | null;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  mobileNavOpen: boolean;
+  setMobileNavOpen: (v: boolean | ((o: boolean) => boolean)) => void;
+  paletteOpen: boolean;
+  setPaletteOpen: (v: boolean) => void;
+  children: React.ReactNode;
+};
+
+/**
+ * Moldura da área autenticada. Fica separada para que hooks que consultam a API
+ * (features do tenant) nunca rodem em telas públicas — lá não há token e um 401
+ * redirecionaria "Esqueci a senha" para o login.
+ */
+function PrivateChrome({
+  session,
+  collapsed,
+  onToggleCollapsed,
+  mobileNavOpen,
+  setMobileNavOpen,
+  paletteOpen,
+  setPaletteOpen,
+  children,
+}: PrivateChromeProps) {
+  const features = useTenantFeatures();
   const isAdmin = session?.user?.role === 'admin';
   const navPermissions = session?.user?.navPermissions ?? null;
   const navOpts = {
@@ -251,7 +293,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div key={sessionKey} className="flex h-screen flex-row print:block print:h-auto">
+    <div className="flex h-screen flex-row print:block print:h-auto">
       <a
         href="#conteudo"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:shadow-lg"
@@ -264,7 +306,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           onOpenMobile={() => setMobileNavOpen(true)}
           onCloseMobile={() => setMobileNavOpen(false)}
           collapsed={collapsed}
-          onToggleCollapsed={toggleCollapsed}
+          onToggleCollapsed={onToggleCollapsed}
         />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col print:max-w-none">

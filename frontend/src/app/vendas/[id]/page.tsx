@@ -41,7 +41,7 @@ export default function VendaDetailPage() {
   const router = useRouter();
   const { freteEnabled, fretePagoDefault, nfeEnabled } = useTenantFeatures();
   const sessao = useSession();
-  const podeReceber = canAccessNavKey("financeiro", {
+  const podeReceber = sessao.session != null && canAccessNavKey("financeiro", {
     isAdmin: sessao.isAdmin,
     navPermissions: sessao.navPermissions,
   });
@@ -311,7 +311,7 @@ export default function VendaDetailPage() {
   return (
     <div className="page-container">
       <PageHeader
-        breadcrumbs={[{ label: "Vendas", href: "/vendas" }, { label: `#${venda.numeroVenda ?? venda.id}` }]}
+        breadcrumbs={[{ label: "Vendas", href: "/vendas" }]}
         title={
           <span className="flex flex-wrap items-center gap-2">
             Venda <VendaOrdem venda={venda} link={false} size="xl" className="!text-gray-950" />
