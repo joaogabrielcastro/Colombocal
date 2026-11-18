@@ -19,16 +19,16 @@ export function nfeStatusLabel(status?: string | null, opts?: { short?: boolean 
 export function nfeStatusClass(status?: string | null) {
   switch (status) {
     case "autorizada":
-      return "bg-green-100 text-green-800";
+      return "badge-success";
     case "processando":
-      return "bg-amber-100 text-amber-900";
+      return "badge-warning";
     case "rejeitada":
     case "denegada":
-      return "bg-red-50 text-red-700";
+      return "badge-danger";
     case "cancelada":
-      return "bg-gray-100 text-gray-600";
+      return "badge-neutral line-through decoration-gray-400/60";
     default:
-      return "bg-slate-100 text-slate-600";
+      return "badge-neutral";
   }
 }
 
@@ -41,7 +41,7 @@ export function NfeStatusBadge({
 }) {
   return (
     <span
-      className={`inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${nfeStatusClass(status)}`}
+      className={`badge ${nfeStatusClass(status)}`}
     >
       {nfeStatusLabel(status, { short })}
     </span>

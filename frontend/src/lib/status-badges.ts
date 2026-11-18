@@ -18,9 +18,9 @@ export function labelStatusTituloUi(status: StatusTituloUi | string) {
 
 export function classStatusTituloUi(status: StatusTituloUi | string) {
   const s = String(status).toLowerCase();
-  if (s === "quitado") return "bg-green-100 text-green-800";
-  if (s === "parcial") return "bg-amber-100 text-amber-900";
-  return "bg-red-50 text-red-700";
+  if (s === "quitado") return "badge-success";
+  if (s === "parcial") return "badge-warning";
+  return "badge-danger";
 }
 
 export function badgeTipoPagamento(tipo: string): { label: string; className: string } {

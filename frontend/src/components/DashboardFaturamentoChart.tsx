@@ -84,7 +84,8 @@ export function DashboardFaturamentoChart({ dados }: { dados: MesFaturamento[] }
 
                 {/* Barras */}
                 <div className="absolute inset-0 flex items-end gap-2 sm:gap-3">
-                  {dados.map((m) => {
+                  {dados.map((m, idx) => {
+                    const atual = idx === dados.length - 1;
                     const pct = maxVal > 0 ? (m.total / maxVal) * 100 : 0;
                     const altura = m.total > 0 ? Math.max(pct, 2) : 0;
                     return (
@@ -102,9 +103,11 @@ export function DashboardFaturamentoChart({ dados }: { dados: MesFaturamento[] }
                         </span>
                         <div
                           className={`w-full max-w-[3.5rem] mx-auto rounded-t-md transition-colors ${
-                            m.total > 0
-                              ? "bg-blue-500 group-hover:bg-blue-600"
-                              : "bg-gray-200"
+                            m.total <= 0
+                              ? "bg-gray-200"
+                              : atual
+                                ? "bg-blue-800 group-hover:bg-blue-900"
+                                : "bg-blue-200 group-hover:bg-blue-300"
                           }`}
                           style={{ height: `${altura}%`, minHeight: m.total > 0 ? 4 : 2 }}
                           title={`${m.mes}: ${formatMoney(m.total)}`}

@@ -125,7 +125,7 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4 backdrop-blur-[2px] animate-fade-in"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onCancel();
@@ -137,10 +137,10 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
-        className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"
+        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl ring-1 ring-gray-950/5 animate-pop-in"
         onKeyDown={onPanelKeyDown}
       >
-        <h3 id={titleId} className="text-lg font-semibold text-gray-900">
+        <h3 id={titleId} className="text-base font-semibold text-gray-900">
           {title}
         </h3>
         {description ? (

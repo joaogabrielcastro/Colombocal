@@ -181,3 +181,40 @@ describe("canAccessPath / resolvePathNavAccess", () => {
     );
   });
 });
+
+describe("buildNavGroups", () => {
+  it("admin vê Sistema com Configurações e Usuários", async () => {
+    const { buildNavGroups } = await import("./navigation");
+    const groups = buildNavGroups({ isAdmin: true, freteEnabled: true, nfeEnabled: true });
+    const sistema = groups.find((g) => g.id === "sistema");
+    expect(sistema?.items.map((i) => i.label)).toEqual(["Auditoria", "Configurações", "Usuários"]);
+    expect(groups.find((g) => g.id === "operacao")?.items.map((i) => i.href)).toContain("/fretes");
+  });
+
+  it("membro só vê abas liberadas e nunca Usuários", async () => {
+    const { buildNavGroups } = await import("./navigation");
+    const groups = buildNavGroups({ isAdmin: false, navPermissions: ["vendas", "clientes"] });
+    const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
+    expect(hrefs).toEqual(["/", "/vendas", "/clientes"]);
+    expect(groups.some((g) => g.id === "sistema")).toBe(false);
+  });
+
+  it("oculta Fiscal sem documentos habilitados e frete sem módulo", async () => {
+    const { buildNavGroups } = await import("./navigation");
+    const groups = buildNavGroups({ isAdmin: true, freteEnabled: false });
+    expect(groups.some((g) => g.id === "fiscal")).toBe(false);
+    const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
+    expect(hrefs).not.toContain("/fretes");
+    expect(hrefs).not.toContain("/motoristas");
+  });
+});
+
+describe("isNavHrefActive", () => {
+  it("diferencia Receber de Financeiro e trata alias de Contas a receber", async () => {
+    const { isNavHrefActive } = await import("./navigation");
+    expect(isNavHrefActive("/financeiro", "/financeiro/novo")).toBe(false);
+    expect(isNavHrefActive("/financeiro/novo", "/financeiro/novo")).toBe(true);
+    expect(isNavHrefActive("/contas-a-receber", "/relatorios/financeiro")).toBe(true);
+    expect(isNavHrefActive("/", "/vendas")).toBe(false);
+  });
+});

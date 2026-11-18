@@ -4,7 +4,7 @@ function SkeletonBox({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-gray-200 ${className ?? ''}`}
+      className={`animate-pulse rounded-md bg-gray-200/70 ${className ?? ''}`}
       {...rest}
     />
   );
@@ -38,7 +38,7 @@ function DashboardStatGridSkeleton({ cards = 4 }: { cards?: number }) {
 
 export function DashboardSkeleton() {
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="page-container" aria-busy="true" aria-label="Carregando">
       <PageHeaderSkeleton />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -90,7 +90,7 @@ export function ListPageSkeleton({
   showFilters?: boolean;
 }) {
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="page-container" aria-busy="true" aria-label="Carregando">
       <PageHeaderSkeleton />
       {showFilters && (
         <div className="mb-4 flex flex-wrap gap-3">
@@ -106,7 +106,7 @@ export function ListPageSkeleton({
 
 export function DetailPageSkeleton() {
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="page-container max-w-3xl" aria-busy="true" aria-label="Carregando">
       <div className="flex gap-3 mb-6">
         <SkeletonBox className="h-9 w-9 rounded-lg" />
         <div className="flex-1 space-y-2">
@@ -131,7 +131,7 @@ export function DetailPageSkeleton() {
 
 export function FormPageSkeleton() {
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="page-container max-w-2xl" aria-busy="true" aria-label="Carregando">
       <PageHeaderSkeleton />
       <div className="card p-6 space-y-4">
         {Array.from({ length: 6 }).map((_, i) => (

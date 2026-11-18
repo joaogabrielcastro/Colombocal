@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import api from "@/lib/api";
+import { fetchSession } from "@/lib/session";
 import { AUTH_SESSION_EVENT, getAuthTenantId } from "@/lib/auth-token";
 import {
   TENANT_FEATURES_DEFAULTS,
@@ -27,21 +27,17 @@ export function fetchTenantFeatures(force = false): Promise<TenantFeatures> {
   if (inflight && inflightTenantId === tid) return inflight;
 
   inflightTenantId = tid;
-  inflight = api
-    .get<{
-      features?: Partial<TenantFeatures>;
-      user?: { tenantId?: number };
-      tenant?: { slug?: string };
-    }>("/auth/me")
+  inflight = fetchSession({ force })
     .then((r) => {
+      const f = (r.features ?? {}) as Partial<TenantFeatures>;
       const next: TenantFeatures = {
-        clienteCpf: !!r.features?.clienteCpf,
-        frete: !!r.features?.frete,
-        fretePagoDefault: !!r.features?.fretePagoDefault,
-        nfe: !!r.features?.nfe,
-        cte: !!r.features?.cte,
-        mdfe: !!r.features?.mdfe,
-        ciot: !!r.features?.ciot,
+        clienteCpf: !!f.clienteCpf,
+        frete: !!f.frete,
+        fretePagoDefault: !!f.fretePagoDefault,
+        nfe: !!f.nfe,
+        cte: !!f.cte,
+        mdfe: !!f.mdfe,
+        ciot: !!f.ciot,
       };
       const meTid = Number(r.user?.tenantId) || tid;
       setTenantFeaturesCache(next, meTid);

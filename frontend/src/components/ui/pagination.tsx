@@ -27,6 +27,8 @@ export function Pagination({
   const end = total != null && pageSize ? Math.min(current * pageSize, total) : null;
 
   if (totalPages <= 1 && total == null) return null;
+  // Lista vazia: o estado vazio da própria tela já comunica (evita "Nenhum nota").
+  if (total === 0) return null;
 
   return (
     <nav
@@ -35,9 +37,7 @@ export function Pagination({
     >
       <p aria-live="polite">
         {total != null ? (
-          total > 0 ? (
-            <><span className="font-semibold text-slate-800">{start}–{end}</span> de {total} {noun}{total === 1 ? "" : "s"}</>
-          ) : `Nenhum ${noun}`
+          <><span className="font-semibold text-slate-800">{start}–{end}</span> de {total} {noun}{total === 1 ? "" : "s"}</>
         ) : `Página ${current} de ${safeTotalPages}`}
       </p>
       {totalPages > 1 ? (

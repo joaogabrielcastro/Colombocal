@@ -13,6 +13,7 @@ import { HomologacaoBanner } from "@/features/fiscal/components/HomologacaoBanne
 import { formatChave } from "@/features/fiscal/services/query";
 import type { FiscalNotaDetalhe } from "@/features/fiscal/types";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { PageHeader } from "@/components/ui/page-header";
 
 async function abrirArquivo(path: string, nome: string) {
   const { blob, filename } = await api.getBlob(path);
@@ -58,7 +59,7 @@ export default function FiscalNotaDetalhePage() {
 
   if (featLoading || loading) {
     return (
-      <div className="p-6">
+      <div className="page-container">
         <TableListSkeleton rows={6} />
       </div>
     );
@@ -76,7 +77,7 @@ export default function FiscalNotaDetalhePage() {
     return (
       <div className="p-6">
         <p className="text-sm text-slate-600">NF-e não encontrada.</p>
-        <Link href="/fiscal/notas" className="text-sky-700 text-sm hover:underline">
+        <Link href="/fiscal/notas" className="text-blue-700 text-sm hover:underline">
           Voltar
         </Link>
       </div>
@@ -88,22 +89,36 @@ export default function FiscalNotaDetalhePage() {
     venda?.cliente?.nomeFantasia || venda?.cliente?.razaoSocial || "—";
   const doc = venda?.cliente?.cnpj || venda?.cliente?.cpf || "—";
 
+  const problema = nota.status === "rejeitada" || nota.status === "denegada";
+  const linhaDoTempo = [
+    { label: "Emitida", data: nota.emitidaEm },
+    { label: "Autorizada", data: nota.autorizadaEm },
+    { label: "Cancelada", data: nota.canceladaEm },
+  ].filter((e) => e.data);
+
   return (
-    <div className="p-4 sm:p-6 lg:px-8 w-full max-w-none space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <Link href="/fiscal/notas" className="text-sm text-sky-700 hover:underline">
-            ← Notas fiscais
-          </Link>
-          <h1 className="text-2xl font-semibold text-slate-900 mt-1">
-            NF-e #{nota.numero ?? nota.id}
-          </h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div className="page-container space-y-6">
+      <PageHeader
+        className="!mb-0"
+        breadcrumbs={[
+          { label: "Fiscal" },
+          { label: "Notas fiscais", href: "/fiscal/notas" },
+        ]}
+        title={`NF-e #${nota.numero ?? nota.id}`}
+        meta={
+          <>
+            <NfeStatusBadge status={nota.status} />
+            {nota.serie != null ? <span className="text-sm text-gray-500">Série {nota.serie}</span> : null}
+            <span className="text-sm text-gray-500">· {clienteNome}</span>
+            <span className="text-sm font-semibold tabular-nums text-gray-900">· {formatMoney(nota.valor)}</span>
+          </>
+        }
+        actions={
+          <>
           {(nota.status === "autorizada" || nota.temXml || nota.status === "cancelada") && (
             <button
               type="button"
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
+              className="btn-secondary btn-sm"
               onClick={async () => {
                 try {
                   await abrirArquivo(
@@ -121,7 +136,7 @@ export default function FiscalNotaDetalhePage() {
           {(nota.status === "autorizada" || nota.temDanfe) && (
             <button
               type="button"
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
+              className="btn-secondary btn-sm"
               onClick={async () => {
                 try {
                   await abrirArquivo(
@@ -137,13 +152,60 @@ export default function FiscalNotaDetalhePage() {
               Visualizar DANFE
             </button>
           )}
+          {venda ? (
+            <Link href={`/vendas/${venda.id}`} className="btn-secondary btn-sm">
+              Abrir venda #{venda.numeroVenda ?? venda.id}
+            </Link>
+          ) : null}
+          </>
+        }
+      />
+
+      {problema ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 sm:p-5">
+          <p className="text-sm font-semibold text-red-900">
+            {nota.status === "denegada" ? "Uso denegado pela SEFAZ" : "Rejeitada pela SEFAZ"}
+          </p>
+          <p className="mt-1 text-sm text-red-800">
+            {nota.motivoRejeicao || "O provedor não informou o motivo. Consulte a nota na venda para atualizar o retorno."}
+          </p>
+          <p className="mt-2 text-xs text-red-800/80">
+            Como resolver: corrija o dado indicado (cadastro do cliente, produto ou emitente) e emita novamente a
+            partir da venda. Esta tentativa permanece no histórico.
+          </p>
+          {venda ? (
+            <Link href={`/vendas/${venda.id}`} className="btn-secondary btn-sm mt-3">
+              Ir para a venda #{venda.numeroVenda ?? venda.id}
+            </Link>
+          ) : null}
         </div>
-      </div>
+      ) : null}
+      {nota.status === "processando" ? (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Aguardando retorno da SEFAZ</p>
+          <p className="mt-1">Abra a venda e use “Consultar” na seção NF-e para atualizar o status.</p>
+        </div>
+      ) : null}
+
+      {linhaDoTempo.length > 0 ? (
+        <ol className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm" aria-label="Histórico de processamento">
+          {linhaDoTempo.map((e) => (
+            <li key={e.label} className="flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full ${e.label === "Autorizada" ? "bg-green-600" : e.label === "Cancelada" ? "bg-gray-400" : "bg-blue-700"}`}
+                aria-hidden="true"
+              />
+              <span className="text-gray-500">{e.label}</span>
+              <span className="font-medium text-gray-900">{new Date(e.data as string).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
 
       <HomologacaoBanner ambiente={ambiente} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-2 text-sm">
+        <div className="card p-5 space-y-2 text-sm">
           <h2 className="text-base font-semibold text-slate-900 mb-3">Identificação</h2>
           <div className="flex items-center gap-2">
             <span className="text-slate-500">Status:</span>
@@ -203,13 +265,13 @@ export default function FiscalNotaDetalhePage() {
         </div>
 
         {venda ? (
-          <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm space-y-2">
+          <section className="card p-5 text-sm space-y-2">
             <h2 className="text-base font-semibold text-slate-900 mb-3">Venda relacionada</h2>
             <p>
               Venda{" "}
               <Link
                 href={`/vendas/${venda.id}`}
-                className="text-sky-700 font-medium hover:underline"
+                className="text-blue-700 font-medium hover:underline"
               >
                 #{venda.numeroVenda ?? venda.id}
               </Link>

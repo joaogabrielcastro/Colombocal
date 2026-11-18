@@ -11,6 +11,13 @@ import {
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
   DocumentChartBarIcon,
+  ArrowDownTrayIcon,
+  ListBulletIcon,
+  IdentificationIcon,
+  MagnifyingGlassIcon,
+  UsersIcon,
+  DocumentTextIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 
 type NavIcon = ComponentType<{ className?: string }>;
@@ -354,3 +361,160 @@ export function canAccessPath(
 }
 
 export { Cog6ToothIcon, DocumentChartBarIcon };
+
+/* ------------------------------------------------------------------ */
+/* Grupos de navegação (fonte única para menu lateral e paleta Ctrl+K) */
+/* ------------------------------------------------------------------ */
+
+export type NavEntry = {
+  href: string;
+  label: string;
+  icon: NavIcon;
+  /** Termos extras para a busca da paleta. */
+  keywords?: string;
+};
+
+export type NavGroupId = 'operacao' | 'cadastros' | 'fiscal' | 'relatorios' | 'sistema';
+
+export type NavGroup = {
+  id: NavGroupId;
+  label: string;
+  icon?: NavIcon;
+  /** Grupos recolhíveis (Fiscal, Relatórios) — abrem automaticamente na própria seção. */
+  collapsible?: boolean;
+  items: NavEntry[];
+};
+
+export type NavBuildOptions = {
+  isAdmin?: boolean;
+  navPermissions?: string[] | null;
+  freteEnabled?: boolean;
+  nfeEnabled?: boolean;
+  cteEnabled?: boolean;
+  mdfeEnabled?: boolean;
+  ciotEnabled?: boolean;
+};
+
+const ENTRY_ICON: Record<string, NavIcon> = {
+  '/': HomeIcon,
+  '/vendas': ShoppingCartIcon,
+  '/financeiro/novo': ArrowDownTrayIcon,
+  '/contas-a-receber': DocumentChartBarIcon,
+  '/financeiro': BanknotesIcon,
+  '/fretes': TruckIcon,
+  '/carregamento': ClipboardDocumentListIcon,
+  '/clientes': UserGroupIcon,
+  '/produtos': CubeIcon,
+  '/motoristas': IdentificationIcon,
+  '/vendedores': UserIcon,
+  '/auditoria': MagnifyingGlassIcon,
+  '/usuarios': UsersIcon,
+  [CONFIG_NAV_HREF]: Cog6ToothIcon,
+};
+
+const ENTRY_KEYWORDS: Record<string, string> = {
+  '/': 'dashboard inicio painel resumo',
+  '/vendas': 'ordens pedidos venda',
+  '/financeiro/novo': 'receber pagamento baixa cheque pix dinheiro',
+  '/contas-a-receber': 'titulos cobranca vencidos aging inadimplencia',
+  '/financeiro': 'extrato recebimentos pagamentos estorno',
+  '/fretes': 'frete avulso vale',
+  '/carregamento': 'oc ordem de carregamento patio',
+  '/clientes': 'cadastro cnpj cpf',
+  '/produtos': 'cadastro estoque ncm',
+  '/motoristas': 'placa caminhao',
+  '/vendedores': 'representantes comissao',
+  '/auditoria': 'log historico trilha alteracoes',
+  '/usuarios': 'acesso permissoes convite',
+  [CONFIG_NAV_HREF]: 'empresa emitente fiscal banco condicoes',
+};
+
+function entry(href: string, label: string): NavEntry {
+  return {
+    href,
+    label,
+    icon: ENTRY_ICON[href] ?? DocumentTextIcon,
+    keywords: ENTRY_KEYWORDS[href],
+  };
+}
+
+/**
+ * Monta os grupos visíveis para o usuário, respeitando papel, permissões de menu
+ * e módulos habilitados no tenant. Mesma regra usada historicamente pelo Sidebar.
+ */
+export function buildNavGroups(options: NavBuildOptions): NavGroup[] {
+  const navOpts = { isAdmin: options.isAdmin, navPermissions: options.navPermissions ?? null };
+  const allMain = filterMainNavForSidebar(MAIN_NAV, false, {
+    ...navOpts,
+    freteEnabled: options.freteEnabled,
+    nfeEnabled: options.nfeEnabled,
+  }).filter((i) => i.href !== '/usuarios');
+  const has = (href: string) => allMain.some((i) => i.href === href);
+
+  const operacao = [
+    entry('/', 'Início'),
+    entry('/vendas', 'Vendas'),
+    entry('/financeiro/novo', 'Receber'),
+    entry('/contas-a-receber', 'Contas a receber'),
+    entry('/financeiro', 'Financeiro'),
+    ...(options.freteEnabled
+      ? [entry('/fretes', 'Fretes'), entry('/carregamento', 'Carregamento')]
+      : []),
+  ].filter((l) => l.href === '/' || has(l.href));
+
+  const cadastros = [
+    entry('/clientes', 'Clientes'),
+    entry('/produtos', 'Produtos'),
+    ...(options.freteEnabled ? [entry('/motoristas', 'Motoristas')] : []),
+    entry('/vendedores', 'Vendedores'),
+  ].filter((l) => has(l.href));
+
+  const fiscal = filterFiscalForSidebar(FISCAL_NAV, {
+    ...navOpts,
+    nfeEnabled: options.nfeEnabled,
+    cteEnabled: options.cteEnabled,
+    mdfeEnabled: options.mdfeEnabled,
+    ciotEnabled: options.ciotEnabled,
+  }).map((i) => ({ ...entry(i.href, i.label), icon: DocumentTextIcon, keywords: 'fiscal nota documento' }));
+
+  const relatorios = filterReportsForSidebar(REPORT_NAV, false, {
+    ...navOpts,
+    freteEnabled: options.freteEnabled,
+    nfeEnabled: options.nfeEnabled,
+  }).map((i) => ({ ...entry(i.href, i.label), icon: ListBulletIcon, keywords: 'relatorio analise exportar' }));
+
+  const sistema = [
+    ...(has('/auditoria') ? [entry('/auditoria', 'Auditoria')] : []),
+    ...(options.isAdmin
+      ? [entry(CONFIG_NAV_HREF, 'Configurações'), entry('/usuarios', 'Usuários')]
+      : []),
+  ];
+
+  const groups: NavGroup[] = [
+    { id: 'operacao', label: 'Operação', items: operacao },
+    { id: 'cadastros', label: 'Cadastros', items: cadastros },
+    { id: 'fiscal', label: 'Fiscal', icon: DocumentTextIcon, collapsible: true, items: fiscal },
+    { id: 'relatorios', label: 'Relatórios', icon: ChartBarIcon, collapsible: true, items: relatorios },
+    { id: 'sistema', label: 'Sistema', items: sistema },
+  ];
+  return groups.filter((g) => g.items.length > 0);
+}
+
+/** Item ativo considerando aliases (Receber × Financeiro, Contas a receber × relatórios). */
+export function isNavHrefActive(href: string, pathname: string): boolean {
+  if (href === '/') return pathname === '/';
+  if (href === '/financeiro') {
+    return pathname === '/financeiro' || pathname.startsWith('/financeiro/cobrancas');
+  }
+  if (href === '/financeiro/novo') {
+    return pathname === '/financeiro/novo' || pathname.startsWith('/financeiro/novo/');
+  }
+  if (href === '/contas-a-receber') {
+    return (
+      pathname.startsWith('/contas-a-receber') ||
+      pathname.startsWith('/relatorios/financeiro') ||
+      pathname.startsWith('/relatorios/titulos')
+    );
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}

@@ -22,3 +22,12 @@ describe("Pagination", () => {
     expect(screen.getByRole("button", { name: "Próxima página" })).toBeEnabled();
   });
 });
+
+describe("Pagination sem registros", () => {
+  it("não renderiza quando o total é zero", () => {
+    const { container } = render(
+      <Pagination page={1} totalPages={1} total={0} pageSize={20} noun="nota" onPageChange={() => {}} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+});

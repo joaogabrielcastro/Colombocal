@@ -76,8 +76,8 @@ export function RelatorioVendasEvolucaoChart({ evolucao }: Props) {
                     role="img"
                     aria-label={`Evolução do faturamento ${rotuloGranularidade}`}
                   >
-                    <path d={path.area} fill="rgb(59 130 246 / 0.16)" />
-                    <path d={path.line} fill="none" stroke="#2563eb" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+                    <path d={path.area} fill="rgb(19 89 156 / 0.12)" />
+                    <path d={path.line} fill="none" stroke="#004071" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
                   </svg>
                 ) : null}
                 <div className="absolute inset-0 flex">
